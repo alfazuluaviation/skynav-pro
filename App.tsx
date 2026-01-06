@@ -235,7 +235,7 @@ const App: React.FC = () => {
   };
 
   const handleAddWaypoint = (point: NavPoint, insertionType: 'ORIGIN' | 'DESTINATION' | 'WAYPOINT' = 'WAYPOINT') => {
-    // Check if it's a NavPoint or search result
+    console.log(`[App.tsx] handleAddWaypoint received NavPoint for ${point.icao || point.name}: magneticVariation = ${point.magneticVariation}`);
     const wp: Waypoint = {
       id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: point.name,
@@ -247,6 +247,7 @@ const App: React.FC = () => {
       role: insertionType,
       magneticVariation: point.magneticVariation // Pass magnetic variation from NavPoint
     };
+    console.log(`[App.tsx] Created Waypoint for ${wp.icao || wp.name}: magneticVariation = ${wp.magneticVariation}`);
 
     setWaypoints(prev => {
       let next = [...prev];

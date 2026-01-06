@@ -38,8 +38,8 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                         const [lng, lat] = coords;
 
                         let type: NavPoint['type'] = 'airport';
-                        let name = f.properties?.name || f.id;
-                        let icao = f.properties?.icao || '';
+                        let name = f.properties?.nome || f.id;
+                        let icao = f.properties?.localidade_id || '';
                         let magneticVariation: number | undefined = undefined;
 
                         // Specific property checking
@@ -50,49 +50,35 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                             // We'll try to get it from Gemini if not present.
                             if (f.properties?.magvariati !== undefined) {
                                 magneticVariation = parseFloat(f.properties.magvariati);
-                                console.log(`[NavDataService - fetchNavigationData] Airport ${icao} - MagVar from WFS: ${magneticVariation}`);
+                                console.log(`[NavDataService - fetchNavigationData] Airport ${icao}: MagVar from WFS: ${magneticVariation}`);
                             } else if (icao) {
-                                console.log(`[NavDataService - fetchNavigationData] Airport ${icao} - MagVar not in WFS, trying Gemini...`);
+                                console.log(`[NavDataService - fetchNavigationData] Airport ${icao}: MagVar not in WFS. Trying Gemini...`);
                                 try {
                                     const geminiResult = await searchAerodrome(icao);
                                     if (geminiResult?.magneticVariation !== undefined) {
                                         magneticVariation = geminiResult.magneticVariation;
-                                        console.log(`[NavDataService - fetchNavigationData] Airport ${icao} - MagVar from Gemini: ${magneticVariation}`);
+                                        console.log(`[NavDataService - fetchNavigationData] Airport ${icao}: MagVar from Gemini: ${magneticVariation}`);
                                     } else {
-                                        console.warn(`[NavDataService - fetchNavigationData] Airport ${icao} - Gemini returned no magneticVariation.`);
+                                        console.warn(`[NavDataService - fetchNavigationData] Airport ${icao}: Gemini returned no magneticVariation.`);
                                     }
                                 } catch (geminiError) {
                                     console.error(`[NavDataService - fetchNavigationData] Error fetching magnetic variation from Gemini for ICAO ${icao}:`, geminiError);
                                 }
                             }
-                        } else if (layerName === 'ICA:waypoint') {
-                            type = 'fix';
+                        } else if (layerName === 'ICA:waypoint' || layerName === 'ICA:vor' || layerName === 'ICA:ndb') {
+                            type = layerName === 'ICA:waypoint' ? 'fix' : layerName === 'ICA:vor' ? 'vor' : 'ndb';
                             name = f.properties?.ident || f.properties?.nome || name;
                             icao = f.properties?.ident || '';
                             if (f.properties?.magvariati !== undefined) {
                                 magneticVariation = parseFloat(f.properties.magvariati);
-                                console.log(`[NavDataService - fetchNavigationData] Waypoint ${icao} - MagVar from WFS: ${magneticVariation}`);
-                            }
-                        } else if (layerName === 'ICA:vor') {
-                            type = 'vor';
-                            name = f.properties?.nome || f.properties?.ident || name;
-                            icao = f.properties?.ident || '';
-                            if (f.properties?.magvariati !== undefined) {
-                                magneticVariation = parseFloat(f.properties.magvariati);
-                                console.log(`[NavDataService - fetchNavigationData] VOR ${icao} - MagVar from WFS: ${magneticVariation}`);
-                            }
-                        } else if (layerName === 'ICA:ndb') {
-                            type = 'ndb';
-                            name = f.properties?.nome || f.properties?.ident || name;
-                            icao = f.properties?.ident || '';
-                            if (f.properties?.magvariati !== undefined) {
-                                magneticVariation = parseFloat(f.properties.magvariati);
-                                console.log(`[NavDataService - fetchNavigationData] NDB ${icao} - MagVar from WFS: ${magneticVariation}`);
+                                console.log(`[NavDataService - fetchNavigationData] ${type.toUpperCase()} ${icao}: MagVar from WFS: ${magneticVariation}`);
+                            } else {
+                                console.log(`[NavDataService - fetchNavigationData] ${type.toUpperCase()} ${icao}: MagVar not in WFS.`);
                             }
                         }
 
-                        // Fallback if name is empty
                         if (!name) name = icao || f.id;
+                        console.log(`[NavDataService - fetchNavigationData] Final NavPoint for ${icao || name}: magneticVariation = ${magneticVariation}`);
 
                         results.push({
                             id: f.id,
@@ -105,9 +91,7 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                         });
                     }
                 }
-
             }
-
         } catch (error) {
             console.warn(`[NavDataService - fetchNavigationData] Failed to fetch layer ${layerName}`, error);
         }
@@ -190,51 +174,36 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
                             // We'll try to get it from Gemini if not present.
                             if (f.properties?.magvariati !== undefined) {
                                 magneticVariation = parseFloat(f.properties.magvariati);
-                                console.log(`[NavDataService - searchNavigationPoints] Airport ${icao} - MagVar from WFS: ${magneticVariation}`);
+                                console.log(`[NavDataService - searchNavigationPoints] Airport ${icao}: MagVar from WFS: ${magneticVariation}`);
                             } else if (icao) {
-                                console.log(`[NavDataService - searchNavigationPoints] Airport ${icao} - MagVar not in WFS, trying Gemini...`);
+                                console.log(`[NavDataService - searchNavigationPoints] Airport ${icao}: MagVar not in WFS. Trying Gemini...`);
                                 try {
                                     const geminiResult = await searchAerodrome(icao);
                                     if (geminiResult?.magneticVariation !== undefined) {
                                         magneticVariation = geminiResult.magneticVariation;
-                                        console.log(`[NavDataService - searchNavigationPoints] Airport ${icao} - MagVar from Gemini: ${magneticVariation}`);
+                                        console.log(`[NavDataService - searchNavigationPoints] Airport ${icao}: MagVar from Gemini: ${magneticVariation}`);
                                     } else {
-                                        console.warn(`[NavDataService - searchNavigationPoints] Airport ${icao} - Gemini returned no magneticVariation.`);
+                                        console.warn(`[NavDataService - searchNavigationPoints] Airport ${icao}: Gemini returned no magneticVariation.`);
                                     }
                                 } catch (geminiError) {
-                                    console.error(`[NavDataService - searchNavigationPoints] Error fetching magnetic variation from Gemini for ICAO ${icao}:`, geminiError);
+                                    console.error(`[NavDataService - searchNavigationPoints] Error fetching magnetic variation from Gemini for ICAO ${icao} during search:`, geminiError);
                                 }
                             }
-                        } else if (layerName === 'ICA:waypoint') {
-                            type = 'fix';
+                        } else if (layerName === 'ICA:waypoint' || layerName === 'ICA:vor' || layerName === 'ICA:ndb') {
+                            type = layerName === 'ICA:waypoint' ? 'fix' : layerName === 'ICA:vor' ? 'vor' : 'ndb';
                             icao = f.properties?.ident || '';
-                            // Usually valid fixes don't have separate names, just the 5-letter code.
-                            name = icao;
+                            name = f.properties?.nome || icao; // Use nome if available, otherwise ident
                             if (f.properties?.magvariati !== undefined) {
                                 magneticVariation = parseFloat(f.properties.magvariati);
-                                console.log(`[NavDataService - searchNavigationPoints] Waypoint ${icao} - MagVar from WFS: ${magneticVariation}`);
-                            }
-                        } else if (layerName === 'ICA:vor') {
-                            type = 'vor';
-                            icao = f.properties?.ident || '';
-                            name = f.properties?.nome || icao;
-                            if (f.properties?.magvariati !== undefined) {
-                                magneticVariation = parseFloat(f.properties.magvariati);
-                                console.log(`[NavDataService - searchNavigationPoints] VOR ${icao} - MagVar from WFS: ${magneticVariation}`);
-                            }
-                        } else if (layerName === 'ICA:ndb') {
-                            type = 'ndb';
-                            icao = f.properties?.ident || '';
-                            name = f.properties?.nome || icao;
-                            if (f.properties?.magvariati !== undefined) {
-                                magneticVariation = parseFloat(f.properties.magvariati);
-                                console.log(`[NavDataService - searchNavigationPoints] NDB ${icao} - MagVar from WFS: ${magneticVariation}`);
+                                console.log(`[NavDataService - searchNavigationPoints] ${type.toUpperCase()} ${icao}: MagVar from WFS: ${magneticVariation}`);
+                            } else {
+                                console.log(`[NavDataService - searchNavigationPoints] ${type.toUpperCase()} ${icao}: MagVar not in WFS.`);
                             }
                         }
 
-                        // Deduplicate
                         const key = icao || name;
                         if (!results.find(r => (r.icao === key || r.name === key))) {
+                            console.log(`[NavDataService - searchNavigationPoints] Final NavPoint for ${icao || name}: magneticVariation = ${magneticVariation}`);
                             results.push({
                                 id: f.id,
                                 type,

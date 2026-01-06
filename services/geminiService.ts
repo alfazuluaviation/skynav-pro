@@ -62,7 +62,7 @@ export const syncAeronauticalData = async (): Promise<{ airac: AiracCycle, chart
 export const searchAerodrome = async (query: string): Promise<{ icao: string, name: string, lat: number, lng: number, magneticVariation?: number } | null> => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    console.error("GEMINI_API_KEY is not set. Please ensure VITE_GEMINI_API_KEY is in your .env.local file.");
+    console.error("[GeminiService] GEMINI_API_KEY is not set. Please ensure VITE_GEMINI_API_KEY is in your .env.local file.");
     return null;
   }
   const ai = new GoogleGenAI({ apiKey });
@@ -88,12 +88,14 @@ export const searchAerodrome = async (query: string): Promise<{ icao: string, na
 
     const text = response.text.trim();
     if (!text) {
-      console.warn(`Gemini API returned empty response for query: ${query}`);
+      console.warn(`[GeminiService] Gemini API returned empty response for query: ${query}`);
       return null;
     }
-    return JSON.parse(text);
+    const result = JSON.parse(text);
+    console.log(`[GeminiService] searchAerodrome for "${query}" returned:`, result);
+    return result;
   } catch (e) {
-    console.error(`Error calling Gemini API for query "${query}":`, e);
+    console.error(`[GeminiService] Error calling Gemini API for query "${query}":`, e);
     return null;
   }
 };
