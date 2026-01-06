@@ -328,8 +328,11 @@ const App: React.FC = () => {
       ? from.magneticVariation
       : 0; // Default to 0 if undefined or NaN
 
-    console.log(`Segment ${i}: From ${from.icao || from.name} (Lat: ${from.lat}, Lng: ${from.lng}, MagneticVariation_Waypoint: ${from.magneticVariation}) to ${to.icao || to.name}`);
-    console.log(`  True Bearing: ${trueBrng.toFixed(2)}°, Magnetic Variation Used: ${magneticVariation.toFixed(2)}°, Magnetic Track: ${applyMagneticVariation(trueBrng, magneticVariation).toFixed(2)}°`);
+    console.log(`[App.tsx] Segment ${i}: From ${from.icao || from.name} (Lat: ${from.lat}, Lng: ${from.lng})`);
+    console.log(`[App.tsx]   Waypoint magneticVariation property: ${from.magneticVariation}`);
+    console.log(`[App.tsx]   Magnetic Variation Used in calculation: ${magneticVariation}`);
+    console.log(`[App.tsx]   True Bearing: ${trueBrng.toFixed(2)}°`);
+    console.log(`[App.tsx]   Magnetic Track (calculated): ${applyMagneticVariation(trueBrng, magneticVariation).toFixed(2)}°`);
 
     const magneticTrack = applyMagneticVariation(trueBrng, magneticVariation);
 
