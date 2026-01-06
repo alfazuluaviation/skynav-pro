@@ -1,14 +1,5 @@
 import { LatLngBounds } from 'leaflet';
-
-export interface NavPoint {
-    id: string;
-    type: 'airport' | 'vor' | 'ndb' | 'fix';
-    name: string;
-    lat: number;
-    lng: number;
-    icao?: string;
-    kind?: string; // For airport type (helipad, etc) or navaid frequency
-}
+import { NavPoint } from '../types';
 
 const BASE_WFS_URL = '/geoserver/wfs';
 
@@ -48,24 +39,36 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                         let type: NavPoint['type'] = 'airport';
                         let name = f.properties?.name || f.id;
                         let icao = f.properties?.icao || '';
+                        let magneticVariation: number | undefined = undefined;
 
                         // Specific property checking
                         if (layerName === 'ICA:airport') {
                             name = f.properties?.nome || name;
                             icao = f.properties?.localidade_id || icao;
+                            if (f.properties?.magvariati !== undefined) {
+                                magneticVariation = parseFloat(f.properties.magvariati);
+                            }
                         } else if (layerName === 'ICA:waypoint') {
                             type = 'fix';
-                            // Waypoints usually have 'ident'
                             name = f.properties?.ident || f.properties?.nome || name;
                             icao = f.properties?.ident || '';
+                            if (f.properties?.magvariati !== undefined) {
+                                magneticVariation = parseFloat(f.properties.magvariati);
+                            }
                         } else if (layerName === 'ICA:vor') {
                             type = 'vor';
                             name = f.properties?.nome || f.properties?.ident || name;
                             icao = f.properties?.ident || '';
+                            if (f.properties?.magvariati !== undefined) {
+                                magneticVariation = parseFloat(f.properties.magvariati);
+                            }
                         } else if (layerName === 'ICA:ndb') {
                             type = 'ndb';
                             name = f.properties?.nome || f.properties?.ident || name;
                             icao = f.properties?.ident || '';
+                            if (f.properties?.magvariati !== undefined) {
+                                magneticVariation = parseFloat(f.properties.magvariati);
+                            }
                         }
 
                         // Fallback if name is empty
@@ -77,7 +80,8 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                             name,
                             lat,
                             lng,
-                            icao
+                            icao,
+                            magneticVariation
                         });
                     }
                 });
@@ -155,24 +159,37 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
                         let type: NavPoint['type'] = 'fix'; // Default for non-airport layers here
                         let name = f.properties?.name || f.id;
                         let icao = '';
+                        let magneticVariation: number | undefined = undefined;
 
                         if (layerName === 'ICA:airport') {
                             type = 'airport';
                             name = f.properties?.nome || name;
                             icao = f.properties?.localidade_id || '';
+                            if (f.properties?.magvariati !== undefined) {
+                                magneticVariation = parseFloat(f.properties.magvariati);
+                            }
                         } else if (layerName === 'ICA:waypoint') {
                             type = 'fix';
                             icao = f.properties?.ident || '';
                             // Usually valid fixes don't have separate names, just the 5-letter code.
                             name = icao;
+                            if (f.properties?.magvariati !== undefined) {
+                                magneticVariation = parseFloat(f.properties.magvariati);
+                            }
                         } else if (layerName === 'ICA:vor') {
                             type = 'vor';
                             icao = f.properties?.ident || '';
                             name = f.properties?.nome || icao;
+                            if (f.properties?.magvariati !== undefined) {
+                                magneticVariation = parseFloat(f.properties.magvariati);
+                            }
                         } else if (layerName === 'ICA:ndb') {
                             type = 'ndb';
                             icao = f.properties?.ident || '';
                             name = f.properties?.nome || icao;
+                            if (f.properties?.magvariati !== undefined) {
+                                magneticVariation = parseFloat(f.properties.magvariati);
+                            }
                         }
 
                         // Deduplicate
@@ -184,7 +201,8 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
                                 name,
                                 lat,
                                 lng,
-                                icao
+                                icao,
+                                magneticVariation
                             });
                         }
                     }

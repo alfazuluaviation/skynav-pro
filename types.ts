@@ -1,4 +1,3 @@
-
 export interface Waypoint {
   id: string;
   name: string;
@@ -8,12 +7,13 @@ export interface Waypoint {
   description?: string;
   icao?: string;
   role?: 'ORIGIN' | 'WAYPOINT' | 'DESTINATION';
+  magneticVariation?: number;
 }
 
 export interface FlightSegment {
   from: Waypoint;
   to: Waypoint;
-  track: number;
+  track: number; // This will now represent the magnetic track
   distance: number;
   ete: string;
   fuel: number;
@@ -54,4 +54,15 @@ export interface SavedPlan {
   waypoints: Waypoint[];
   aircraft: { id: string, label: string, speed: number };
   speed: number;
+}
+
+export interface NavPoint {
+    id: string;
+    type: 'airport' | 'vor' | 'ndb' | 'fix';
+    name: string;
+    lat: number;
+    lng: number;
+    icao?: string;
+    kind?: string; // For airport type (helipad, etc) or navaid frequency
+    magneticVariation?: number;
 }

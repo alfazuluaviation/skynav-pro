@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Waypoint, AiracCycle, ChartConfig } from "../types";
 
@@ -60,11 +59,11 @@ export const syncAeronauticalData = async (): Promise<{ airac: AiracCycle, chart
   };
 };
 
-export const searchAerodrome = async (query: string): Promise<{ icao: string, name: string, lat: number, lng: number } | null> => {
+export const searchAerodrome = async (query: string): Promise<{ icao: string, name: string, lat: number, lng: number, magneticVariation?: number } | null> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Encontre as coordenadas e o nome oficial do aeródromo ou ponto aeronáutico: ${query}. Forneça apenas dados reais e precisos para navegação aérea no Brasil.`,
+    contents: `Encontre as coordenadas, o nome oficial e a variação magnética (em graus) do aeródromo ou ponto aeronáutico: ${query}. Forneça apenas dados reais e precisos para navegação aérea no Brasil.`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -73,7 +72,8 @@ export const searchAerodrome = async (query: string): Promise<{ icao: string, na
           icao: { type: Type.STRING },
           name: { type: Type.STRING },
           lat: { type: Type.NUMBER },
-          lng: { type: Type.NUMBER }
+          lng: { type: Type.NUMBER },
+          magneticVariation: { type: Type.NUMBER }
         },
         required: ["icao", "name", "lat", "lng"]
       }

@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Waypoint, FlightStats, ChartConfig, AiracCycle, FlightSegment, SavedPlan } from './types';
-import { calculateDistance, calculateBearing, formatTime } from './utils/geoUtils';
+import { Waypoint, FlightStats, ChartConfig, AiracCycle, FlightSegment, SavedPlan, NavPoint } from './types';
+import { calculateDistance, calculateBearing, formatTime, applyMagneticVariation } from './utils/geoUtils';
 import { syncAeronauticalData, searchAerodrome } from './services/geminiService';
 
 // Components
@@ -220,7 +219,8 @@ const App: React.FC = () => {
         lat: result.lat,
         lng: result.lng,
         type: 'AIRPORT',
-        description: 'Encontrado via busca.'
+        description: 'Encontrado via busca.',
+        magneticVariation: result.magneticVariation // Pass magnetic variation from Gemini search
       };
       setWaypoints([...waypoints, wp]);
       setSearchQuery('');
@@ -228,7 +228,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddWaypoint = (point: any, insertionType: 'ORIGIN' | 'DESTINATION' | 'WAYPOINT' = 'WAYPOINT') => {
+  const handleAddWaypoint = (point: NavPoint, insertionType: 'ORIGIN' | 'DESTINATION' | 'WAYPOINT' = 'WAYPOINT') => {
     // Check if it's a NavPoint or search result
     const wp: Waypoint = {
       id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -238,7 +238,8 @@ const App: React.FC = () => {
       lng: point.lng,
       type: point.type === 'vor' ? 'VOR' : point.type === 'ndb' ? 'FIX' : 'AIRPORT',
       description: point.type,
-      role: insertionType
+      role: insertionType,
+      magneticVariation: point.magneticVariation // Pass magnetic variation from NavPoint
     };
 
     setWaypoints(prev => {
@@ -314,11 +315,16 @@ const App: React.FC = () => {
     const from = waypoints[i];
     const to = waypoints[i + 1];
     const dist = calculateDistance(from.lat, from.lng, to.lat, to.lng);
-    const brng = calculateBearing(from.lat, from.lng, to.lat, to.lng);
+    const trueBrng = calculateBearing(from.lat, from.lng, to.lat, to.lng);
+    
+    // Use magnetic variation from the 'from' waypoint for the segment's magnetic track
+    const magneticVariation = from.magneticVariation !== undefined ? from.magneticVariation : 0; // Default to 0 if not available
+    const magneticTrack = applyMagneticVariation(trueBrng, magneticVariation);
+
     flightSegments.push({
       from, to,
       distance: dist,
-      track: Math.round(brng),
+      track: Math.round(magneticTrack), // Now 'track' is magnetic
       ete: formatTime(dist / plannedSpeed),
       fuel: Math.round(dist * 1.3)
     });
@@ -394,6 +400,7 @@ const App: React.FC = () => {
         downloadedLayers={downloadedLayers}
         onDownloadLayer={handleChartDownload}
         syncingLayers={syncingLayers}
+        airac={airac}
       />
 
       {/* MAIN CONTENT AREA */}
@@ -430,6 +437,7 @@ const App: React.FC = () => {
           <MapControls
             isFollowing={isFollowing}
             onToggleFollowing={() => setIsFollowing(!isFollowing)}
+            onZoomIn={handleZoomIn}
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
             onCenterOnUser={handleCenterOnUser}

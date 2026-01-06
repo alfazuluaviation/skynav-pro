@@ -1,4 +1,3 @@
-
 const R_NM = 3440.065; // Earth radius in nautical miles
 
 export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -17,7 +16,13 @@ export const calculateBearing = (lat1: number, lon1: number, lat2: number, lon2:
   const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
             Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos((lon2 - lon1) * Math.PI / 180);
   let brng = Math.atan2(y, x) * 180 / Math.PI;
-  return (brng + 360) % 360;
+  return (brng + 360) % 360; // This is True Bearing
+};
+
+export const applyMagneticVariation = (trueBearing: number, magneticVariation: number): number => {
+  // Magnetic Bearing = True Bearing - Magnetic Variation
+  // Ensure result is between 0 and 360
+  return (trueBearing - magneticVariation + 360) % 360;
 };
 
 export const formatTime = (hours: number): string => {
