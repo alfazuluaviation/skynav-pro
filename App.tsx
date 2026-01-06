@@ -324,8 +324,14 @@ const App: React.FC = () => {
     const trueBrng = calculateBearing(from.lat, from.lng, to.lat, to.lng);
     
     // Use magnetic variation from the 'from' waypoint for the segment's magnetic track
-    const magneticVariation = from.magneticVariation !== undefined ? from.magneticVariation : 0; // Default to 0 if not available
+    const magneticVariation = (from.magneticVariation !== undefined && !isNaN(from.magneticVariation))
+      ? from.magneticVariation
+      : 0; // Default to 0 if undefined or NaN
+
     const magneticTrack = applyMagneticVariation(trueBrng, magneticVariation);
+
+    console.log(`Segment ${i}: From ${from.icao || from.name} (Lat: ${from.lat}, Lng: ${from.lng}, MagneticVariation_Waypoint: ${from.magneticVariation}) to ${to.icao || to.name}`);
+    console.log(`  True Bearing: ${trueBrng.toFixed(2)}°, Magnetic Variation Used: ${magneticVariation.toFixed(2)}°, Magnetic Track: ${magneticTrack.toFixed(2)}°`);
 
     flightSegments.push({
       from, to,
