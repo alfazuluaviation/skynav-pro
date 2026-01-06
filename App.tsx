@@ -66,6 +66,7 @@ function MapUIControls({
 
 const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
+  const [loadingSession, setLoadingSession] = useState(true); // New state for session loading
   const [showPlanPanel, setShowPlanPanel] = useState(false);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
@@ -90,14 +91,19 @@ const App: React.FC = () => {
   const KEY_SAVED_PLANS = 'saved_flight_plans_v1';
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
-    });
+      setLoadingSession(false); // Session loading is complete
+    };
+
+    checkSession();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      setLoadingSession(false); // Also set to false on auth state change
     });
 
     return () => subscription.unsubscribe();
@@ -380,6 +386,15 @@ const App: React.FC = () => {
     setSavedPlans(nextList);
     localStorage.setItem(KEY_SAVED_PLANS, JSON.stringify(nextList));
   };
+
+  if (loadingSession) {
+    // Render a loading spinner or null while session is being checked
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#0d1117]">
+        <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   if (!session) {
     return <Auth />;
