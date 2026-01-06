@@ -1,0 +1,5 @@
+Copyright (c) 2026 Josemir Barreto Costa. Todos os direitos reservados.
+
+Este software e todos os arquivos associados são de propriedade exclusiva de Josemir. 
+Nenhuma parte deste código pode ser copiada, modificada, distribuída ou 
+comercializada sem a autorização expressa e por escrito do proprietário.

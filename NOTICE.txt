@@ -1,0 +1,32 @@
+========================================================================
+SKYNAV - OPEN SOURCE ATTRIBUTIONS
+========================================================================
+
+Este software utiliza componentes de terceiros sob as seguintes licenças:
+
+1. ANTIGRAVITY (Caleb Spare)
+   Licença: MIT
+   Copyright (c) 2016 Caleb Spare
+   Uso: Permite uso comercial, modificação e distribuição.
+
+2. GO CRYPTO & PROTOBUF (The Go Authors / Google Inc.)
+   Licença: BSD 3-Clause / Apache 2.0
+   Copyright (c) 2009 The Go Authors.
+   Copyright 2008 Google Inc.
+   Uso: Requer a manutenção dos avisos de copyright originais.
+
+3. MIDTERM / GOLANG SET
+   Licença: MIT
+   Copyright (c) 2021-2023 Alex Suraci / Ralph Caraveo
+   Uso: Uso livre para qualquer propósito, incluindo comercial.
+
+4. PROTONTECH AG (Go Crypto Extensions)
+   Licença: BSD 3-Clause
+   Copyright (c) 2019 ProtonTech AG
+
+------------------------------------------------------------------------
+DISCLAIMER:
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS 
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+------------------------------------------------------------------------
