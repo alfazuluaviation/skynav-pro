@@ -1,5 +1,6 @@
 import { LatLngBounds } from 'leaflet';
 import { NavPoint } from '../types';
+import { searchAerodrome } from './geminiService'; // Import searchAerodrome
 
 const BASE_WFS_URL = '/geoserver/wfs';
 
@@ -30,7 +31,7 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
 
             // Parse features
             if (data.features) {
-                data.features.forEach((f: any) => {
+                for (const f of data.features) { // Changed to for...of to allow await inside
                     // Check geometry type
                     if (f.geometry && (f.geometry.type === 'Point' || f.geometry.type === 'MultiPoint')) {
                         const coords = f.geometry.type === 'MultiPoint' ? f.geometry.coordinates[0] : f.geometry.coordinates; // GeoJSON is always lng, lat
@@ -45,8 +46,15 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                         if (layerName === 'ICA:airport') {
                             name = f.properties?.nome || name;
                             icao = f.properties?.localidade_id || icao;
+                            // WFS for ICA:airport often doesn't have magvariati.
+                            // We'll try to get it from Gemini if not present.
                             if (f.properties?.magvariati !== undefined) {
                                 magneticVariation = parseFloat(f.properties.magvariati);
+                            } else if (icao) {
+                                const geminiResult = await searchAerodrome(icao);
+                                if (geminiResult?.magneticVariation !== undefined) {
+                                    magneticVariation = geminiResult.magneticVariation;
+                                }
                             }
                         } else if (layerName === 'ICA:waypoint') {
                             type = 'fix';
@@ -84,7 +92,8 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                             magneticVariation
                         });
                     }
-                });
+                }
+
             }
 
         } catch (error) {
@@ -150,7 +159,7 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
             const data = await response.json();
 
             if (data.features) {
-                data.features.forEach((f: any) => {
+                for (const f of data.features) { // Changed to for...of to allow await inside
                     if (f.geometry && (f.geometry.type === 'Point' || f.geometry.type === 'MultiPoint')) {
                         // Handle MultiPoint
                         const coords = f.geometry.type === 'MultiPoint' ? f.geometry.coordinates[0] : f.geometry.coordinates;
@@ -165,8 +174,15 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
                             type = 'airport';
                             name = f.properties?.nome || name;
                             icao = f.properties?.localidade_id || '';
+                            // WFS for ICA:airport often doesn't have magvariati.
+                            // We'll try to get it from Gemini if not present.
                             if (f.properties?.magvariati !== undefined) {
                                 magneticVariation = parseFloat(f.properties.magvariati);
+                            } else if (icao) {
+                                const geminiResult = await searchAerodrome(icao);
+                                if (geminiResult?.magneticVariation !== undefined) {
+                                    magneticVariation = geminiResult.magneticVariation;
+                                }
                             }
                         } else if (layerName === 'ICA:waypoint') {
                             type = 'fix';
@@ -206,7 +222,7 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
                             });
                         }
                     }
-                });
+                }
             }
         } catch (error) {
             console.warn(`Search failed for ${layerName}`, error);
