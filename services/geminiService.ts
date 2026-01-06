@@ -59,7 +59,7 @@ export const syncAeronauticalData = async (): Promise<{ airac: AiracCycle, chart
   };
 };
 
-export const searchAerodrome = async (query: string): Promise<{ icao: string, name: string, lat: number, lng: number, magneticVariation?: number } | null> => {
+export const searchAerodrome = async (query: string): Promise<{ icao: string, name: string, lat: number, lng: number } | null> => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
     console.error("[GeminiService] GEMINI_API_KEY is not set. Please ensure VITE_GEMINI_API_KEY is in your .env.local file.");
@@ -77,7 +77,7 @@ export const searchAerodrome = async (query: string): Promise<{ icao: string, na
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Encontre as coordenadas, o nome oficial e a variação magnética (em graus) do aeródromo ou ponto aeronáutico: ${query}. Forneça apenas dados reais e precisos para navegação aérea no Brasil.`,
+      contents: `Encontre as coordenadas e o nome oficial do aeródromo ou ponto aeronáutico: ${query}. Forneça apenas dados reais e precisos para navegação aérea no Brasil.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -87,7 +87,6 @@ export const searchAerodrome = async (query: string): Promise<{ icao: string, na
             name: { type: Type.STRING },
             lat: { type: Type.NUMBER },
             lng: { type: Type.NUMBER },
-            magneticVariation: { type: Type.NUMBER }
           },
           required: ["icao", "name", "lat", "lng"]
         }

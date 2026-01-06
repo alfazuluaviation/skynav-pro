@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Waypoint, FlightStats, ChartConfig, AiracCycle, FlightSegment, SavedPlan, NavPoint } from './types';
-import { calculateDistance, calculateBearing, formatTime, applyMagneticVariation } from './utils/geoUtils';
+import { calculateDistance, calculateBearing, formatTime, applyMagneticVariation, getMagneticDeclination } from './utils/geoUtils';
 import { syncAeronauticalData, searchAerodrome } from './services/geminiService';
 
 // Components
@@ -226,7 +226,6 @@ const App: React.FC = () => {
         lng: result.lng,
         type: 'AIRPORT',
         description: 'Encontrado via busca.',
-        magneticVariation: result.magneticVariation // Pass magnetic variation from Gemini search
       };
       setWaypoints([...waypoints, wp]);
       setSearchQuery('');
@@ -235,7 +234,6 @@ const App: React.FC = () => {
   };
 
   const handleAddWaypoint = (point: NavPoint, insertionType: 'ORIGIN' | 'DESTINATION' | 'WAYPOINT' = 'WAYPOINT') => {
-    console.log(`[App.tsx] handleAddWaypoint received NavPoint for ${point.icao || point.name}: magneticVariation = ${point.magneticVariation}`);
     const wp: Waypoint = {
       id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: point.name,
@@ -245,9 +243,7 @@ const App: React.FC = () => {
       type: point.type === 'vor' ? 'VOR' : point.type === 'ndb' ? 'FIX' : 'AIRPORT',
       description: point.type,
       role: insertionType,
-      magneticVariation: point.magneticVariation // Pass magnetic variation from NavPoint
     };
-    console.log(`[App.tsx] Created Waypoint for ${wp.icao || wp.name}: magneticVariation = ${wp.magneticVariation}`);
 
     setWaypoints(prev => {
       let next = [...prev];
@@ -324,20 +320,16 @@ const App: React.FC = () => {
     const dist = calculateDistance(from.lat, from.lng, to.lat, to.lng);
     const trueBrng = calculateBearing(from.lat, from.lng, to.lat, to.lng);
     
-    // Use magnetic variation from the 'from' waypoint for the segment's magnetic track
-    const magneticVariation = (from.magneticVariation !== undefined && !isNaN(from.magneticVariation))
-      ? from.magneticVariation
-      : 0; // Default to 0 if undefined or NaN
-
+    // Calculate magnetic variation dynamically using WMM
+    const magneticVariation = getMagneticDeclination(from.lat, from.lng, 0, new Date()); // Assuming altitude 0 for now
+    
     console.log(`[App.tsx] Segment ${i}: From ${from.icao || from.name} (Lat: ${from.lat.toFixed(6)}, Lng: ${from.lng.toFixed(6)})`);
-    console.log(`[App.tsx]   Waypoint magneticVariation property: ${from.magneticVariation}`);
-    console.log(`[App.tsx]   Magnetic Variation Used in calculation (raw): ${magneticVariation}`);
-    console.log(`[App.tsx]   True Bearing (raw): ${trueBrng}`); // Log raw true bearing
+    console.log(`[App.tsx]   True Bearing (calculated): ${trueBrng.toFixed(2)}°`);
+    console.log(`[App.tsx]   Magnetic Declination (WMM): ${magneticVariation.toFixed(2)}°`);
     
     const magneticTrack = applyMagneticVariation(trueBrng, magneticVariation);
     
-    console.log(`[App.tsx]   Magnetic Track (calculated, raw): ${magneticTrack}`);
-    console.log(`[App.tsx]   Magnetic Track (rounded): ${Math.round(magneticTrack)}°`);
+    console.log(`[App.tsx]   Magnetic Track (calculated): ${magneticTrack.toFixed(2)}°`);
 
     flightSegments.push({
       from, to,

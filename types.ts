@@ -7,7 +7,7 @@ export interface Waypoint {
   description?: string;
   icao?: string;
   role?: 'ORIGIN' | 'WAYPOINT' | 'DESTINATION';
-  magneticVariation?: number;
+  // magneticVariation?: number; // Removed as it will be calculated dynamically
 }
 
 export interface FlightSegment {
@@ -64,5 +64,5 @@ export interface NavPoint {
     lng: number;
     icao?: string;
     kind?: string; // For airport type (helipad, etc) or navaid frequency
-    magneticVariation?: number;
+    // magneticVariation?: number; // Removed as it will be calculated dynamically
 }

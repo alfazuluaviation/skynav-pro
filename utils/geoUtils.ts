@@ -1,3 +1,5 @@
+import { getMagVar } from 'geomag-algorithms';
+
 const R_NM = 3440.065; // Earth radius in nautical miles
 
 export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -17,6 +19,14 @@ export const calculateBearing = (lat1: number, lon1: number, lat2: number, lon2:
             Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos((lon2 - lon1) * Math.PI / 180);
   let brng = Math.atan2(y, x) * 180 / Math.PI;
   return (brng + 360) % 360; // This is True Bearing
+};
+
+export const getMagneticDeclination = (lat: number, lng: number, alt: number = 0, date: Date = new Date()): number => {
+  // getMagVar returns declination in degrees
+  // Altitude is in meters, so convert feet to meters if needed. Assuming alt is already in meters.
+  // If your altitude is in feet, convert it: alt_meters = alt_feet * 0.3048
+  const declination = getMagVar(lat, lng, alt, date);
+  return declination;
 };
 
 export const applyMagneticVariation = (trueBearing: number, magneticVariation: number): number => {
