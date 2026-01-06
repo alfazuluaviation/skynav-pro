@@ -1,4 +1,4 @@
-import { getMagVar } from 'geomag';
+import geomag from 'geomag';
 
 const R_NM = 3440.065; // Earth radius in nautical miles
 
@@ -25,7 +25,7 @@ export const getMagneticDeclination = (lat: number, lng: number, alt: number = 0
   // getMagVar returns declination in degrees
   // Altitude is in meters, so convert feet to meters if needed. Assuming alt is already in meters.
   // If your altitude is in feet, convert it: alt_meters = alt_feet * 0.3048
-  const declination = getMagVar(lat, lng, alt, date);
+  const declination = geomag.getMagVar(lat, lng, alt, date);
   return declination;
 };
 
