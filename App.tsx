@@ -486,7 +486,7 @@ const App: React.FC = () => {
               }
             />
 
-            {userPos && <Marker position={userPos} icon={planeIcon} zIndexOffset={1000} />}
+            {userPos && userPos[0] !== 0 && <Marker position={userPos} icon={planeIcon} zIndexOffset={1000} />}
 
             {waypoints.map((wp) => (
               <Marker key={wp.id} position={[wp.lat, wp.lng]} icon={defaultIcon}>
