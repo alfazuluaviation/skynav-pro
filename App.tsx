@@ -329,13 +329,15 @@ const App: React.FC = () => {
       ? from.magneticVariation
       : 0; // Default to 0 if undefined or NaN
 
-    console.log(`[App.tsx] Segment ${i}: From ${from.icao || from.name} (Lat: ${from.lat}, Lng: ${from.lng})`);
+    console.log(`[App.tsx] Segment ${i}: From ${from.icao || from.name} (Lat: ${from.lat.toFixed(6)}, Lng: ${from.lng.toFixed(6)})`);
     console.log(`[App.tsx]   Waypoint magneticVariation property: ${from.magneticVariation}`);
-    console.log(`[App.tsx]   Magnetic Variation Used in calculation: ${magneticVariation}`);
-    console.log(`[App.tsx]   True Bearing: ${trueBrng.toFixed(2)}°`);
-    console.log(`[App.tsx]   Magnetic Track (calculated): ${applyMagneticVariation(trueBrng, magneticVariation).toFixed(2)}°`);
-
+    console.log(`[App.tsx]   Magnetic Variation Used in calculation (raw): ${magneticVariation}`);
+    console.log(`[App.tsx]   True Bearing (raw): ${trueBrng}`); // Log raw true bearing
+    
     const magneticTrack = applyMagneticVariation(trueBrng, magneticVariation);
+    
+    console.log(`[App.tsx]   Magnetic Track (calculated, raw): ${magneticTrack}`);
+    console.log(`[App.tsx]   Magnetic Track (rounded): ${Math.round(magneticTrack)}°`);
 
     flightSegments.push({
       from, to,

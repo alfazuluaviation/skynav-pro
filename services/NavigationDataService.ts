@@ -53,16 +53,22 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                                 console.log(`[NavDataService - fetchNavigationData] Airport ${icao}: MagVar from WFS: ${magneticVariation}`);
                             } else if (icao) {
                                 console.log(`[NavDataService - fetchNavigationData] Airport ${icao}: MagVar not in WFS. Trying Gemini...`);
-                                try {
-                                    const geminiResult = await searchAerodrome(icao);
-                                    if (geminiResult?.magneticVariation !== undefined) {
-                                        magneticVariation = geminiResult.magneticVariation;
-                                        console.log(`[NavDataService - fetchNavigationData] Airport ${icao}: MagVar from Gemini: ${magneticVariation}`);
-                                    } else {
-                                        console.warn(`[NavDataService - fetchNavigationData] Airport ${icao}: Gemini returned no magneticVariation.`);
+                                const cachedResult = JSON.parse(localStorage.getItem(`aerodromeCache_${icao.toUpperCase()}`) || 'null');
+                                if (cachedResult && cachedResult.magneticVariation !== undefined) {
+                                    magneticVariation = cachedResult.magneticVariation;
+                                    console.log(`[NavDataService - fetchNavigationData] Airport ${icao}: MagVar from cache: ${magneticVariation}`);
+                                } else {
+                                    try {
+                                        const geminiResult = await searchAerodrome(icao);
+                                        if (geminiResult?.magneticVariation !== undefined) {
+                                            magneticVariation = geminiResult.magneticVariation;
+                                            console.log(`[NavDataService - fetchNavigationData] Airport ${icao}: MagVar from Gemini: ${magneticVariation}`);
+                                        } else {
+                                            console.warn(`[NavDataService - fetchNavigationData] Airport ${icao}: Gemini returned no magneticVariation.`);
+                                        }
+                                    } catch (geminiError) {
+                                        console.error(`[NavDataService - fetchNavigationData] Error fetching magnetic variation from Gemini for ICAO ${icao}:`, geminiError);
                                     }
-                                } catch (geminiError) {
-                                    console.error(`[NavDataService - fetchNavigationData] Error fetching magnetic variation from Gemini for ICAO ${icao}:`, geminiError);
                                 }
                             }
                         } else if (layerName === 'ICA:waypoint' || layerName === 'ICA:vor' || layerName === 'ICA:ndb') {
@@ -177,16 +183,22 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
                                 console.log(`[NavDataService - searchNavigationPoints] Airport ${icao}: MagVar from WFS: ${magneticVariation}`);
                             } else if (icao) {
                                 console.log(`[NavDataService - searchNavigationPoints] Airport ${icao}: MagVar not in WFS. Trying Gemini...`);
-                                try {
-                                    const geminiResult = await searchAerodrome(icao);
-                                    if (geminiResult?.magneticVariation !== undefined) {
-                                        magneticVariation = geminiResult.magneticVariation;
-                                        console.log(`[NavDataService - searchNavigationPoints] Airport ${icao}: MagVar from Gemini: ${magneticVariation}`);
-                                    } else {
-                                        console.warn(`[NavDataService - searchNavigationPoints] Airport ${icao}: Gemini returned no magneticVariation.`);
+                                const cachedResult = JSON.parse(localStorage.getItem(`aerodromeCache_${icao.toUpperCase()}`) || 'null');
+                                if (cachedResult && cachedResult.magneticVariation !== undefined) {
+                                    magneticVariation = cachedResult.magneticVariation;
+                                    console.log(`[NavDataService - searchNavigationPoints] Airport ${icao}: MagVar from cache: ${magneticVariation}`);
+                                } else {
+                                    try {
+                                        const geminiResult = await searchAerodrome(icao);
+                                        if (geminiResult?.magneticVariation !== undefined) {
+                                            magneticVariation = geminiResult.magneticVariation;
+                                            console.log(`[NavDataService - searchNavigationPoints] Airport ${icao}: MagVar from Gemini: ${magneticVariation}`);
+                                        } else {
+                                            console.warn(`[NavDataService - searchNavigationPoints] Airport ${icao}: Gemini returned no magneticVariation.`);
+                                        }
+                                    } catch (geminiError) {
+                                        console.error(`[NavDataService - searchNavigationPoints] Error fetching magnetic variation from Gemini for ICAO ${icao} during search:`, geminiError);
                                     }
-                                } catch (geminiError) {
-                                    console.error(`[NavDataService - searchNavigationPoints] Error fetching magnetic variation from Gemini for ICAO ${icao} during search:`, geminiError);
                                 }
                             }
                         } else if (layerName === 'ICA:waypoint' || layerName === 'ICA:vor' || layerName === 'ICA:ndb') {

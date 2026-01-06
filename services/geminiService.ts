@@ -65,6 +65,14 @@ export const searchAerodrome = async (query: string): Promise<{ icao: string, na
     console.error("[GeminiService] GEMINI_API_KEY is not set. Please ensure VITE_GEMINI_API_KEY is in your .env.local file.");
     return null;
   }
+  
+  const normalizedQuery = query.toUpperCase();
+  const cachedResult = JSON.parse(localStorage.getItem(`aerodromeCache_${normalizedQuery}`) || 'null');
+  if (cachedResult) {
+      console.log(`[GeminiService] Full aerodrome data for ${query} found in cache.`);
+      return cachedResult;
+  }
+
   const ai = new GoogleGenAI({ apiKey });
   try {
     const response = await ai.models.generateContent({
@@ -93,6 +101,11 @@ export const searchAerodrome = async (query: string): Promise<{ icao: string, na
     }
     const result = JSON.parse(text);
     console.log(`[GeminiService] searchAerodrome for "${query}" returned:`, result);
+
+    // Cache the result
+    if (result && result.icao) {
+        localStorage.setItem(`aerodromeCache_${result.icao.toUpperCase()}`, JSON.stringify(result));
+    }
     return result;
   } catch (e) {
     console.error(`[GeminiService] Error calling Gemini API for query "${query}":`, e);
