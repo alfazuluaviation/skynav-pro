@@ -60,29 +60,40 @@ export const syncAeronauticalData = async (): Promise<{ airac: AiracCycle, chart
 };
 
 export const searchAerodrome = async (query: string): Promise<{ icao: string, name: string, lat: number, lng: number, magneticVariation?: number } | null> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Encontre as coordenadas, o nome oficial e a variação magnética (em graus) do aeródromo ou ponto aeronáutico: ${query}. Forneça apenas dados reais e precisos para navegação aérea no Brasil.`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          icao: { type: Type.STRING },
-          name: { type: Type.STRING },
-          lat: { type: Type.NUMBER },
-          lng: { type: Type.NUMBER },
-          magneticVariation: { type: Type.NUMBER }
-        },
-        required: ["icao", "name", "lat", "lng"]
-      }
-    }
-  });
-
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    console.error("GEMINI_API_KEY is not set. Please ensure VITE_GEMINI_API_KEY is in your .env.local file.");
+    return null;
+  }
+  const ai = new GoogleGenAI({ apiKey });
   try {
-    return JSON.parse(response.text.trim());
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Encontre as coordenadas, o nome oficial e a variação magnética (em graus) do aeródromo ou ponto aeronáutico: ${query}. Forneça apenas dados reais e precisos para navegação aérea no Brasil.`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            icao: { type: Type.STRING },
+            name: { type: Type.STRING },
+            lat: { type: Type.NUMBER },
+            lng: { type: Type.NUMBER },
+            magneticVariation: { type: Type.NUMBER }
+          },
+          required: ["icao", "name", "lat", "lng"]
+        }
+      }
+    });
+
+    const text = response.text.trim();
+    if (!text) {
+      console.warn(`Gemini API returned empty response for query: ${query}`);
+      return null;
+    }
+    return JSON.parse(text);
   } catch (e) {
+    console.error(`Error calling Gemini API for query "${query}":`, e);
     return null;
   }
 };

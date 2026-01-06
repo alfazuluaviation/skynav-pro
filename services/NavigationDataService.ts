@@ -51,9 +51,13 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                             if (f.properties?.magvariati !== undefined) {
                                 magneticVariation = parseFloat(f.properties.magvariati);
                             } else if (icao) {
-                                const geminiResult = await searchAerodrome(icao);
-                                if (geminiResult?.magneticVariation !== undefined) {
-                                    magneticVariation = geminiResult.magneticVariation;
+                                try {
+                                    const geminiResult = await searchAerodrome(icao);
+                                    if (geminiResult?.magneticVariation !== undefined) {
+                                        magneticVariation = geminiResult.magneticVariation;
+                                    }
+                                } catch (geminiError) {
+                                    console.error(`Error fetching magnetic variation from Gemini for ICAO ${icao} during map data fetch:`, geminiError);
                                 }
                             }
                         } else if (layerName === 'ICA:waypoint') {
@@ -179,9 +183,13 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
                             if (f.properties?.magvariati !== undefined) {
                                 magneticVariation = parseFloat(f.properties.magvariati);
                             } else if (icao) {
-                                const geminiResult = await searchAerodrome(icao);
-                                if (geminiResult?.magneticVariation !== undefined) {
-                                    magneticVariation = geminiResult.magneticVariation;
+                                try {
+                                    const geminiResult = await searchAerodrome(icao);
+                                    if (geminiResult?.magneticVariation !== undefined) {
+                                        magneticVariation = geminiResult.magneticVariation;
+                                    }
+                                } catch (geminiError) {
+                                    console.error(`Error fetching magnetic variation from Gemini for ICAO ${icao} during search:`, geminiError);
                                 }
                             }
                         } else if (layerName === 'ICA:waypoint') {

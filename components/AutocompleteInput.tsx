@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { NavPoint, searchNavigationPoints } from '../services/NavigationDataService';
 import { IconSearch, IconPlane, IconLocation } from './Icons';
@@ -29,9 +28,15 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({ placeholde
             // logic to skip if query matches value prop (avoid search on selection)
             if (query.length >= 2 && query !== value && isOpen) {
                 setIsLoading(true);
-                const points = await searchNavigationPoints(query);
-                setResults(points);
-                setIsLoading(false);
+                try {
+                    const points = await searchNavigationPoints(query);
+                    setResults(points);
+                } catch (error) {
+                    console.error("Error searching navigation points in AutocompleteInput:", error);
+                    setResults([]); // Clear results on error
+                } finally {
+                    setIsLoading(false);
+                }
             } else if (query.length < 2) {
                 setResults([]);
             }
