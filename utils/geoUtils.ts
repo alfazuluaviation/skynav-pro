@@ -1,4 +1,4 @@
-import { getMagVar } from 'geomag-algorithms';
+import { getMagVar } from 'geomag';
 
 const R_NM = 3440.065; // Earth radius in nautical miles
 
