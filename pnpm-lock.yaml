@@ -14,6 +14,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.89.0
         version: 2.89.0
+      geomag:
+        specifier: ^1.0.0
+        version: 1.0.0
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
@@ -641,6 +644,9 @@ packages:
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
+
+  geomag@1.0.0:
+    resolution: {integrity: sha512-mEblE1vO7HojL7nk2R2s670s1nc/u0jtQaP/8EvZxPZ7XlfkwEJ+TWpjgkNy2402Yj2/VaxaefGQgIzbUzUwHg==}
 
   glob@10.5.0:
     resolution: {integrity: sha512-DfXN8DfhJ7NH3Oe7cFmu3NCu1wKbkReJ8TorzSAFbSKrlNaQSKfIzqYqVY8zlbs2NLBbWpRiU52GX2PbaBVNkg==}
@@ -1459,6 +1465,8 @@ snapshots:
       - supports-color
 
   gensync@1.0.0-beta.2: {}
+
+  geomag@1.0.0: {}
 
   glob@10.5.0:
     dependencies:
