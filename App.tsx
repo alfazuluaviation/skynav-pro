@@ -109,7 +109,7 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Initialization & Auto-Save
+  // Initialization & Auto-Load
   useEffect(() => {
     // 1. Load Settings & Layers
     const savedCharts = localStorage.getItem('sky_nav_charts');
@@ -144,7 +144,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Auto-Save Effect
+  // Auto-Save Effect for current plan
   useEffect(() => {
     const plan = {
       waypoints,
@@ -328,10 +328,10 @@ const App: React.FC = () => {
       ? from.magneticVariation
       : 0; // Default to 0 if undefined or NaN
 
-    const magneticTrack = applyMagneticVariation(trueBrng, magneticVariation);
-
     console.log(`Segment ${i}: From ${from.icao || from.name} (Lat: ${from.lat}, Lng: ${from.lng}, MagneticVariation_Waypoint: ${from.magneticVariation}) to ${to.icao || to.name}`);
-    console.log(`  True Bearing: ${trueBrng.toFixed(2)}°, Magnetic Variation Used: ${magneticVariation.toFixed(2)}°, Magnetic Track: ${magneticTrack.toFixed(2)}°`);
+    console.log(`  True Bearing: ${trueBrng.toFixed(2)}°, Magnetic Variation Used: ${magneticVariation.toFixed(2)}°, Magnetic Track: ${applyMagneticVariation(trueBrng, magneticVariation).toFixed(2)}°`);
+
+    const magneticTrack = applyMagneticVariation(trueBrng, magneticVariation);
 
     flightSegments.push({
       from, to,
