@@ -19,32 +19,25 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     const map = useMap();
     const [points, setPoints] = useState<NavPoint[]>([]);
     const [zoom, setZoom] = useState(map.getZoom());
-    const [isLocked, setIsLocked] = useState(true);
     
-    // REFERÊNCIA DE CONTROLE ABSOLUTO
-    // Usamos um Ref porque ele não é resetado por re-renderizações do componente pai
+    // O estado inicial é TRAVADO (seguindo o avião)
+    const [isLocked, setIsLocked] = useState(true);
     const isLockedRef = useRef(true);
 
-    // Sincroniza o estado visual com a referência de controle
-    const toggleLock = (e?: React.MouseEvent) => {
-        if (e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
+    // Função única para alternar a trava
+    const toggleLock = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
         const nextState = !isLocked;
         isLockedRef.current = nextState;
         setIsLocked(nextState);
-        console.log("Sistema de Travamento:", nextState ? "ARMADO" : "DESATIVADO");
+        console.log("Comando Manual - Mapa:", nextState ? "TRAVADO NO AVIÃO" : "LIVRE PARA NAVEGAÇÃO");
     };
 
-    // 1. LÓGICA DE MOVIMENTAÇÃO (BLINDADA)
+    // 1. LÓGICA DE MOVIMENTAÇÃO: Só executa se isLockedRef for true
     useEffect(() => {
-        // Se a referência diz que está destravado, saímos da função IMEDIATAMENTE
-        if (!isLockedRef.current) return;
-
-        if (aircraftPosition) {
-            // Usamos panTo com duração zero para uma resposta instantânea e sem loop
-            map.panTo(aircraftPosition, { animate: false });
+        if (isLockedRef.current && aircraftPosition) {
+            map.setView(aircraftPosition, map.getZoom(), { animate: true });
         }
     }, [aircraftPosition, map]);
 
@@ -58,27 +51,19 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
             const data = await fetchNavigationData(bounds);
             setPoints(data);
         } catch (error) {
-            console.error('Erro de Dados Nav:', error);
+            console.error('Nav Data Error:', error);
         }
     }, [map, points.length]);
 
-    // 2. EVENTOS: Se o usuário tocar no mapa, ele DEVE destravar
+    // 2. EVENTOS DO MAPA: Removido o destravamento automático ao arrastar
     useMapEvents({
         moveend: () => handleUpdate(),
-        zoomend: () => setZoom(map.getZoom()),
-        dragstart: () => {
-            isLockedRef.current = false;
-            setIsLocked(false);
-        },
-        touchstart: () => {
-            isLockedRef.current = false;
-            setIsLocked(false);
-        }
+        zoomend: () => setZoom(map.getZoom())
+        // dragstart removido para não interferir na sua decisão manual
     });
 
     useEffect(() => { handleUpdate(); }, [handleUpdate]);
 
-    // Funções de Cálculo Geodésico
     const calculateTrueTrack = (start: Waypoint, end: Waypoint) => {
         const rad = Math.PI / 180;
         const y = Math.sin((end.lng - start.lng) * rad) * Math.cos(end.lat * rad);
@@ -106,13 +91,12 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     />
                 )}
 
-                {/* SETAS DE RUMO (ESTILO DECEA) */}
+                {/* SETAS DE RUMO MAGNÉTICO (ESTILO DECEA) */}
                 {zoom >= 8 && waypoints.slice(0, -1).map((start, i) => {
                     const end = waypoints[i + 1];
                     if (!start || !end) return null;
 
                     const trueTrack = calculateTrueTrack(start, end);
-                    // Aqui pegaremos o dado exato da sua API
                     const magVar = start.magneticVariation || 0; 
                     const magTrack = (trueTrack - magVar + 360) % 360;
                     const dist = calculateDistance(start, end);
@@ -131,7 +115,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                                         clip-path: polygon(0% 0%, 82% 0%, 100% 50%, 82% 100%, 0% 100%);
                                         min-width: 90px;
                                     ">
-                                        <span style="font-weight: 900; font-size: 11px; transform: rotate(${needsFlip ? 180 : 0}deg);">
+                                        <span style="font-weight: 900; font-size: 11px; transform: rotate(${needsFlip ? 180 : 0}deg); white-space: nowrap;">
                                             ${magTrack.toFixed(0).padStart(3, '0')}°M ${dist.toFixed(0)}NM
                                         </span>
                                     </div>
@@ -145,35 +129,25 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                 })}
             </LayerGroup>
 
-            {/* BOTÃO DE LOCK - POSICIONAMENTO FIXO FORA DO MAPA */}
+            {/* BOTÃO DE LOCK - AGORA 100% MANUAL */}
             <div 
                 style={{
-                    position: 'fixed',
-                    bottom: '40px',
-                    right: '40px',
-                    zIndex: 99999, // Garantia total de clique
-                    background: isLocked ? '#d946ef' : '#1e293b',
-                    color: 'white',
-                    width: '64px',
-                    height: '64px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    border: '3px solid white',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+                    position: 'fixed', bottom: '40px', right: '40px', zIndex: 99999,
+                    background: isLocked ? '#d946ef' : 'rgba(15, 23, 42, 0.9)',
+                    color: 'white', width: '64px', height: '64px', borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', border: '3px solid white', boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
                 }} 
                 onClick={toggleLock}
             >
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                     {isLocked ? (
                         <>
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="white" fillOpacity="0.3"/>
-                            <circle cx="12" cy="12" r="3" fill="white" />
+                            <circle cx="12" cy="12" r="10" fill="white" fillOpacity="0.2"/>
+                            <circle cx="12" cy="12" r="4" fill="white" />
                         </>
                     ) : (
-                        <path d="M18 6L6 18M6 6l12 12" />
+                        <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" strokeLinecap="round" strokeLinejoin="round"/>
                     )}
                 </svg>
             </div>
