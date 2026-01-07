@@ -16,31 +16,31 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
   const [isLoading, setIsLoading] = useState(false);
   const [zoom, setZoom] = React.useState(map.getZoom());
 
-  // Movemos o useMapEvents para BAIXO do handleUpdate depois, 
-  // por enquanto, vamos apenas garantir que ele não quebre:
+  // 1. Primeiro definimos a função handleUpdate
+  const handleUpdate = useCallback(async () => {
+    if (map.getZoom() < 8) return;
+    
+    setIsLoading(true);
+    try {
+      const bounds = map.getBounds();
+      const data = await fetchNavigationData(bounds);
+      setPoints(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [map]);
+
+  // 2. Depois criamos os eventos que chamam essa função
   const mapEvents = useMapEvents({
     moveend: () => {
-        // Se der erro de "handleUpdate is not defined", mova este bloco 
-        // para baixo da linha 52 (após o useCallback)
-        if (typeof handleUpdate === 'function') handleUpdate();
+      handleUpdate();
     },
     zoomend: () => {
-        setZoom(mapEvents.getZoom());
+      setZoom(mapEvents.getZoom());
     }
   });
-        if (map.getZoom() < 8) return;
-
-        setIsLoading(true);
-        try {
-            const bounds = map.getBounds();
-            const data = await fetchNavigationData(bounds);
-            setPoints(data);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [map]);
 
     useEffect(() => {
         setZoom(map.getZoom());
