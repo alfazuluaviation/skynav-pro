@@ -21,21 +21,30 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     const [zoom, setZoom] = useState(map.getZoom());
     const [isLocked, setIsLocked] = useState(true);
     
-    // A "Trava de Segurança": Esta referência impede o useEffect de mover o mapa
-    const lockRef = useRef(true);
+    // REFERÊNCIA DE CONTROLE ABSOLUTO
+    // Usamos um Ref porque ele não é resetado por re-renderizações do componente pai
+    const isLockedRef = useRef(true);
 
     // Sincroniza o estado visual com a referência de controle
-    const toggleLock = () => {
-        const newLockState = !isLocked;
-        setIsLocked(newLockState);
-        lockRef.current = newLockState;
-        console.log("Map Lock State:", lockRef.current);
+    const toggleLock = (e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        const nextState = !isLocked;
+        isLockedRef.current = nextState;
+        setIsLocked(nextState);
+        console.log("Sistema de Travamento:", nextState ? "ARMADO" : "DESATIVADO");
     };
 
-    // 1. CENTRALIZAÇÃO (Apenas se lockRef.current for estritamente true)
+    // 1. LÓGICA DE MOVIMENTAÇÃO (BLINDADA)
     useEffect(() => {
-        if (lockRef.current && aircraftPosition) {
-            map.setView(aircraftPosition, map.getZoom(), { animate: true });
+        // Se a referência diz que está destravado, saímos da função IMEDIATAMENTE
+        if (!isLockedRef.current) return;
+
+        if (aircraftPosition) {
+            // Usamos panTo com duração zero para uma resposta instantânea e sem loop
+            map.panTo(aircraftPosition, { animate: false });
         }
     }, [aircraftPosition, map]);
 
@@ -49,34 +58,27 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
             const data = await fetchNavigationData(bounds);
             setPoints(data);
         } catch (error) {
-            console.error('Navigation Data Error:', error);
+            console.error('Erro de Dados Nav:', error);
         }
     }, [map, points.length]);
 
-    // 2. EVENTOS: Se houver qualquer interação manual, destrava NA HORA
+    // 2. EVENTOS: Se o usuário tocar no mapa, ele DEVE destravar
     useMapEvents({
         moveend: () => handleUpdate(),
         zoomend: () => setZoom(map.getZoom()),
         dragstart: () => {
-            lockRef.current = false;
+            isLockedRef.current = false;
             setIsLocked(false);
         },
-        zoomstart: () => {
-            lockRef.current = false;
+        touchstart: () => {
+            isLockedRef.current = false;
             setIsLocked(false);
-        },
-        mousedown: () => {
-            // Prevenção extra para cliques rápidos
-            if (lockRef.current) {
-                lockRef.current = false;
-                setIsLocked(false);
-            }
         }
     });
 
     useEffect(() => { handleUpdate(); }, [handleUpdate]);
 
-    // Cálculos de Rumo e Distância
+    // Funções de Cálculo Geodésico
     const calculateTrueTrack = (start: Waypoint, end: Waypoint) => {
         const rad = Math.PI / 180;
         const y = Math.sin((end.lng - start.lng) * rad) * Math.cos(end.lat * rad);
@@ -104,12 +106,13 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     />
                 )}
 
-                {/* SETAS DECEA */}
+                {/* SETAS DE RUMO (ESTILO DECEA) */}
                 {zoom >= 8 && waypoints.slice(0, -1).map((start, i) => {
                     const end = waypoints[i + 1];
                     if (!start || !end) return null;
 
                     const trueTrack = calculateTrueTrack(start, end);
+                    // Aqui pegaremos o dado exato da sua API
                     const magVar = start.magneticVariation || 0; 
                     const magTrack = (trueTrack - magVar + 360) % 360;
                     const dist = calculateDistance(start, end);
@@ -140,38 +143,37 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
 
                     return <Marker key={`arrow-${i}`} position={[midLat, midLng]} icon={deceaIcon} interactive={false} />;
                 })}
-
-                {/* PONTOS WFS */}
-                {zoom >= 8 && points.map(p => (
-                    <CircleMarker key={`${p.type}-${p.id}`} center={[p.lat, p.lng]} radius={4} pathOptions={{ color: '#ffffff', weight: 1, fillColor: '#3b82f6', fillOpacity: 0.9 }}>
-                        <Tooltip direction="top" offset={[0, -10]} opacity={0.9}><div style={{ fontSize: '11px' }}><strong>{p.icao || p.name}</strong></div></Tooltip>
-                    </CircleMarker>
-                ))}
             </LayerGroup>
 
-            {/* BOTÃO LOCK (Z-INDEX ALTÍSSIMO) */}
+            {/* BOTÃO DE LOCK - POSICIONAMENTO FIXO FORA DO MAPA */}
             <div 
                 style={{
-                    position: 'fixed', bottom: '40px', right: '40px', zIndex: 9999,
-                    background: isLocked ? '#d946ef' : 'rgba(15, 23, 42, 0.9)',
-                    color: 'white', width: '60px', height: '60px', borderRadius: '50%',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', border: '3px solid white', boxShadow: '0 6px 20px rgba(0,0,0,0.6)',
-                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                    position: 'fixed',
+                    bottom: '40px',
+                    right: '40px',
+                    zIndex: 99999, // Garantia total de clique
+                    background: isLocked ? '#d946ef' : '#1e293b',
+                    color: 'white',
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    border: '3px solid white',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
                 }} 
-                onClick={(e) => {
-                    e.stopPropagation(); // Impede que o clique no botão desative o lock pelo evento do mapa
-                    toggleLock();
-                }}
+                onClick={toggleLock}
             >
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
                     {isLocked ? (
                         <>
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="white" fillOpacity="0.2"/>
-                            <circle cx="12" cy="12" r="3" fill="white"/>
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="white" fillOpacity="0.3"/>
+                            <circle cx="12" cy="12" r="3" fill="white" />
                         </>
                     ) : (
-                        <path d="M21 21l-18-18M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        <path d="M18 6L6 18M6 6l12 12" />
                     )}
                 </svg>
             </div>
