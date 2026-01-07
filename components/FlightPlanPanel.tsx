@@ -20,7 +20,7 @@ interface FlightPlanPanelProps {
   onSearch: (e: React.FormEvent) => void;
   onClearWaypoints: () => void;
   onRemoveWaypoint: (id: string) => void;
-  onMoveWaypoint: (id: string, direction: 'UP' | 'DOWN') => void;
+  onReorderWaypoints: (newWaypoints: Waypoint[]) => void;
   onPlanViewModeChange: (mode: 'ETAPA' | 'ACUMULADO') => void;
   onAddWaypoint: (point: NavPoint, type: 'ORIGIN' | 'DESTINATION' | 'WAYPOINT') => void;
   savedPlans: SavedPlan[];
@@ -39,7 +39,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   onAircraftModelChange,
   onClearWaypoints,
   onRemoveWaypoint,
-  onMoveWaypoint,
+  onReorderWaypoints,
   onAddWaypoint,
   savedPlans,
   onSavePlan,
