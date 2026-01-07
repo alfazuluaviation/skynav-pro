@@ -69,7 +69,7 @@ const App: React.FC = () => {
   const [loadingSession, setLoadingSession] = useState(true); // New state for session loading
   const [showPlanPanel, setShowPlanPanel] = useState(false);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
-  const [userPos, setUserPos] = useState<[number, number] | null>(null);
+  const [userPos, setUserPos] = useState<[number, number]>([-12.9714, -38.5014]);
   const [stats, setStats] = useState<FlightStats>({ groundSpeed: 0, altitude: 0, heading: 0, nextWaypointDistance: null, ete: null });
   const [isFollowing, setIsFollowing] = useState(true);
   const [isNightMode, setIsNightMode] = useState(true);
