@@ -294,11 +294,14 @@ const [stats, setStats] = useState<FlightStats>({
         }
       } else {
         // WAYPOINT insertion
-        // If we have a destination at the end, insert BEFORE it.
-        // Otherwise, append.
-        if (next.length > 1 && next[next.length - 1].role === 'DESTINATION') {
-          next.splice(next.length - 1, 0, { ...wp, role: 'WAYPOINT' });
+        // Find the index of the destination if it exists
+        const destinationIndex = next.findIndex(w => w.role === 'DESTINATION');
+        
+        if (destinationIndex !== -1) {
+          // Insert waypoint BEFORE the destination point
+          next.splice(destinationIndex, 0, { ...wp, role: 'WAYPOINT' });
         } else {
+          // If no destination is set yet, just append
           next.push({ ...wp, role: 'WAYPOINT' });
         }
       }
