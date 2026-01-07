@@ -70,7 +70,27 @@ const App: React.FC = () => {
   const [showPlanPanel, setShowPlanPanel] = useState(false);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [userPos, setUserPos] = useState<[number, number]>([-12.9714, -38.5014]);
-  const [stats, setStats] = useState<FlightStats>({ groundSpeed: 0, altitude: 0, heading: 0, nextWaypointDistance: null, ete: null });
+ useEffect(() => {
+  const fetchAircraftPosition = async () => {
+    // Busca a posição mais recente do callsign SKYN01
+    const { data, error } = await supabase
+      .from('aircraft_positions')
+      .select('latitude, longitude')
+      .eq('callsign', 'SKYN01')
+      .single();
+
+    if (data && !error) {
+      // Atualiza a posição do ícone no mapa com os dados do banco
+      setUserPos([data.latitude, data.longitude]);
+    }
+  };
+
+  // Chama a função imediatamente e repete a cada 5 segundos (Transponder)
+  fetchAircraftPosition();
+  const interval = setInterval(fetchAircraftPosition, 5000);
+
+  return () => clearInterval(interval); // Limpa o timer se fechar o app
+}, []);
   const [isFollowing, setIsFollowing] = useState(true);
   const [isNightMode, setIsNightMode] = useState(true);
   const [airac, setAirac] = useState<AiracCycle | null>(null);
