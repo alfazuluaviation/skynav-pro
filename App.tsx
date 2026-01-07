@@ -363,7 +363,7 @@ const App: React.FC = () => {
     console.log(`[App.tsx] True Bearing (calculated): ${trueBrng.toFixed(2)}°`);
     console.log(`[App.tsx] Magnetic Declination (WMM): ${magneticVariation.toFixed(2)}°`);
     const magneticTrack = applyMagneticVariation(trueBrng, magneticVariation);
-    console.log(`[App.tsx] Magnetic Track (calculated): ${magneticTrack.toFixed(2)}°`);
+    console.log(`[App.tsx] True Bearing (calculated): ${(trueBrng || 0).toFixed(2)}°`);
     
     flightSegments.push({
       from,
