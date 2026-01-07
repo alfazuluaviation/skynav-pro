@@ -57,8 +57,6 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   const [isAircraftOpen, setIsAircraftOpen] = useState(false);
   const [aircraftQuery, setAircraftQuery] = useState(aircraftModel.label);
   const [isExpanded, setIsExpanded] = useState(false);
-  
-  // Save/Load Modal States
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
   const [planName, setPlanName] = useState('');
@@ -72,6 +70,14 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
     ac.id.toLowerCase().includes(aircraftQuery.toLowerCase())
   );
 
+  const handleOnDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    const items = Array.from(waypoints);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+    onReorderWaypoints(items);
+  };
+
   const handleSaveSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (planName.trim()) {
@@ -82,7 +88,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   };
 
   const handleClearAll = () => {
-    if (window.confirm("Tem certeza que quer apagar todo o Plano de Voo?")) {
+    if (window.confirm("Are you sure you want to clear the entire Flight Plan?")) {
       onClearWaypoints();
     }
   };
