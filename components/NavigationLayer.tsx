@@ -12,17 +12,17 @@ interface NavigationLayerProps {
 }
 
 export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect, waypoints = [], flightSegments = [] }) => {
-  // 1. Hook essencial para acessar o mapa
   const map = useMap(); 
   
   const [points, setPoints] = useState<NavPoint[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [zoom, setZoom] = React.useState(map.getZoom());
+  const [zoom, setZoom] = useState(map.getZoom());
 
-  // 2. Definição da função de busca
+  // 1. Função de busca de dados (WFS)
   const handleUpdate = useCallback(async () => {
+    // Só busca se o zoom for maior ou igual a 8
     if (map.getZoom() < 8) {
-      if (points.length > 0) setPoints([]); // Limpa para economizar memória se estiver longe
+      if (points.length > 0) setPoints([]);
       return;
     }
     
@@ -38,17 +38,18 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
     }
   }, [map, points.length]);
 
-  // 3. Eventos do Mapa
+  // 2. Ouvinte de eventos do mapa
   const mapEvents = useMapEvents({
     moveend: () => {
       handleUpdate();
     },
     zoomend: () => {
-      setZoom(mapEvents.getZoom());
+      const currentZoom = mapEvents.getZoom();
+      setZoom(currentZoom);
     }
   });
 
-  // 4. Efeito inicial
+  // 3. Carregamento inicial
   useEffect(() => {
     handleUpdate();
   }, [handleUpdate]);
@@ -57,7 +58,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
 
   return (
     <LayerGroup>
-      {/* 1. Magenta Route Line */}
+      {/* 1. LINHA DA ROTA (MAGENTA) */}
       {routePositions.length > 1 && (
         <Polyline
           positions={routePositions}
@@ -71,7 +72,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
         />
       )}
 
-      {/* 2. Route Segment Info - Visible zoom > 9 */}
+      {/* 2. SETAS/PILLS DE INFORMAÇÃO DA ROTA (ZOOM > 9) */}
       {zoom > 9 && flightSegments.map((segment, i) => {
         const start = waypoints[i];
         const end = waypoints[i + 1];
@@ -80,6 +81,8 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
         const midLat = (start.lat + end.lat) / 2;
         const midLng = (start.lng + end.lng) / 2;
         const rotation = segment.track;
+        
+        // Mantém o texto em pé (leitura humana) entre 90 e 270 graus
         const needsFlip = rotation > 90 && rotation < 270;
 
         const arrowIcon = L.divIcon({
@@ -87,15 +90,19 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
           html: `
             <div style="transform: translate(-50%, -50%) rotate(${rotation - 90}deg); display: flex; align-items: center; justify-content: center;">
               <div style="
-                background: #d946ef; color: white; padding: 2px 8px; border-radius: 20px; 
-                display: flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,0.4);
-                box-shadow: 0 2px 4px rgba(0,0,0,0.3); white-space: nowrap;
+                background: #d946ef; color: white; padding: 4px 12px; border-radius: 20px; 
+                display: flex; align-items: center; gap: 8px; border: 2px solid white;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.4); white-space: nowrap;
                 transform: rotate(${needsFlip ? 180 : 0}deg);
               ">
                 <span style="display: flex; transform: rotate(${needsFlip ? 180 : 0}deg);">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M21 12l-18 9v-18z"/></svg>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                    <path d="M21 12l-18 9v-18z"/>
+                  </svg>
                 </span>
-                <span style="font-weight: 900; font-size: 11px;">${rotation.toFixed(0)}° | ${segment.distance.toFixed(0)}NM</span>
+                <span style="font-weight: 900; font-size: 12px; font-family: sans-serif; letter-spacing: 0.5px;">
+                  ${rotation.toFixed(0).padStart(3, '0')}° | ${segment.distance.toFixed(0)}NM
+                </span>
               </div>
             </div>
           `,
@@ -103,13 +110,19 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
         });
 
         return (
-          <Marker key={`nav-label-${i}`} position={[midLat, midLng]} icon={arrowIcon} interactive={false} zIndexOffset={1000} />
+          <Marker 
+            key={`pill-${i}-${start.id}`} 
+            position={[midLat, midLng]} 
+            icon={arrowIcon} 
+            interactive={false} 
+            zIndexOffset={1000} 
+          />
         );
       })}
 
-      {/* 3. Navigation Points - Visible zoom > 8 */}
+      {/* 3. PONTOS DE NAVEGAÇÃO (AERÓDROMOS, VOR, FIX) - ZOOM > 8 */}
       {zoom > 8 && points.map(p => {
-        let color = '#3b82f6';
+        let color = '#3b82f6'; // Azul padrão
         let radius = 6;
 
         if (p.type === 'vor') { color = '#f97316'; radius = 4; } 
