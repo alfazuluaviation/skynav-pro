@@ -16,6 +16,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
   const [points, setPoints] = useState<NavPoint[]>([]);
   const [zoom, setZoom] = useState(map.getZoom());
 
+  // 1. FUNÇÃO DE BUSCA (Assíncrona para permitir o await)
   const handleUpdate = useCallback(async () => {
     if (map.getZoom() < 8) {
       if (points.length > 0) setPoints([]);
@@ -23,6 +24,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
     }
     try {
       const bounds = map.getBounds();
+      // O await deve estar aqui dentro
       const data = await fetchNavigationData(bounds);
       setPoints(data);
     } catch (e) {
@@ -39,124 +41,92 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
     handleUpdate();
   }, [handleUpdate]);
 
-  const routePositions = waypoints.map(w => [w.lat, w.lng] as [number, number]);
+  // Cálculos internos para garantir que as setas apareçam mesmo se flightSegments vier vazio
+  const calculateTrack = (start: Waypoint, end: Waypoint) => {
+    const rad = Math.PI / 180;
+    const y = Math.sin((end.lng - start.lng) * rad) * Math.cos(end.lat * rad);
+    const x = Math.cos(start.lat * rad) * Math.sin(end.lat * rad) -
+              Math.sin(start.lat * rad) * Math.cos(end.lat * rad) * Math.cos((end.lng - start.lng) * rad);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  };
+
+  const calculateDistance = (start: Waypoint, end: Waypoint) => {
+    const R = 3440.065; // Milhas Náuticas
+    const rad = Math.PI / 180;
+    const a = Math.sin(((end.lat - start.lat) * rad)/2) ** 2 +
+              Math.cos(start.lat*rad) * Math.cos(end.lat*rad) * Math.sin(((end.lng - start.lng) * rad)/2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  };
+
+  // DIAGNÓSTICO NO CONSOLE
+  console.log("Status da Camada:", { 
+    pontos_rota: waypoints.length, 
+    zoom_atual: zoom, 
+    pontos_wfs: points.length 
+  });
 
   return (
     <LayerGroup>
-      {/* 1. LINHA DA ROTA MAGENTA */}
-      {routePositions.length > 1 && (
+      {/* LINHA DA ROTA */}
+      {waypoints.length > 1 && (
         <Polyline 
-          positions={routePositions} 
-          pathOptions={{ 
-            color: '#d946ef', 
-            weight: 5, 
-            lineCap: 'round',
-            opacity: 0.8 
-          }} 
+          positions={waypoints.map(w => [w.lat, w.lng])} 
+          pathOptions={{ color: '#d946ef', weight: 5, lineCap: 'round', opacity: 0.8 }} 
         />
       )}
 
-      {/* 2. SETAS/PILLS DE NAVEGAÇÃO (ZOOM > 9) */}
-      {zoom > 9 && flightSegments.map((segment, i) => {
-        const start = waypoints[i];
+      {/* SETAS (PILLS) MAGENTA - Visíveis em Zoom > 9 */}
+      {zoom > 9 && waypoints.slice(0, -1).map((start, i) => {
         const end = waypoints[i + 1];
         if (!start || !end) return null;
 
+        const track = calculateTrack(start, end);
+        const dist = calculateDistance(start, end);
         const midLat = (start.lat + end.lat) / 2;
         const midLng = (start.lng + end.lng) / 2;
-        const rotation = segment.track;
-        
-        // Mantém o texto legível (não de cabeça para baixo)
-        const needsFlip = rotation > 90 && rotation < 270;
+        const needsFlip = track > 90 && track < 270;
 
         const arrowIcon = L.divIcon({
-          className: 'route-pill-marker',
-          // O segredo está no margin-left e margin-top para centralizar o div
+          className: 'pill-marker',
           html: `
-            <div style="
-              display: flex; 
-              align-items: center; 
-              justify-content: center; 
-              width: 120px; 
-              height: 30px; 
-              margin-left: -60px; 
-              margin-top: -15px;
-              pointer-events: none;
-            ">
-              <div style="
-                transform: rotate(${rotation - 90}deg);
-              ">
+            <div style="display: flex; align-items: center; justify-content: center; width: 150px; margin-left: -75px; margin-top: -15px;">
+              <div style="transform: rotate(${track - 90}deg);">
                 <div style="
-                  background: #d946ef; 
-                  color: white; 
-                  padding: 4px 10px; 
-                  border-radius: 20px; 
-                  display: flex; 
-                  align-items: center; 
-                  gap: 6px; 
-                  border: 2px solid white;
-                  box-shadow: 0 2px 5px rgba(0,0,0,0.4);
-                  transform: rotate(${needsFlip ? 180 : 0}deg);
+                  background: #d946ef; color: white; padding: 4px 12px; border-radius: 20px; 
+                  display: flex; align-items: center; gap: 6px; border: 2px solid white;
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.4); transform: rotate(${needsFlip ? 180 : 0}deg);
                   white-space: nowrap;
                 ">
                   <span style="display: flex; transform: rotate(${needsFlip ? 180 : 0}deg);">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
-                      <path d="M21 12l-18 9v-18z"/>
-                    </svg>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M21 12l-18 9v-18z"/></svg>
                   </span>
-                  <span style="font-weight: 900; font-size: 11px; font-family: sans-serif;">
-                    ${rotation.toFixed(0).padStart(3, '0')}° | ${segment.distance.toFixed(0)}NM
+                  <span style="font-weight: 900; font-size: 11px;">
+                    ${track.toFixed(0).padStart(3, '0')}° | ${dist.toFixed(0)}NM
                   </span>
                 </div>
               </div>
             </div>
           `,
-          iconSize: [0, 0],
-          iconAnchor: [0, 0]
+          iconSize: [0, 0]
         });
 
-console.log("Dados da Rota:", { waypoints: waypoints.length, segments: flightSegments.length, currentZoom: zoom });
-        return (
-          <Marker 
-            key={`pill-${i}-${segment.track}`} 
-            position={[midLat, midLng]} 
-            icon={arrowIcon} 
-            interactive={false} 
-            zIndexOffset={2000} // Garante que fique acima de tudo
-          />
-        );
+        return <Marker key={`pill-${i}`} position={[midLat, midLng]} icon={arrowIcon} interactive={false} zIndexOffset={2000} />;
       })}
 
-      {/* 3. PONTOS DE NAVEGAÇÃO (ZOOM > 8) */}
-      {zoom > 8 && points.map(p => {
-        let color = '#3b82f6';
-        if (p.type === 'vor') color = '#f97316';
-        else if (p.type === 'ndb') color = '#eab308';
-        else if (p.type === 'fix') color = '#a855f7';
-
-        return (
-          <CircleMarker
-            key={`${p.type}-${p.id}`}
-            center={[p.lat, p.lng]}
-            radius={p.type === 'fix' ? 3 : 4}
-            pathOptions={{
-              color: '#ffffff',
-              weight: 1,
-              fillColor: color,
-              fillOpacity: 0.9
-            }}
-            eventHandlers={{
-              click: () => onPointSelect?.(p)
-            }}
-          >
-            <Tooltip direction="top" offset={[0, -10]} opacity={0.9}>
-              <div style={{ textAlign: 'center', fontSize: '11px' }}>
-                <strong>{p.icao || p.name}</strong>
-              </div>
-            </Tooltip>
-          </CircleMarker>
-        );
-      })}
+      {/* PONTOS DE NAVEGAÇÃO WFS */}
+      {zoom > 8 && points.map(p => (
+        <CircleMarker
+          key={`${p.type}-${p.id}`}
+          center={[p.lat, p.lng]}
+          radius={4}
+          pathOptions={{ color: '#ffffff', weight: 1, fillColor: '#3b82f6', fillOpacity: 0.9 }}
+          eventHandlers={{ click: () => onPointSelect?.(p) }}
+        >
+          <Tooltip direction="top" offset={[0, -10]} opacity={0.9}>
+            <div style={{ fontSize: '11px' }}><strong>{p.icao || p.name}</strong></div>
+          </Tooltip>
+        </CircleMarker>
+      ))}
     </LayerGroup>
   );
 };
