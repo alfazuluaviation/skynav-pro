@@ -13,7 +13,6 @@ interface NavigationLayerProps {
 
 export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect, waypoints = [], flightSegments = [] }) => {
     const [points, setPoints] = useState<NavPoint[]>([]);
-    const [zoom, setZoom] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
 
     const [zoom, setZoom] = React.useState(map.getZoom());
