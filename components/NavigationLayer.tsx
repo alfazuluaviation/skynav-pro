@@ -21,13 +21,20 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     const [zoom, setZoom] = useState(map.getZoom());
     const [isLocked, setIsLocked] = useState(true);
     
-    // Referência para leitura imediata da trava
-    const isLockedRef = useRef(isLocked);
-    useEffect(() => { isLockedRef.current = isLocked; }, [isLocked]);
+    // A "Trava de Segurança": Esta referência impede o useEffect de mover o mapa
+    const lockRef = useRef(true);
 
-    // Lógica de Centralização Agressiva
+    // Sincroniza o estado visual com a referência de controle
+    const toggleLock = () => {
+        const newLockState = !isLocked;
+        setIsLocked(newLockState);
+        lockRef.current = newLockState;
+        console.log("Map Lock State:", lockRef.current);
+    };
+
+    // 1. CENTRALIZAÇÃO (Apenas se lockRef.current for estritamente true)
     useEffect(() => {
-        if (isLockedRef.current && aircraftPosition) {
+        if (lockRef.current && aircraftPosition) {
             map.setView(aircraftPosition, map.getZoom(), { animate: true });
         }
     }, [aircraftPosition, map]);
@@ -46,18 +53,30 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
         }
     }, [map, points.length]);
 
-    // EVENTOS: Mata o lock em qualquer interação
+    // 2. EVENTOS: Se houver qualquer interação manual, destrava NA HORA
     useMapEvents({
         moveend: () => handleUpdate(),
         zoomend: () => setZoom(map.getZoom()),
-        dragstart: () => setIsLocked(false),
-        mousedown: () => setIsLocked(false),
-        touchstart: () => setIsLocked(false),
-        zoomstart: () => setIsLocked(false)
+        dragstart: () => {
+            lockRef.current = false;
+            setIsLocked(false);
+        },
+        zoomstart: () => {
+            lockRef.current = false;
+            setIsLocked(false);
+        },
+        mousedown: () => {
+            // Prevenção extra para cliques rápidos
+            if (lockRef.current) {
+                lockRef.current = false;
+                setIsLocked(false);
+            }
+        }
     });
 
     useEffect(() => { handleUpdate(); }, [handleUpdate]);
 
+    // Cálculos de Rumo e Distância
     const calculateTrueTrack = (start: Waypoint, end: Waypoint) => {
         const rad = Math.PI / 180;
         const y = Math.sin((end.lng - start.lng) * rad) * Math.cos(end.lat * rad);
@@ -91,7 +110,6 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     if (!start || !end) return null;
 
                     const trueTrack = calculateTrueTrack(start, end);
-                    // IMPORTANTE: Busca a variação magnética oficial do objeto
                     const magVar = start.magneticVariation || 0; 
                     const magTrack = (trueTrack - magVar + 360) % 360;
                     const dist = calculateDistance(start, end);
@@ -131,25 +149,29 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                 ))}
             </LayerGroup>
 
-            {/* BOTÃO LOCK */}
+            {/* BOTÃO LOCK (Z-INDEX ALTÍSSIMO) */}
             <div 
                 style={{
-                    position: 'fixed', bottom: '30px', right: '30px', zIndex: 1000,
-                    background: isLocked ? '#d946ef' : 'rgba(15, 23, 42, 0.8)',
-                    color: 'white', width: '55px', height: '55px', borderRadius: '50%',
+                    position: 'fixed', bottom: '40px', right: '40px', zIndex: 9999,
+                    background: isLocked ? '#d946ef' : 'rgba(15, 23, 42, 0.9)',
+                    color: 'white', width: '60px', height: '60px', borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', border: '2px solid white', boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
+                    cursor: 'pointer', border: '3px solid white', boxShadow: '0 6px 20px rgba(0,0,0,0.6)',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                 }} 
-                onClick={() => setIsLocked(!isLocked)}
+                onClick={(e) => {
+                    e.stopPropagation(); // Impede que o clique no botão desative o lock pelo evento do mapa
+                    toggleLock();
+                }}
             >
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     {isLocked ? (
                         <>
-                            <circle cx="12" cy="12" r="10" />
-                            <circle cx="12" cy="12" r="3" fill="white" />
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="white" fillOpacity="0.2"/>
+                            <circle cx="12" cy="12" r="3" fill="white"/>
                         </>
                     ) : (
-                        <path d="M1 1l22 22M12 2a10 10 0 0 1 10 10" />
+                        <path d="M21 21l-18-18M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     )}
                 </svg>
             </div>
