@@ -167,4 +167,6 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
             })}
         </LayerGroup>
     );
-};
+}; // Fecha o componente NavigationLayer
+
+export default NavigationLayer;
