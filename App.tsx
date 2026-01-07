@@ -91,6 +91,7 @@ const App: React.FC = () => {
 
   return () => clearInterval(interval); // Limpa o timer se fechar o app
 }, []);
+
   const [isFollowing, setIsFollowing] = useState(true);
   const [isNightMode, setIsNightMode] = useState(true);
   const [airac, setAirac] = useState<AiracCycle | null>(null);
