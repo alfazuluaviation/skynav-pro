@@ -68,62 +68,52 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
                 />
             )}
 
-            {/* 2. Route Segment Labels (Pills) */}
-{flightSegments.map((segment, i) => {
-  const start = waypoints[i];
-  const end = waypoints[i + 1];
-  if (!start || !end) return null;
+            {zoom > 9 && flightSegments.map((segment, i) => {
+        const start = waypoints[i];
+        const end = waypoints[i + 1];
+        if (!start || !end) return null;
 
-  const midLat = (start.lat + end.lat) / 2;
-  const midLng = (start.lng + end.lng) / 2;
-  const rotation = segment.track;
+        const midLat = (start.lat + end.lat) / 2;
+        const midLng = (start.lng + end.lng) / 2;
+        const rotation = segment.track;
+        
+        // Check if text needs to flip to stay upright
+        const needsFlip = rotation > 90 && rotation < 270;
 
-  // 1. Calculate if text should flip to stay upright (between 90° and 270°)
-  const shouldFlip = rotation > 90 && rotation < 270;
-  const textRotation = shouldFlip ? 180 : 0;
+        const arrowIcon = L.divIcon({
+          className: 'bg-transparent border-none',
+          html: `
+            <div style="transform: translate(-50%, -50%) rotate(${rotation - 90}deg); display: flex; align-items: center; justify-content: center;">
+              <div style="
+                background: #d946ef; color: white; padding: 2px 8px; border-radius: 20px; 
+                display: flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,0.4);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.3); white-space: nowrap;
+                transform: rotate(${needsFlip ? 180 : 0}deg);
+              ">
+                <span style="display: flex; transform: rotate(${needsFlip ? 180 : 0}deg);">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="white">
+                    <path d="M21 12l-18 9v-18z"/>
+                  </svg>
+                </span>
+                <span style="font-weight: 900; font-size: 11px; letter-spacing: 0.5px;">
+                  ${rotation.toFixed(0)}° | ${segment.distance.toFixed(0)}NM
+                </span>
+              </div>
+            </div>
+          `,
+          iconSize: [0, 0]
+        });
 
-  const arrowIcon = L.divIcon({
-    className: 'bg-transparent border-none',
-    html: `
-      <div style="
-        position: absolute;
-        left: 0; top: 0;
-        transform: translate(-50%, -50%) rotate(${rotation - 90}deg);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      ">
-        <div class="bg-[#d946ef] border border-white/20 text-white text-[10px] 
-             font-black px-2 py-1 rounded-full shadow-lg flex items-center gap-1.5 
-             whitespace-nowrap tracking-wider"
-             style="transform: rotate(${textRotation}deg);">
-          
-          <span style="transform: rotate(${shouldFlip ? 180 : 0}deg); display: flex;">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M21 12l-18 9v-18z"/>
-            </svg>
-          </span>
-
-          <span>${segment.track}°</span>
-          <span class="w-px h-3 bg-white/30"></span>
-          <span>${segment.distance.toFixed(0)} NM</span>
-        </div>
-      </div>
-    `,
-    iconSize: [0, 0],
-    iconAnchor: [0, 0]
-  });
-
-  return (
-    <Marker
-      key={`seg-${i}`}
-      position={[midLat, midLng]}
-      icon={arrowIcon}
-      interactive={false}
-      zIndexOffset={100}
-    />
-  );
-})}
+        return (
+          <Marker 
+            key={`nav-label-${i}`} 
+            position={[midLat, midLng]} 
+            icon={arrowIcon} 
+            interactive={false} 
+            zIndexOffset={1000} 
+          />
+        );
+      })}
 
             {/* 3. Navigation Points (WFS) */}
             {points.map(p => {
