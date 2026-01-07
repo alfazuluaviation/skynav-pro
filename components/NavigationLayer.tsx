@@ -16,16 +16,17 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
     const [zoom, setZoom] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
 
-    const map = useMapEvents({
-        moveend: () => {
-            handleUpdate();
-        },
-        zoomend: () => {
-            const z = map.getZoom();
-            setZoom(z);
-            if (z < 8) setPoints([]);
-        }
-    });
+    const [zoom, setZoom] = React.useState(map.getZoom());
+
+  const mapEvents = useMapEvents({
+    moveend: () => {
+      handleUpdate();
+    },
+    zoomend: () => {
+      const currentZoom = mapEvents.getZoom();
+      setZoom(currentZoom);
+    }
+  });
 
     const handleUpdate = useCallback(async () => {
         if (map.getZoom() < 8) return;
