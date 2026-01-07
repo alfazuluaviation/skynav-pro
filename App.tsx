@@ -4,7 +4,6 @@ import L from 'leaflet';
 import { Waypoint, FlightStats, ChartConfig, AiracCycle, FlightSegment, SavedPlan, NavPoint } from './types';
 import { calculateDistance, calculateBearing, formatTime, applyMagneticVariation, getMagneticDeclination } from './utils/geoUtils';
 import { syncAeronauticalData, searchAerodrome } from './services/geminiService';
-
 // Components
 import { Sidebar } from './components/Sidebar';
 import { FlightPlanPanel } from './components/FlightPlanPanel';
@@ -24,35 +23,28 @@ const defaultIcon = L.icon({
   iconSize: [25, 41],
   iconAnchor: [12, 41],
 });
+
 L.Marker.prototype.options.icon = defaultIcon;
 
 const planeIcon = L.divIcon({
   html: `<div style="transform: rotate(0deg); transition: transform 0.5s;">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="#a855f7" stroke="white" stroke-width="0.5">
-            <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
-          </svg>
-        </div>`,
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="#a855f7" stroke="white" stroke-width="0.5">
+      <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+    </svg>
+  </div>`,
   className: 'plane-icon',
   iconSize: [40, 40],
   iconAnchor: [20, 20],
 });
 
 // Component to handle map resize and follow user
-function MapUIControls({
-  userPos,
-  isFollowing,
-  setIsFollowing,
-  showPlanPanel
-}: {
-  userPos: [number, number] | null,
-  isFollowing: boolean,
-  setIsFollowing: (v: boolean) => void,
-  showPlanPanel: boolean
-}) {
+function MapUIControls({ userPos, isFollowing, setIsFollowing, showPlanPanel }: { userPos: [number, number] | null, isFollowing: boolean, setIsFollowing: (v: boolean) => void, showPlanPanel: boolean }) {
   const map = useMap();
-
+  
   useEffect(() => {
-    setTimeout(() => { map.invalidateSize(); }, 300);
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 300);
   }, [showPlanPanel, map]);
 
   useEffect(() => {
@@ -70,34 +62,37 @@ const App: React.FC = () => {
   const [showPlanPanel, setShowPlanPanel] = useState(false);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [userPos, setUserPos] = useState<[number, number]>([-12.9714, -38.5014]);
- useEffect(() => {
-  const fetchAircraftPosition = async () => {
-    // Busca a posição mais recente do callsign SKYN01
-    const { data, error } = await supabase
-      .from('aircraft_positions')
-      .select('latitude, longitude')
-      .eq('callsign', 'SKYN01')
-      .single();
+  
+  useEffect(() => {
+    const fetchAircraftPosition = async () => {
+      // Busca a posição mais recente do callsign SKYN01
+      const { data, error } = await supabase
+        .from('aircraft_positions')
+        .select('latitude, longitude')
+        .eq('callsign', 'SKYN01')
+        .single();
+      
+      if (data && !error) {
+        // Atualiza a posição do ícone no mapa com os dados do banco
+        setUserPos([data.latitude, data.longitude]);
+      }
+    };
+    
+    // Chama a função imediatamente e repete a cada 5 segundos (Transponder)
+    fetchAircraftPosition();
+    const interval = setInterval(fetchAircraftPosition, 5000);
+    
+    return () => clearInterval(interval); // Limpa o timer se fechar o app
+  }, []);
 
-    if (data && !error) {
-      // Atualiza a posição do ícone no mapa com os dados do banco
-      setUserPos([data.latitude, data.longitude]);
-    }
-  };
-
-  // Chama a função imediatamente e repete a cada 5 segundos (Transponder)
-  fetchAircraftPosition();
-  const interval = setInterval(fetchAircraftPosition, 5000);
-
-  return () => clearInterval(interval); // Limpa o timer se fechar o app
-}, []);
-const [stats, setStats] = useState<FlightStats>({
+  const [stats, setStats] = useState<FlightStats>({
     groundSpeed: 0,
     altitude: 0,
     heading: 0,
     nextWaypointDistance: null,
-    ete: null
+    ete: null,
   });
+
   const [isFollowing, setIsFollowing] = useState(true);
   const [isNightMode, setIsNightMode] = useState(true);
   const [airac, setAirac] = useState<AiracCycle | null>(null);
@@ -110,7 +105,6 @@ const [stats, setStats] = useState<FlightStats>({
   const [activeLayers, setActiveLayers] = useState<string[]>([]);
   const [downloadedLayers, setDownloadedLayers] = useState<string[]>([]);
   const [syncingLayers, setSyncingLayers] = useState<Record<string, number>>({});
-
   const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
 
   // Persistence Keys
@@ -123,12 +117,10 @@ const [stats, setStats] = useState<FlightStats>({
       setSession(session);
       setLoadingSession(false); // Session loading is complete
     };
-
+    
     checkSession();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    
+    const { data: { subscription }, } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setLoadingSession(false); // Also set to false on auth state change
     });
@@ -150,6 +142,7 @@ const [stats, setStats] = useState<FlightStats>({
     } else {
       handleSync();
     }
+
     if (savedDownloaded) setDownloadedLayers(JSON.parse(savedDownloaded));
     if (savedActive) setActiveLayers(JSON.parse(savedActive));
 
@@ -176,7 +169,7 @@ const [stats, setStats] = useState<FlightStats>({
     const plan = {
       waypoints,
       aircraft: aircraftModel,
-      speed: plannedSpeed
+      speed: plannedSpeed,
     };
     localStorage.setItem(KEY_CURRENT_PLAN, JSON.stringify(plan));
   }, [waypoints, aircraftModel, plannedSpeed]);
@@ -197,7 +190,12 @@ const [stats, setStats] = useState<FlightStats>({
         });
       }, (err) => {
         console.error("Erro GPS:", err);
-      }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
+      }, {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+      });
+      
       return () => navigator.geolocation.clearWatch(watchId);
     }
   }, [waypoints]);
@@ -215,24 +213,26 @@ const [stats, setStats] = useState<FlightStats>({
       };
       setAirac(airacObj);
       localStorage.setItem('sky_nav_airac', JSON.stringify(airacObj));
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleChartDownload = async (layer: string) => {
     if (syncingLayers[layer] !== undefined) return;
-
+    
     // Iniciar progresso
     for (let p = 0; p <= 100; p += 10) {
       setSyncingLayers(prev => ({ ...prev, [layer]: p }));
       await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 500));
     }
-
+    
     setDownloadedLayers(prev => {
       const next = prev.includes(layer) ? prev : [...prev, layer];
       localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
       return next;
     });
-
+    
     setSyncingLayers(prev => {
       const next = { ...prev };
       delete next[layer];
@@ -260,7 +260,7 @@ const [stats, setStats] = useState<FlightStats>({
     }
   };
 
-  const handleAddWaypoint = (point: NavPoint, insertionType: 'ORIGIN' | 'DESTINATION' | 'WAYPOINT' = 'WAYPOINT') => {
+  const handleAddWaypoint = (point: NavPoint, insertionType: 'ORIGIN' | 'DESTINATION' | 'WAYPOINT') => {
     const wp: Waypoint = {
       id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: point.name,
@@ -274,38 +274,42 @@ const [stats, setStats] = useState<FlightStats>({
 
     setWaypoints(prev => {
       let next = [...prev];
-
+      
       if (insertionType === 'ORIGIN') {
-        // Always replace index 0
+        // Sempre substitui o índice 0
         if (next.length > 0) {
-          next[0] = { ...wp, role: 'ORIGIN' };
+          // Verifica se já existe uma origem e a substitui
+          const originIndex = next.findIndex(w => w.role === 'ORIGIN');
+          if (originIndex !== -1) {
+            next[originIndex] = { ...wp, role: 'ORIGIN' };
+          } else {
+            // Se não tem origem, insere no início
+            next.unshift({ ...wp, role: 'ORIGIN' });
+          }
         } else {
           next = [{ ...wp, role: 'ORIGIN' }];
         }
       } else if (insertionType === 'DESTINATION') {
-        // If the LAST element is already a DESTINATION, replace it.
-        // Otherwise, append.
-        if (next.length > 1 && next[next.length - 1].role === 'DESTINATION') {
-          next[next.length - 1] = { ...wp, role: 'DESTINATION' };
+        // Substitui o destino existente ou adiciona no final
+        const destinationIndex = next.findIndex(w => w.role === 'DESTINATION');
+        if (destinationIndex !== -1) {
+          next[destinationIndex] = { ...wp, role: 'DESTINATION' };
         } else {
-          // Append as new destination
-          // (Ensure previous last point loses implicit destination status if we tracked it, but role handles this)
+          // Se não tem destino, adiciona no final
           next.push({ ...wp, role: 'DESTINATION' });
         }
       } else {
-        // WAYPOINT insertion
-        // Find the index of the destination if it exists
+        // WAYPOINT insertion - insere antes do destino se existir, senão no final
         const destinationIndex = next.findIndex(w => w.role === 'DESTINATION');
-        
         if (destinationIndex !== -1) {
-          // Insert waypoint BEFORE the destination point
+          // Insere antes do destino
           next.splice(destinationIndex, 0, { ...wp, role: 'WAYPOINT' });
         } else {
-          // If no destination is set yet, just append
+          // Se não tem destino, adiciona no final
           next.push({ ...wp, role: 'WAYPOINT' });
         }
       }
-
+      
       return next;
     });
   };
@@ -313,12 +317,14 @@ const [stats, setStats] = useState<FlightStats>({
   const handleInvertRoute = () => {
     setWaypoints(prev => {
       if (prev.length < 2) return prev;
+      
       const newWaypoints = [...prev].reverse().map((wp, index, arr) => {
         let role: 'ORIGIN' | 'DESTINATION' | 'WAYPOINT' = 'WAYPOINT';
         if (index === 0) role = 'ORIGIN';
         else if (index === arr.length - 1) role = 'DESTINATION';
         return { ...wp, role };
       });
+      
       return newWaypoints;
     });
   };
@@ -327,13 +333,14 @@ const [stats, setStats] = useState<FlightStats>({
     setWaypoints(prev => {
       const index = prev.findIndex(w => w.id === id);
       if (index === -1) return prev;
-
+      
       const newWaypoints = [...prev];
       if (direction === 'UP' && index > 0) {
         [newWaypoints[index], newWaypoints[index - 1]] = [newWaypoints[index - 1], newWaypoints[index]];
       } else if (direction === 'DOWN' && index < prev.length - 1) {
         [newWaypoints[index], newWaypoints[index + 1]] = [newWaypoints[index + 1], newWaypoints[index]];
       }
+      
       return newWaypoints;
     });
   };
@@ -352,17 +359,15 @@ const [stats, setStats] = useState<FlightStats>({
     
     // Calculate magnetic variation dynamically using WMM
     const magneticVariation = getMagneticDeclination(from.lat, from.lng, 0, new Date()); // Assuming altitude 0 for now
-    
     console.log(`[App.tsx] Segment ${i}: From ${from.icao || from.name} (Lat: ${from.lat.toFixed(6)}, Lng: ${from.lng.toFixed(6)})`);
-    console.log(`[App.tsx]   True Bearing (calculated): ${trueBrng.toFixed(2)}°`);
-    console.log(`[App.tsx]   Magnetic Declination (WMM): ${magneticVariation.toFixed(2)}°`);
-    
+    console.log(`[App.tsx] True Bearing (calculated): ${trueBrng.toFixed(2)}°`);
+    console.log(`[App.tsx] Magnetic Declination (WMM): ${magneticVariation.toFixed(2)}°`);
     const magneticTrack = applyMagneticVariation(trueBrng, magneticVariation);
+    console.log(`[App.tsx] Magnetic Track (calculated): ${magneticTrack.toFixed(2)}°`);
     
-    console.log(`[App.tsx]   Magnetic Track (calculated): ${magneticTrack.toFixed(2)}°`);
-
     flightSegments.push({
-      from, to,
+      from,
+      to,
       distance: dist,
       track: Math.round(magneticTrack), // Now 'track' is magnetic
       ete: formatTime(dist / plannedSpeed),
@@ -383,13 +388,13 @@ const [stats, setStats] = useState<FlightStats>({
     setActiveLayers(prev => {
       const isActivating = !prev.includes(layer);
       let next = isActivating ? [...prev, layer] : prev.filter(l => l !== layer);
-
+      
       if (isActivating) {
         if (layer === 'HIGH') next = next.filter(l => l !== 'LOW' && l !== 'WAC');
         if (layer === 'LOW') next = next.filter(l => l !== 'HIGH' && l !== 'WAC');
         if (layer === 'WAC') next = next.filter(l => l !== 'HIGH' && l !== 'LOW');
       }
-
+      
       localStorage.setItem('sky_nav_active_layers', JSON.stringify(next));
       return next;
     });
@@ -436,7 +441,6 @@ const [stats, setStats] = useState<FlightStats>({
 
   return (
     <div className={`flex h-screen w-screen bg-[#0d1117] text-slate-100 overflow-hidden font-sans select-none transition-colors duration-500 ${!isNightMode ? 'bg-slate-200' : ''}`}>
-
       {/* SIDEBAR */}
       <Sidebar
         showPlanPanel={showPlanPanel}
@@ -454,7 +458,6 @@ const [stats, setStats] = useState<FlightStats>({
 
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex overflow-hidden relative">
-
         {/* FLIGHT PLAN PANEL */}
         {showPlanPanel && (
           <FlightPlanPanel
@@ -509,15 +512,13 @@ const [stats, setStats] = useState<FlightStats>({
               setIsFollowing={setIsFollowing}
               showPlanPanel={showPlanPanel}
             />
+            
             <TileLayer
-              url={isNightMode
-                ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              }
+              url={isNightMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"}
             />
-
+            
             {userPos && userPos[0] !== 0 && <Marker position={userPos} icon={planeIcon} zIndexOffset={1000} />}
-
+            
             {waypoints.map((wp) => (
               <Marker key={wp.id} position={[wp.lat, wp.lng]} icon={defaultIcon}>
                 <Popup><div className="p-2 font-black text-[10px] uppercase text-purple-400">{wp.name}</div></Popup>
@@ -538,6 +539,7 @@ const [stats, setStats] = useState<FlightStats>({
                 zIndex={100}
               />
             )}
+            
             {activeLayers.includes('LOW') && (
               <WMSTileLayer
                 url="https://geoaisweb.decea.mil.br/geoserver/wms"
@@ -549,17 +551,27 @@ const [stats, setStats] = useState<FlightStats>({
                 zIndex={100}
               />
             )}
+            
             {activeLayers.includes('WAC') && (
               <>
                 {/* WAC Group 1 (North/Northwest) */}
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
                   layers={[
-                    'ICA:WAC_2825_CABO_ORANGE', 'ICA:WAC_2826_MONTE_RORAIMA', 'ICA:WAC_2827_SERRA_PACARAIMA',
-                    'ICA:WAC_2892_PICO_DA_NEBLINA', 'ICA:WAC_2893_BOA_VISTA', 'ICA:WAC_2894_TUMUCUMAQUE',
-                    'ICA:WAC_2895_MACAPA', 'ICA:WAC_2944_FORTALEZA', 'ICA:WAC_2945_SAO_LUIS',
-                    'ICA:WAC_2946_BELEM', 'ICA:WAC_2947_SANTAREM', 'ICA:WAC_2948_MANAUS',
-                    'ICA:WAC_2949_SAO_GABRIEL_DA_CACHOEIRA', 'ICA:WAC_3012_CRUZEIRO_DO_SUL',
+                    'ICA:WAC_2825_CABO_ORANGE',
+                    'ICA:WAC_2826_MONTE_RORAIMA',
+                    'ICA:WAC_2827_SERRA_PACARAIMA',
+                    'ICA:WAC_2892_PICO_DA_NEBLINA',
+                    'ICA:WAC_2893_BOA_VISTA',
+                    'ICA:WAC_2894_TUMUCUMAQUE',
+                    'ICA:WAC_2895_MACAPA',
+                    'ICA:WAC_2944_FORTALEZA',
+                    'ICA:WAC_2945_SAO_LUIS',
+                    'ICA:WAC_2946_BELEM',
+                    'ICA:WAC_2947_SANTAREM',
+                    'ICA:WAC_2948_MANAUS',
+                    'ICA:WAC_2949_SAO_GABRIEL_DA_CACHOEIRA',
+                    'ICA:WAC_3012_CRUZEIRO_DO_SUL',
                     'ICA:WAC_3013_TABATINGA'
                   ].join(',')}
                   format="image/png"
@@ -568,15 +580,25 @@ const [stats, setStats] = useState<FlightStats>({
                   opacity={0.8}
                   zIndex={114}
                 />
+                
                 {/* WAC Group 2 (Center/Northeast) */}
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
                   layers={[
-                    'ICA:WAC_3014_HUMAITA', 'ICA:WAC_3015_ITAITUBA',
-                    'ICA:WAC_3016_IMPERATRIZ', 'ICA:WAC_3017_TERESINA', 'ICA:WAC_3018_NATAL',
-                    'ICA:WAC_3019_FERNANDO_DE_NORONHA', 'ICA:WAC_3066_RECIFE', 'ICA:WAC_3067_PETROLINA',
-                    'ICA:WAC_3068_PORTO_NACIONAL', 'ICA:WAC_3069_CACHIMBO', 'ICA:WAC_3070_JI_PARANA',
-                    'ICA:WAC_3071_PORTO_VELHO', 'ICA:WAC_3072_TARAUACA', 'ICA:WAC_3137_PRINCIPE_DA_BEIRA',
+                    'ICA:WAC_3014_HUMAITA',
+                    'ICA:WAC_3015_ITAITUBA',
+                    'ICA:WAC_3016_IMPERATRIZ',
+                    'ICA:WAC_3017_TERESINA',
+                    'ICA:WAC_3018_NATAL',
+                    'ICA:WAC_3019_FERNANDO_DE_NORONHA',
+                    'ICA:WAC_3066_RECIFE',
+                    'ICA:WAC_3067_PETROLINA',
+                    'ICA:WAC_3068_PORTO_NACIONAL',
+                    'ICA:WAC_3069_CACHIMBO',
+                    'ICA:WAC_3070_JI_PARANA',
+                    'ICA:WAC_3071_PORTO_VELHO',
+                    'ICA:WAC_3072_TARAUACA',
+                    'ICA:WAC_3137_PRINCIPE_DA_BEIRA',
                     'ICA:WAC_3138_CUIABA'
                   ].join(',')}
                   format="image/png"
@@ -585,16 +607,27 @@ const [stats, setStats] = useState<FlightStats>({
                   opacity={0.8}
                   zIndex={114}
                 />
+                
                 {/* WAC Group 3 (South/Southeast) */}
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
                   layers={[
-                    'ICA:WAC_3139_ARAGARCAS', 'ICA:WAC_3140_BRASILIA',
-                    'ICA:WAC_3141_SALVADOR', 'ICA:WAC_3189_BELO_HORIZONTE', 'ICA:WAC_3190_GOIANIA',
-                    'ICA:WAC_3191_RONDONOPOLIS', 'ICA:WAC_3192_CORUMBA', 'ICA:WAC_3260_BELA_VISTA',
-                    'ICA:WAC_3261_CAMPO_GRANDE', 'ICA:WAC_3262_SAO_PAULO', 'ICA:WAC_3263_RIO_DE_JANEIRO',
-                    'ICA:WAC_3313_CURITIBA', 'ICA:WAC_3314_FOZ_DO_IGUACU', 'ICA:WAC_3383_URUGUAIANA',
-                    'ICA:WAC_3384_PORTO_ALEGRE', 'ICA:WAC_3434_RIO_DA_PRATA'
+                    'ICA:WAC_3139_ARAGARCAS',
+                    'ICA:WAC_3140_BRASILIA',
+                    'ICA:WAC_3141_SALVADOR',
+                    'ICA:WAC_3189_BELO_HORIZONTE',
+                    'ICA:WAC_3190_GOIANIA',
+                    'ICA:WAC_3191_RONDONOPOLIS',
+                    'ICA:WAC_3192_CORUMBA',
+                    'ICA:WAC_3260_BELA_VISTA',
+                    'ICA:WAC_3261_CAMPO_GRANDE',
+                    'ICA:WAC_3262_SAO_PAULO',
+                    'ICA:WAC_3263_RIO_DE_JANEIRO',
+                    'ICA:WAC_3313_CURITIBA',
+                    'ICA:WAC_3314_FOZ_DO_IGUACU',
+                    'ICA:WAC_3383_URUGUAIANA',
+                    'ICA:WAC_3384_PORTO_ALEGRE',
+                    'ICA:WAC_3434_RIO_DA_PRATA'
                   ].join(',')}
                   format="image/png"
                   transparent={true}
@@ -604,7 +637,7 @@ const [stats, setStats] = useState<FlightStats>({
                 />
               </>
             )}
-
+            
             {activeLayers.includes('REA') && (
               <>
                 {/* REA / CCV - Specialized Layer for Recife to ensure loading reliability */}
@@ -617,6 +650,7 @@ const [stats, setStats] = useState<FlightStats>({
                   opacity={0.9}
                   zIndex={115}
                 />
+                
                 {/* REA / CCV Paper-style Georeferenced Charts (Group 1A) - v1.1.1 for raster compatibility */}
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
@@ -627,6 +661,7 @@ const [stats, setStats] = useState<FlightStats>({
                   opacity={0.9}
                   zIndex={116}
                 />
+                
                 {/* REA / CCV Paper-style Georeferenced Charts (Group 1B) - v1.1.1 for raster compatibility */}
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
@@ -637,6 +672,7 @@ const [stats, setStats] = useState<FlightStats>({
                   opacity={0.9}
                   zIndex={117}
                 />
+                
                 {/* REA / CCV Paper-style Georeferenced Charts (Group 2) - v1.1.1 for raster compatibility */}
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
@@ -649,15 +685,15 @@ const [stats, setStats] = useState<FlightStats>({
                 />
               </>
             )}
-
+            
             {/* DYNAMIC NAVIGATION DATA (Airports, Navaids, Route) */}
             <NavigationLayer
-              onPointSelect={handleAddWaypoint}
+              onPointSelect={(point) => handleAddWaypoint(point, 'WAYPOINT')}
               waypoints={waypoints}
               flightSegments={flightSegments}
             />
           </MapContainer>
-
+          
           <StatusBar stats={stats} />
         </div>
       </div>
