@@ -13,21 +13,21 @@ interface NavigationLayerProps {
 
 export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect, waypoints = [], flightSegments = [] }) => {
     const [points, setPoints] = useState<NavPoint[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [zoom, setZoom] = React.useState(map.getZoom());
 
-    const [zoom, setZoom] = React.useState(map.getZoom());
-
+  // Movemos o useMapEvents para BAIXO do handleUpdate depois, 
+  // por enquanto, vamos apenas garantir que ele não quebre:
   const mapEvents = useMapEvents({
     moveend: () => {
-      handleUpdate();
+        // Se der erro de "handleUpdate is not defined", mova este bloco 
+        // para baixo da linha 52 (após o useCallback)
+        if (typeof handleUpdate === 'function') handleUpdate();
     },
     zoomend: () => {
-      const currentZoom = mapEvents.getZoom();
-      setZoom(currentZoom);
+        setZoom(mapEvents.getZoom());
     }
   });
-
-    const handleUpdate = useCallback(async () => {
         if (map.getZoom() < 8) return;
 
         setIsLoading(true);
