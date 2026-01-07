@@ -21,14 +21,14 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     const [zoom, setZoom] = useState(map.getZoom());
     const [isLocked, setIsLocked] = useState(true);
     
-    // Referência para evitar loop de atualização no travamento do mapa
+    // Referência para leitura imediata da trava
     const isLockedRef = useRef(isLocked);
     useEffect(() => { isLockedRef.current = isLocked; }, [isLocked]);
 
-    // 3. CORREÇÃO DO TRAVAMENTO (LOCK): Centraliza apenas se isLocked for true
+    // Lógica de Centralização Agressiva
     useEffect(() => {
         if (isLockedRef.current && aircraftPosition) {
-            map.panTo(aircraftPosition, { animate: true });
+            map.setView(aircraftPosition, map.getZoom(), { animate: true });
         }
     }, [aircraftPosition, map]);
 
@@ -46,17 +46,18 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
         }
     }, [map, points.length]);
 
+    // EVENTOS: Mata o lock em qualquer interação
     useMapEvents({
         moveend: () => handleUpdate(),
         zoomend: () => setZoom(map.getZoom()),
-        // Se o usuário clicar ou arrastar, desativa o lock imediatamente
-        mousedown: () => { if (isLockedRef.current) setIsLocked(false); },
-        dragstart: () => { if (isLockedRef.current) setIsLocked(false); }
+        dragstart: () => setIsLocked(false),
+        mousedown: () => setIsLocked(false),
+        touchstart: () => setIsLocked(false),
+        zoomstart: () => setIsLocked(false)
     });
 
     useEffect(() => { handleUpdate(); }, [handleUpdate]);
 
-    // Cálculo Geodésico de Rumo Verdadeiro
     const calculateTrueTrack = (start: Waypoint, end: Waypoint) => {
         const rad = Math.PI / 180;
         const y = Math.sin((end.lng - start.lng) * rad) * Math.cos(end.lat * rad);
@@ -66,7 +67,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     };
 
     const calculateDistance = (start: Waypoint, end: Waypoint) => {
-        const R = 3440.065; // NM
+        const R = 3440.065; 
         const rad = Math.PI / 180;
         const a = Math.sin(((end.lat - start.lat) * rad) / 2) ** 2 +
                   Math.cos(start.lat * rad) * Math.cos(end.lat * rad) * Math.sin(((end.lng - start.lng) * rad) / 2) ** 2;
@@ -76,7 +77,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     return (
         <>
             <LayerGroup>
-                {/* 1. ROTA MAGENTA */}
+                {/* ROTA */}
                 {waypoints.length > 1 && (
                     <Polyline 
                         positions={waypoints.map(w => [w.lat, w.lng])} 
@@ -84,16 +85,15 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     />
                 )}
 
-                {/* 2. SETA ESTILO DECEA COM RUMO MAGNÉTICO OFICIAL */}
+                {/* SETAS DECEA */}
                 {zoom >= 8 && waypoints.slice(0, -1).map((start, i) => {
                     const end = waypoints[i + 1];
                     if (!start || !end) return null;
 
                     const trueTrack = calculateTrueTrack(start, end);
-                    // IMPORTANTE: Busca magVar da API. Se não houver, usa 0 e avisa no console.
-                    const magVar = start.magneticVariation ?? 0;
+                    // IMPORTANTE: Busca a variação magnética oficial do objeto
+                    const magVar = start.magneticVariation || 0; 
                     const magTrack = (trueTrack - magVar + 360) % 360;
-                    
                     const dist = calculateDistance(start, end);
                     const midLat = (start.lat + end.lat) / 2;
                     const midLng = (start.lng + end.lng) / 2;
@@ -107,11 +107,10 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                                     <div style="
                                         background: #d946ef; color: white; padding: 2px 10px; height: 26px;
                                         display: flex; align-items: center; border: 1.5px solid white;
-                                        box-shadow: 0 2px 6px rgba(0,0,0,0.4);
                                         clip-path: polygon(0% 0%, 82% 0%, 100% 50%, 82% 100%, 0% 100%);
                                         min-width: 90px;
                                     ">
-                                        <span style="font-weight: 900; font-size: 11px; font-family: sans-serif; transform: rotate(${needsFlip ? 180 : 0}deg); white-space: nowrap;">
+                                        <span style="font-weight: 900; font-size: 11px; transform: rotate(${needsFlip ? 180 : 0}deg);">
                                             ${magTrack.toFixed(0).padStart(3, '0')}°M ${dist.toFixed(0)}NM
                                         </span>
                                     </div>
@@ -121,10 +120,10 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                         iconSize: [0, 0]
                     });
 
-                    return <Marker key={`arrow-${i}`} position={[midLat, midLng]} icon={deceaIcon} interactive={false} zIndexOffset={2000} />;
+                    return <Marker key={`arrow-${i}`} position={[midLat, midLng]} icon={deceaIcon} interactive={false} />;
                 })}
 
-                {/* PONTOS DE NAVEGAÇÃO WFS */}
+                {/* PONTOS WFS */}
                 {zoom >= 8 && points.map(p => (
                     <CircleMarker key={`${p.type}-${p.id}`} center={[p.lat, p.lng]} radius={4} pathOptions={{ color: '#ffffff', weight: 1, fillColor: '#3b82f6', fillOpacity: 0.9 }}>
                         <Tooltip direction="top" offset={[0, -10]} opacity={0.9}><div style={{ fontSize: '11px' }}><strong>{p.icao || p.name}</strong></div></Tooltip>
@@ -132,20 +131,18 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                 ))}
             </LayerGroup>
 
-            {/* 3. BOTÃO DE LOCK (DESIGN MINIMALISTA) */}
+            {/* BOTÃO LOCK */}
             <div 
                 style={{
                     position: 'fixed', bottom: '30px', right: '30px', zIndex: 1000,
-                    background: isLocked ? '#d946ef' : 'rgba(30, 41, 59, 0.8)',
-                    color: 'white', width: '50px', height: '50px', borderRadius: '50%',
+                    background: isLocked ? '#d946ef' : 'rgba(15, 23, 42, 0.8)',
+                    color: 'white', width: '55px', height: '55px', borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', border: '2px solid white', boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
-                    transition: 'all 0.2s'
+                    cursor: 'pointer', border: '2px solid white', boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
                 }} 
                 onClick={() => setIsLocked(!isLocked)}
-                title={isLocked ? "Map Locked to Aircraft" : "Map Free"}
             >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                     {isLocked ? (
                         <>
                             <circle cx="12" cy="12" r="10" />
