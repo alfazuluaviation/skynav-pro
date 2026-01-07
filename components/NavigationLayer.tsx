@@ -115,6 +115,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
           iconAnchor: [0, 0]
         });
 
+console.log("Dados da Rota:", { waypoints: waypoints.length, segments: flightSegments.length, currentZoom: zoom });
         return (
           <Marker 
             key={`pill-${i}-${segment.track}`} 
