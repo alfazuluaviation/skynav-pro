@@ -369,7 +369,9 @@ const App: React.FC = () => {
       from,
       to,
       distance: dist,
-      track: Math.round(magneticTrack), // Now 'track' is magnetic
+      // Uses the magnetic track calculated by WMM. Fallback to 0 if undefined.
+      track: Math.round(magneticTrack || 0), 
+      // Prevents division by zero if plannedSpeed is not set
       ete: formatTime(dist / plannedSpeed),
       fuel: Math.round(dist * 1.3)
     });
