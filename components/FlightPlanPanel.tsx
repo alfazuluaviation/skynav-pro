@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'; // Nova linha
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { GripVertical } from 'lucide-react';
 import { Waypoint, FlightSegment, SavedPlan } from '../types';
 import { NavPoint } from '../services/NavigationDataService';
 import { AutocompleteInput } from './AutocompleteInput';
 import { commonAircraft } from '../utils/aircraftData';
-import { IconPlane, IconTrash, IconSwap, IconArrowUp, IconArrowDown, IconLocation, IconMaximize, IconDisk, IconFolder } from './Icons';
-import { GripVertical } from 'lucide-react'; // Para o ícone de arrastar
+import { 
+  IconPlane, IconTrash, IconSwap, IconArrowUp, 
+  IconArrowDown, IconLocation, IconMaximize, 
+  IconDisk, IconFolder 
+} from './Icons';
 
 interface FlightPlanPanelProps {
   waypoints: Waypoint[];
