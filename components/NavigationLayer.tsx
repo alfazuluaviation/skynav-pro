@@ -16,7 +16,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
   const [isLoading, setIsLoading] = useState(false);
   const [zoom, setZoom] = React.useState(map.getZoom());
 
-  // 1. Primeiro definimos a função handleUpdate
+  // 1. Definição da função de busca (PRECISA vir antes dos eventos)
   const handleUpdate = useCallback(async () => {
     if (map.getZoom() < 8) return;
     
@@ -26,13 +26,13 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
       const data = await fetchNavigationData(bounds);
       setPoints(data);
     } catch (e) {
-      console.error(e);
+      console.error('Navigation Data Error:', e);
     } finally {
       setIsLoading(false);
     }
   }, [map]);
 
-  // 2. Depois criamos os eventos que chamam essa função
+  // 2. Eventos do Mapa (Chamam o handleUpdate e atualizam o zoom)
   const mapEvents = useMapEvents({
     moveend: () => {
       handleUpdate();
@@ -42,10 +42,10 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({ onPointSelect,
     }
   });
 
-    useEffect(() => {
-        setZoom(map.getZoom());
-        handleUpdate();
-    }, [handleUpdate, map]);
+  // 3. Efeito inicial para carregar dados ao abrir
+  useEffect(() => {
+    handleUpdate();
+  }, [handleUpdate]);
 
     // Route Polyline
     const routePositions = waypoints.map(w => [w.lat, w.lng] as [number, number]);
