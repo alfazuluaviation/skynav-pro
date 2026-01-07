@@ -359,7 +359,7 @@ const App: React.FC = () => {
     
     // Calculate magnetic variation dynamically using WMM
     const magneticVariation = getMagneticDeclination(from.lat, from.lng, 0, new Date()); // Assuming altitude 0 for now
-    console.log(`[App.tsx] Segment ${i}: From ${from.icao || from.name} (Lat: ${from.lat.toFixed(6)}, Lng: ${from.lng.toFixed(6)})`);
+    console.log(`[App.tsx] Segment ${i}: From ${from.icao || from.name} (Lat: ${(from.lat || 0).toFixed(6)}, Lng: ${(from.lng || 0).toFixed(6)})`);
     console.log(`[App.tsx] True Bearing (calculated): ${trueBrng.toFixed(2)}°`);
     console.log(`[App.tsx] Magnetic Declination (WMM): ${magneticVariation.toFixed(2)}°`);
     const magneticTrack = applyMagneticVariation(trueBrng, magneticVariation);
