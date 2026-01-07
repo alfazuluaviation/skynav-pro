@@ -91,7 +91,13 @@ const App: React.FC = () => {
 
   return () => clearInterval(interval); // Limpa o timer se fechar o app
 }, []);
-
+const [stats, setStats] = useState<FlightStats>({
+    groundSpeed: 0,
+    altitude: 0,
+    heading: 0,
+    nextWaypointDistance: null,
+    ete: null
+  });
   const [isFollowing, setIsFollowing] = useState(true);
   const [isNightMode, setIsNightMode] = useState(true);
   const [airac, setAirac] = useState<AiracCycle | null>(null);
