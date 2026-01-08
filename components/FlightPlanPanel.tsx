@@ -5,6 +5,8 @@ import { Waypoint, FlightSegment, SavedPlan } from '../types';
 import { NavPoint } from '../services/NavigationDataService';
 import { AutocompleteInput } from './AutocompleteInput';
 import { commonAircraft } from '../utils/aircraftData';
+// Import the magnetic declination utility
+import { getMagDeclination } from '../utils/geo'; 
 import { 
   IconPlane, IconTrash, IconSwap, IconArrowUp, 
   IconArrowDown, IconLocation, IconMaximize, 
@@ -98,9 +100,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
       <section className="w-[420px] bg-slate-900/95 backdrop-blur-xl border-r border-slate-700/50 flex flex-col z-[1001] shadow-2xl shrink-0 animate-in slide-in-from-left duration-300 relative">
         {/* Header / Info & Search Inputs */}
         <div className="p-4 bg-slate-900/50 border-b border-slate-800/50">
-          {/* Aircraft Info & Speed Inputs */}
           <div className="flex items-start justify-between mb-4 gap-2">
-            {/* Aircraft Input */}
             <div className="flex-1 relative">
               <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest block mb-1">Aeronave</label>
               <div className="relative group">
@@ -141,7 +141,6 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
               </div>
             </div>
             
-            {/* Speed Input */}
             <div className="w-24">
               <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest block mb-1 text-right">Velocidade</label>
               <div className="relative">
@@ -158,9 +157,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
             </div>
           </div>
           
-          {/* Inputs */}
           <div className="space-y-3">
-            {/* Origem */}
             <div className="space-y-1">
               <label className="text-[10px] font-black text-teal-500 uppercase tracking-widest ml-1">Origem</label>
               <AutocompleteInput
@@ -171,7 +168,6 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
               />
             </div>
             
-            {/* Waypoints */}
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Waypoints / Fixos</label>
               <AutocompleteInput
@@ -180,7 +176,6 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
               />
             </div>
             
-            {/* Destino */}
             <div className="space-y-1">
               <label className="text-[10px] font-black text-purple-500 uppercase tracking-widest ml-1">Destino</label>
               <AutocompleteInput
@@ -193,11 +188,8 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
           </div>
         </div>
         
-        {/* Toolbar */}
         <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            Rota
-          </span>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rota</span>
           <div className="flex gap-1">
             <button onClick={() => setIsSaveModalOpen(true)} title="Salvar Plano" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-green-400 transition-colors">
               <IconDisk />
@@ -220,73 +212,79 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
         
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0b0e14] p-4">
           <DragDropContext onDragEnd={handleOnDragEnd}>
-  <Droppable droppableId="table-waypoints">
-    {(provided) => (
-      <tbody 
-        {...provided.droppableProps} 
-        ref={provided.innerRef} 
-        className="text-sm font-bold text-slate-300 divide-y divide-slate-800"
-      >
-        {waypoints.map((wp, i) => {
-          const segment = flightSegments[i];
-          const inboundSegment = i > 0 ? flightSegments[i - 1] : null;
-          const accumulatedDist = flightSegments.slice(0, i).reduce((acc, s) => acc + s.distance, 0);
-          
-          return (
-            <Draggable key={wp.id} draggableId={wp.id.toString()} index={i}>
-              {(draggableProvided, snapshot) => (
-                <tr 
-                  ref={draggableProvided.innerRef}
-                  {...draggableProvided.draggableProps}
-                  {...draggableProvided.dragHandleProps}
-                  className={`transition-colors ${
-                    snapshot.isDragging ? 'bg-slate-700 shadow-lg' : 'hover:bg-slate-800/30'
-                  }`}
+            <Droppable droppableId="waypoints-list">
+              {(provided) => (
+                <div 
+                  {...provided.droppableProps} 
+                  ref={provided.innerRef} 
+                  className="space-y-2"
                 >
-                  <td className="p-4 font-mono text-white text-base">
-                    <div className="flex items-center gap-2">
-                      <GripVertical size={14} className="text-slate-500" />
-                      {wp.icao || wp.name}
+                  {waypoints.length === 0 ? (
+                    <div className="text-center py-8 opacity-30">
+                      <p className="text-[10px] uppercase font-bold">No route defined</p>
                     </div>
-                  </td>
-                  <td className="p-4">
-                    <span className={`text-[9px] font-bold px-2 py-1 rounded text-black ${
-                      wp.role === 'ORIGIN' ? 'bg-teal-400' : 
-                      wp.role === 'DESTINATION' ? 'bg-purple-400' : 
-                      'bg-yellow-400'
-                    }`}>
-                      {wp.role === 'ORIGIN' ? 'ORIGIN' : wp.role === 'DESTINATION' ? 'DESTINATION' : wp.type}
-                    </span>
-                  </td>
-                  <td className="p-4 font-mono text-slate-500 text-xs">
-                    {wp.lat.toFixed(4)}, {wp.lng.toFixed(4)}
-                  </td>
-                  <td className="p-4 text-right font-mono text-purple-400">
-                    {inboundSegment ? (() => {
-                      const declination = getMagDeclination(wp.lat, wp.lng); 
-                      const magTrack = Math.round((inboundSegment.track - declination + 360) % 360);
-                      return `${magTrack.toString().padStart(3, '0')}°M`;
-                    })() : '-'}
-                  </td>
-                  <td className="p-4 text-right font-mono">
-                    {inboundSegment ? inboundSegment.distance.toFixed(1) : '-'}
-                  </td>
-                  <td className="p-4 text-right font-mono text-teal-400">
-                    {inboundSegment ? inboundSegment.ete : '-'}
-                  </td>
-                  <td className="p-4 text-right font-mono text-slate-400">
-                    {accumulatedDist > 0 ? accumulatedDist.toFixed(1) : '-'}
-                  </td>
-                </tr>
+                  ) : (
+                    waypoints.map((wp, i) => {
+                      const segment = flightSegments[i];
+                      const isOrigin = wp.role === 'ORIGIN';
+                      const isDest = wp.role === 'DESTINATION';
+                      
+                      return (
+                        <Draggable key={wp.id} draggableId={wp.id.toString()} index={i}>
+                          {(draggableProvided, snapshot) => (
+                            <div 
+                              ref={draggableProvided.innerRef}
+                              {...draggableProvided.draggableProps}
+                              className={`relative group border rounded-xl p-3 transition-colors ${
+                                snapshot.isDragging ? 'ring-2 ring-purple-500 bg-slate-800 z-50' : 
+                                isOrigin ? 'bg-teal-500/10 border-teal-500/30' : 
+                                isDest ? 'bg-purple-500/10 border-purple-500/30' : 
+                                'bg-slate-800/20 border-slate-800 hover:bg-slate-800/40'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <div {...draggableProvided.dragHandleProps} className="text-slate-600 hover:text-slate-400 cursor-grab active:cursor-grabbing">
+                                    <GripVertical size={14} />
+                                  </div>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded text-black ${
+                                    isOrigin ? 'bg-teal-400' : 
+                                    isDest ? 'bg-purple-400' : 
+                                    'bg-yellow-400'
+                                  }`}>
+                                    {isOrigin ? 'DEP' : isDest ? 'ARR' : (wp.type ? wp.type.substring(0, 3) : 'WPT')}
+                                  </span>
+                                  <span className="font-bold text-slate-200">{wp.icao || wp.name}</span>
+                                </div>
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => onRemoveWaypoint(wp.id)} className="p-1 hover:text-red-400">
+                                    <IconTrash />
+                                  </button>
+                                </div>
+                              </div>
+                              {segment && (
+                                <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+                                  <span>
+                                    {(() => {
+                                      const declination = getMagDeclination(wp.lat, wp.lng);
+                                      const magTrack = Math.round((segment.track - declination + 360) % 360);
+                                      return magTrack.toString().padStart(3, '0');
+                                    })()}°M / {segment.distance.toFixed(0)}NM
+                                  </span>
+                                  <span>{segment.ete}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </Draggable>
+                      );
+                    })
+                  )}
+                  {provided.placeholder}
+                </div>
               )}
-            </Draggable>
-          );
-        })}
-        {provided.placeholder}
-      </tbody>
-    )}
-  </Droppable>
-</DragDropContext>
+            </Droppable>
+          </DragDropContext>
         </div>
         
         {/* Footer Totals */}
@@ -338,7 +336,6 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                 </thead>
                 <tbody className="text-sm font-bold text-slate-300 divide-y divide-slate-800">
                   {waypoints.map((wp, i) => {
-                    const segment = flightSegments[i];
                     const inboundSegment = i > 0 ? flightSegments[i - 1] : null;
                     const accumulatedDist = flightSegments.slice(0, i).reduce((acc, s) => acc + s.distance, 0);
                     
@@ -355,118 +352,4 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                           </span>
                         </td>
                         <td className="p-4 font-mono text-slate-500 text-xs">
-                          {wp.lat.toFixed(4)}, {wp.lng.toFixed(4)}
-                        </td>
-                        <td className="p-4 text-right font-mono text-purple-400">
-  {inboundSegment ? (() => {
-    const declination = getMagDeclination(wp.lat, wp.lng); 
-    const magTrack = Math.round((inboundSegment.track - declination + 360) % 360);
-    return `${magTrack.toString().padStart(3, '0')}°M`;
-  })() : '-'}
-</td>
-<td className="p-4 text-right font-mono">
-  {inboundSegment ? inboundSegment.distance.toFixed(1) : '-'}
-</td>
-<td className="p-4 text-right font-mono text-teal-400">
-  {inboundSegment ? inboundSegment.ete : '-'}
-</td>
-<td className="p-4 text-right font-mono text-slate-400">
-  {accumulatedDist > 0 ? accumulatedDist.toFixed(1) : '-'}
-</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot className="bg-slate-900/80 border-t-2 border-slate-700">
-                  <tr>
-                    <td colSpan={4} className="p-4 text-right font-black uppercase text-slate-500">Totais</td>
-                    <td className="p-4 text-right font-black text-white text-lg">
-                      {flightSegments.reduce((acc, s) => acc + s.distance, 0).toFixed(0)} NM
-                    </td>
-                    <td className="p-4 text-right font-black text-white text-lg">
-                      {((flightSegments.reduce((acc, s) => acc + s.distance, 0) / plannedSpeed)).toFixed(2).replace('.', ':')} H
-                    </td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* SAVE PLAN MODAL */}
-      {isSaveModalOpen && (
-        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h3 className="text-xl font-black text-white mb-4">Salvar Plano de Voo</h3>
-            <form onSubmit={handleSaveSubmit}>
-              <div className="mb-4">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Nome do Plano</label>
-                <input
-                  type="text"
-                  autoFocus
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-green-500/50 focus:outline-none"
-                  placeholder="Ex: Voo SBGR-SBRJ"
-                  value={planName}
-                  onChange={e => setPlanName(e.target.value)}
-                />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <button type="button" onClick={() => setIsSaveModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white font-bold">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white font-bold">Salvar</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      
-      {/* LOAD PLAN MODAL */}
-      {isLoadModalOpen && (
-        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh]">
-            <div className="p-6 border-b border-slate-800">
-              <h3 className="text-xl font-black text-white mb-1">Carregar Plano</h3>
-              <p className="text-slate-500 text-xs">Selecione um plano salvo para carregar.</p>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {savedPlans.length === 0 ? (
-                <div className="text-center py-8 text-slate-600 font-bold text-xs uppercase">Nenhum plano salvo.</div>
-              ) : (
-                savedPlans.map((plan, i) => (
-                  <div 
-                    key={i} 
-                    className="flex items-center justify-between p-3 bg-slate-800/30 border border-slate-800 hover:bg-slate-800 hover:border-blue-500/30 rounded-lg group transition-colors cursor-pointer"
-                    onClick={() => {
-                      onLoadPlan(plan);
-                      setIsLoadModalOpen(false);
-                    }}
-                  >
-                    <div>
-                      <div className="font-bold text-white text-sm">{plan.name}</div>
-                      <div className="text-[10px] text-slate-500 font-mono mt-1">
-                        {new Date(plan.date).toLocaleDateString()} • {plan.waypoints.length} pontos • {plan.aircraft.label}
-                      </div>
-                    </div>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm('Deletar este plano?')) onDeletePlan(plan.name);
-                      }} 
-                      className="p-2 text-slate-600 hover:text-red-400 transition-colors"
-                    >
-                      <IconTrash />
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="p-4 border-t border-slate-800 flex justify-end">
-              <button onClick={() => setIsLoadModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white font-bold">Fechar</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
+                          {wp.lat.toFixed(4)},
