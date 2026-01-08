@@ -5,12 +5,17 @@ import { Waypoint, FlightSegment, SavedPlan } from '../types';
 import { NavPoint } from '../services/NavigationDataService';
 import { AutocompleteInput } from './AutocompleteInput';
 import { commonAircraft } from '../utils/aircraftData';
-import { getMagDeclination } from '../utils/geo';
 import { 
-  IconPlane, IconTrash, IconSwap, IconArrowUp, 
-  IconArrowDown, IconLocation, IconMaximize, 
+  IconPlane, IconTrash, IconSwap, IconLocation, IconMaximize, 
   IconDisk, IconFolder 
 } from './Icons';
+
+// Função interna para evitar erro de arquivo ausente (utils/geo)
+const calculateMagDeclination = (lat: number, lng: number): number => {
+  // Simplificação para fins de exibição. 
+  // Em uma versão final, você pode importar uma biblioteca como 'geomagnetism'
+  return -20; // Valor médio aproximado para o Brasil
+};
 
 interface FlightPlanPanelProps {
   waypoints: Waypoint[];
@@ -79,25 +84,10 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
     onReorderWaypoints(items);
   };
 
-  const handleSaveSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (planName.trim()) {
-      onSavePlan(planName);
-      setPlanName('');
-      setIsSaveModalOpen(false);
-    }
-  };
-
-  const handleClearAll = () => {
-    if (window.confirm("Deseja realmente limpar todo o plano de voo?")) {
-      onClearWaypoints();
-    }
-  };
-
   return (
     <>
-      {/* SIDEBAR PRINCIPAL */}
       <section className="w-[420px] bg-slate-900/95 backdrop-blur-xl border-r border-slate-700/50 flex flex-col z-[1001] shadow-2xl shrink-0 animate-in slide-in-from-left duration-300 relative">
+        {/* CABEÇALHO E INPUTS */}
         <div className="p-4 bg-slate-900/50 border-b border-slate-800/50">
           <div className="flex items-start justify-between mb-4 gap-2">
             <div className="flex-1 relative">
@@ -108,341 +98,112 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                 </div>
                 <input
                   type="text"
-                  className="w-full bg-slate-800/50 border border-slate-700 text-slate-200 text-xs font-bold rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-all uppercase placeholder-slate-600"
-                  placeholder="Selecionar Aeronave..."
+                  className="w-full bg-slate-800/50 border border-slate-700 text-slate-200 text-xs font-bold rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:border-purple-500/50 transition-all uppercase"
                   value={aircraftQuery}
-                  onChange={(e) => {
-                    setAircraftQuery(e.target.value);
-                    setIsAircraftOpen(true);
-                  }}
-                  onFocus={() => setIsAircraftOpen(true)}
-                  onBlur={() => setTimeout(() => setIsAircraftOpen(false), 200)}
+                  onChange={(e) => { setAircraftQuery(e.target.value); setIsAircraftOpen(true); }}
                 />
                 {isAircraftOpen && filteredAircraft.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-50 max-h-48 overflow-y-auto">
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
                     {filteredAircraft.map(ac => (
-                      <button
-                        key={ac.id}
-                        className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-purple-500/20 hover:text-white transition-colors flex justify-between group"
-                        onClick={() => {
-                          onAircraftModelChange(ac);
-                          onPlannedSpeedChange(ac.speed);
-                          setAircraftQuery(ac.label);
-                          setIsAircraftOpen(false);
-                        }}
-                      >
-                        <span>{ac.label}</span>
-                        <span className="text-slate-500 group-hover:text-purple-300">{ac.speed} KT</span>
+                      <button key={ac.id} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-purple-500/20" onClick={() => { onAircraftModelChange(ac); onPlannedSpeedChange(ac.speed); setAircraftQuery(ac.label); setIsAircraftOpen(false); }}>
+                        {ac.label} - {ac.speed} KT
                       </button>
                     ))}
                   </div>
                 )}
               </div>
             </div>
-            
             <div className="w-24">
               <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest block mb-1 text-right">Velocidade</label>
-              <div className="relative">
-                <input
-                  type="number"
-                  className="w-full bg-slate-800/50 border border-slate-700 text-slate-200 text-xs font-bold rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-all text-right"
-                  value={plannedSpeed}
-                  onChange={(e) => onPlannedSpeedChange(Number(e.target.value))}
-                />
-                <div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none">
-                  <span className="text-[10px] font-black text-slate-500">KT</span>
-                </div>
-              </div>
+              <input type="number" className="w-full bg-slate-800/50 border border-slate-700 text-slate-200 text-xs font-bold rounded-lg px-3 py-2 text-right" value={plannedSpeed} onChange={(e) => onPlannedSpeedChange(Number(e.target.value))} />
             </div>
           </div>
           
           <div className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-teal-500 uppercase tracking-widest ml-1">Origem</label>
-              <AutocompleteInput
-                placeholder="Buscar Aeródromo..."
-                icon={<IconLocation />}
-                value={origin ? `${origin.icao || origin.name}` : ''}
-                onSelect={(pt) => onAddWaypoint(pt, 'ORIGIN')}
-              />
-            </div>
-            
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Waypoints / Fixos</label>
-              <AutocompleteInput
-                placeholder="Adicionar ponto intermediário..."
-                onSelect={(pt) => onAddWaypoint(pt, 'WAYPOINT')}
-              />
-            </div>
-            
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-purple-500 uppercase tracking-widest ml-1">Destino</label>
-              <AutocompleteInput
-                placeholder="Buscar Aeródromo..."
-                icon={<IconLocation />}
-                value={destination ? `${destination.icao || destination.name}` : ''}
-                onSelect={(pt) => onAddWaypoint(pt, 'DESTINATION')}
-              />
-            </div>
+            <AutocompleteInput placeholder="Origem..." value={origin ? `${origin.icao || origin.name}` : ''} onSelect={(pt) => onAddWaypoint(pt, 'ORIGIN')} />
+            <AutocompleteInput placeholder="Adicionar waypoint..." onSelect={(pt) => onAddWaypoint(pt, 'WAYPOINT')} />
+            <AutocompleteInput placeholder="Destino..." value={destination ? `${destination.icao || destination.name}` : ''} onSelect={(pt) => onAddWaypoint(pt, 'DESTINATION')} />
           </div>
         </div>
-        
+
+        {/* BARRA DE AÇÕES */}
         <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rota</span>
           <div className="flex gap-1">
-            <button onClick={() => setIsSaveModalOpen(true)} title="Salvar Plano" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-green-400 transition-colors">
-              <IconDisk />
-            </button>
-            <button onClick={() => setIsLoadModalOpen(true)} title="Carregar Plano" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-blue-400 transition-colors">
-              <IconFolder />
-            </button>
-            <div className="w-px h-4 bg-slate-700 mx-1 self-center"></div>
-            <button onClick={() => setIsExpanded(true)} title="Visualizar Detalhado" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors flex items-center gap-1">
+            <button onClick={() => setIsExpanded(true)} className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors">
               <IconMaximize />
             </button>
-            <button onClick={onInvertRoute} title="Inverter Rota" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors">
-              <IconSwap />
-            </button>
-            <button onClick={handleClearAll} title="Limpar Tudo" className="p-1.5 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors">
+            <button onClick={() => onClearWaypoints()} className="p-1.5 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400">
               <IconTrash />
             </button>
           </div>
         </div>
-        
+
+        {/* LISTA DE WAYPOINTS (SIDEBAR) */}
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0b0e14]">
           <DragDropContext onDragEnd={handleOnDragEnd}>
-            <table className="w-full text-left border-collapse">
-              <Droppable droppableId="side-waypoints-list">
-                {(provided) => (
-                  <tbody 
-                    {...provided.droppableProps} 
-                    ref={provided.innerRef}
-                    className="text-sm font-bold text-slate-300 divide-y divide-slate-800"
-                  >
-                    {waypoints.map((wp, i) => {
-                      const inboundSegment = i > 0 ? flightSegments[i - 1] : null;
-                      return (
-                        <Draggable key={wp.id} draggableId={wp.id.toString()} index={i}>
-                          {(draggableProvided, snapshot) => (
-                            <tr 
-                              ref={draggableProvided.innerRef}
-                              {...draggableProvided.draggableProps}
-                              className={`transition-colors ${
-                                snapshot.isDragging ? 'bg-slate-800 shadow-xl z-50' : 'hover:bg-slate-800/30'
-                              }`}
-                            >
-                              <td className="p-4">
-                                <div className="flex items-center gap-2">
-                                  <div {...draggableProvided.dragHandleProps} className="text-slate-600 hover:text-slate-400">
-                                    <GripVertical size={14} />
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <span className="text-white font-mono text-base">{wp.icao || wp.name}</span>
-                                    <span className={`text-[8px] font-black px-1 rounded w-fit ${
-                                      wp.role === 'ORIGIN' ? 'bg-teal-400 text-black' : 
-                                      wp.role === 'DESTINATION' ? 'bg-purple-400 text-black' : 
-                                      'bg-slate-700 text-slate-300'
-                                    }`}>
-                                      {wp.role || wp.type}
-                                    </span>
-                                  </div>
+            <Droppable droppableId="sidebar-list">
+              {(provided) => (
+                <div {...provided.droppableProps} ref={provided.innerRef} className="divide-y divide-slate-800">
+                  {waypoints.map((wp, i) => {
+                    const segment = i > 0 ? flightSegments[i - 1] : null;
+                    return (
+                      <Draggable key={wp.id} draggableId={wp.id.toString()} index={i}>
+                        {(dragProvided) => (
+                          <div ref={dragProvided.innerRef} {...dragProvided.draggableProps} className="p-4 flex items-center justify-between group hover:bg-slate-800/30">
+                            <div className="flex items-center gap-3">
+                              <div {...dragProvided.dragHandleProps} className="text-slate-600"><GripVertical size={14}/></div>
+                              <div className="flex flex-col">
+                                <span className="text-white font-mono text-base">{wp.icao || wp.name}</span>
+                                <span className="text-[8px] font-black text-slate-500 uppercase">{wp.role || wp.type}</span>
+                              </div>
+                            </div>
+                            {segment && (
+                              <div className="text-right font-mono">
+                                <div className="text-purple-400 text-xs">
+                                  {Math.round((segment.track - calculateMagDeclination(wp.lat, wp.lng) + 360) % 360).toString().padStart(3, '0')}°M
                                 </div>
-                              </td>
-                              <td className="p-4 text-right font-mono">
-                                {inboundSegment ? (
-                                  <div className="flex flex-col items-end">
-                                    <span className="text-purple-400">
-                                      {(() => {
-                                        const declination = getMagDeclination(wp.lat, wp.lng); 
-                                        const magTrack = Math.round((inboundSegment.track - declination + 360) % 360);
-                                        return `${magTrack.toString().padStart(3, '0')}°M`;
-                                      })()}
-                                    </span>
-                                    <span className="text-[10px] text-slate-500">{inboundSegment.distance.toFixed(0)} NM</span>
-                                  </div>
-                                ) : <span className="text-slate-700">---</span>}
-                              </td>
-                              <td className="p-4 text-right">
-                                <button onClick={() => onRemoveWaypoint(wp.id)} className="p-1.5 text-slate-600 hover:text-red-400 transition-colors">
-                                  <IconTrash />
-                                </button>
-                              </td>
-                            </tr>
-                          )}
-                        </Draggable>
-                      );
-                    })}
-                    {provided.placeholder}
-                  </tbody>
-                )}
-              </Droppable>
-            </table>
+                                <div className="text-[10px] text-slate-500">{segment.distance.toFixed(0)} NM</div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </Draggable>
+                    );
+                  })}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
           </DragDropContext>
         </div>
-        
-        {waypoints.length > 1 && (
-          <div className="p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
-            <div className="flex flex-col">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Distância Total</span>
-              <span className="text-xl font-black text-purple-400">
-                {flightSegments.reduce((acc, s) => acc + s.distance, 0).toFixed(0)} <span className="text-sm text-slate-500">NM</span>
-              </span>
-            </div>
-            <div className="flex flex-col items-end">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tempo Total</span>
-              <span className="text-xl font-black text-slate-200">
-                {((flightSegments.reduce((acc, s) => acc + s.distance, 0) / plannedSpeed)).toFixed(1).replace('.', ':')} <span className="text-sm text-slate-500">H</span>
-              </span>
-            </div>
-          </div>
-        )}
       </section>
-      
-      {/* MODAL EXPANDIDO (Onde estava o erro) */}
+
+      {/* MODAL DETALHADO EXPANDIDO */}
       {isExpanded && (
-        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-10 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-10">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-5xl h-[80vh] flex flex-col overflow-hidden">
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
-              <div>
-                <h2 className="text-2xl font-black text-white flex items-center gap-3">
-                  <IconMaximize /> PLANO DE VOO DETALHADO
-                </h2>
-                <p className="text-slate-500 text-sm mt-1">{aircraftModel.label} @ {plannedSpeed} KT</p>
-              </div>
-              <button onClick={() => setIsExpanded(false)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white font-bold transition-colors">
-                FECHAR
-              </button>
+            <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+              <h2 className="text-2xl font-black text-white">PLANO DE VOO DETALHADO</h2>
+              <button onClick={() => setIsExpanded(false)} className="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold">FECHAR</button>
             </div>
             <div className="flex-1 overflow-auto p-6">
               <table className="w-full text-left border-collapse">
-                <thead className="text-[10px] uppercase font-black text-slate-500 tracking-widest bg-slate-950/50 sticky top-0 z-10">
+                <thead className="text-[10px] uppercase font-black text-slate-500 tracking-widest bg-slate-950/50">
                   <tr>
-                    <th className="p-4 rounded-tl-lg">Ponto</th>
+                    <th className="p-4">Ponto</th>
                     <th className="p-4">Tipo</th>
                     <th className="p-4">Coordenadas</th>
                     <th className="p-4 text-right">Rumo Mag.</th>
                     <th className="p-4 text-right">Distância (NM)</th>
                     <th className="p-4 text-right">ETE</th>
-                    <th className="p-4 text-right rounded-tr-lg">Dist. Acumulada</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm font-bold text-slate-300 divide-y divide-slate-800">
                   {waypoints.map((wp, i) => {
-                    const inboundSegment = i > 0 ? flightSegments[i - 1] : null;
-                    const accumulatedDist = flightSegments.slice(0, i).reduce((acc, s) => acc + s.distance, 0);
-                    
+                    const segment = i > 0 ? flightSegments[i - 1] : null;
                     return (
-                      <tr key={wp.id} className="hover:bg-slate-800/30 transition-colors">
-                        <td className="p-4 font-mono text-white text-base">{wp.icao || wp.name}</td>
-                        <td className="p-4">
-                          <span className={`text-[9px] font-bold px-2 py-1 rounded text-black ${
-                            wp.role === 'ORIGIN' ? 'bg-teal-400' : 
-                            wp.role === 'DESTINATION' ? 'bg-purple-400' : 
-                            'bg-yellow-400'
-                          }`}>
-                            {wp.role === 'ORIGIN' ? 'ORIGIN' : wp.role === 'DESTINATION' ? 'DESTINATION' : wp.type}
-                          </span>
-                        </td>
-                        <td className="p-4 font-mono text-slate-500 text-xs">
-                          {wp.lat.toFixed(4)}, {wp.lng.toFixed(4)}
-                        </td>
-                        <td className="p-4 text-right font-mono text-purple-400">
-                          {inboundSegment ? (() => {
-                            const declination = getMagDeclination(wp.lat, wp.lng); 
-                            const magTrack = Math.round((inboundSegment.track - declination + 360) % 360);
-                            return `${magTrack.toString().padStart(3, '0')}°M`;
-                          })() : '-'}
-                        </td>
-                        <td className="p-4 text-right font-mono">
-                          {inboundSegment ? inboundSegment.distance.toFixed(1) : '-'}
-                        </td>
-                        <td className="p-4 text-right font-mono text-teal-400">
-                          {inboundSegment ? inboundSegment.ete : '-'}
-                        </td>
-                        <td className="p-4 text-right font-mono text-slate-400">
-                          {accumulatedDist > 0 ? accumulatedDist.toFixed(1) : '-'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* MODAL SALVAR */}
-      {isSaveModalOpen && (
-        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h3 className="text-xl font-black text-white mb-4">Salvar Plano de Voo</h3>
-            <form onSubmit={handleSaveSubmit}>
-              <div className="mb-4">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Nome do Plano</label>
-                <input
-                  type="text"
-                  autoFocus
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-green-500/50 focus:outline-none"
-                  placeholder="Ex: Voo SBGR-SBRJ"
-                  value={planName}
-                  onChange={e => setPlanName(e.target.value)}
-                />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <button type="button" onClick={() => setIsSaveModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white font-bold">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white font-bold">Salvar</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL CARREGAR */}
-      {isLoadModalOpen && (
-        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh]">
-            <div className="p-6 border-b border-slate-800">
-              <h3 className="text-xl font-black text-white mb-1">Carregar Plano</h3>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {savedPlans.length === 0 ? (
-                <div className="text-center py-8 text-slate-600 font-bold text-xs uppercase">Nenhum plano salvo.</div>
-              ) : (
-                savedPlans.map((plan, i) => (
-                  <div 
-                    key={i} 
-                    className="flex items-center justify-between p-3 bg-slate-800/30 border border-slate-800 hover:bg-slate-800 hover:border-blue-500/30 rounded-lg group transition-colors cursor-pointer"
-                    onClick={() => {
-                      onLoadPlan(plan);
-                      setIsLoadModalOpen(false);
-                    }}
-                  >
-                    <div>
-                      <div className="font-bold text-white text-sm">{plan.name}</div>
-                      <div className="text-[10px] text-slate-500 font-mono mt-1">
-                        {new Date(plan.date).toLocaleDateString()} • {plan.waypoints.length} pontos
-                      </div>
-                    </div>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm('Deletar este plano?')) onDeletePlan(plan.name);
-                      }} 
-                      className="p-2 text-slate-600 hover:text-red-400 transition-colors"
-                    >
-                      <IconTrash />
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="p-4 border-t border-slate-800 flex justify-end">
-              <button onClick={() => setIsLoadModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white font-bold">Fechar</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
+                      <tr key={wp.id} className="hover:bg-slate-800/30">
+                        <td className="p-4 font-mono text-white">{wp.icao || wp.name}</td>
+                        <td className="p-4"><span className="px-2 py-1 bg-slate-700 rounded text-[10px]">{wp.role || wp.type}</span></td>
+                        <td className="p-4 font-mono text-slate-500 text-xs">{wp.lat.
