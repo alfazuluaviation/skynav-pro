@@ -206,8 +206,9 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
       )}
 
       {showToast && (
-        <div className="fixed top-6 right-6 z-[4000] bg-green-500 text-black px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-4 duration-300">
-          <CheckCircle2 size={20} /> <span className="font-black uppercase text-xs">Saved successfully to library!</span>
+        <div className="fixed top-6 right-6 z-[4000] bg-green-500 text-black px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3">
+          <CheckCircle2 size={20} /> 
+          <span className="font-black uppercase text-xs">Saved successfully!</span>
         </div>
       )}
 
