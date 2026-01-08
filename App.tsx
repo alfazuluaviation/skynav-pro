@@ -8,7 +8,6 @@ import { syncAeronauticalData, searchAerodrome } from './services/geminiService'
 import { Sidebar } from './components/Sidebar';
 import { FlightPlanPanel } from './components/FlightPlanPanel';
 import { MapControls } from './components/MapControls';
-import { StatusBar } from './components/StatusBar';
 import { Auth } from './components/Auth';
 import { supabase } from './services/supabaseClient';
 import { Session } from '@supabase/supabase-js';
@@ -120,7 +119,9 @@ const App: React.FC = () => {
     
     checkSession();
     
-    const { data: { subscription }, } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setLoadingSession(false); // Also set to false on auth state change
     });
@@ -203,6 +204,7 @@ const App: React.FC = () => {
   const handleSync = async () => {
     try {
       const airacData = getAiracCycleInfo();
+      
       // Transform Date to string for the existing type/component
       const airacObj: AiracCycle = {
         current: airacData.current.current,
@@ -211,6 +213,7 @@ const App: React.FC = () => {
         nextCycleDate: airacData.current.nextCycleDate.toLocaleDateString(),
         status: 'CURRENT'
       };
+      
       setAirac(airacObj);
       localStorage.setItem('sky_nav_airac', JSON.stringify(airacObj));
     } catch (e) {
@@ -243,6 +246,7 @@ const App: React.FC = () => {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery) return;
+    
     const result = await searchAerodrome(searchQuery);
     if (result) {
       const wp: Waypoint = {
@@ -359,9 +363,11 @@ const App: React.FC = () => {
     
     // Calculate magnetic variation dynamically using WMM
     const magneticVariation = getMagneticDeclination(from.lat, from.lng, 0, new Date()); // Assuming altitude 0 for now
+    
     console.log(`[App.tsx] Segment ${i}: From ${from.icao || from.name} (Lat: ${(from.lat || 0).toFixed(6)}, Lng: ${(from.lng || 0).toFixed(6)})`);
     console.log(`[App.tsx] True Bearing (calculated): ${trueBrng.toFixed(2)}°`);
     console.log(`[App.tsx] Magnetic Declination (WMM): ${((magneticVariation || 0)).toFixed(2)}°`);
+    
     const magneticTrack = applyMagneticVariation(trueBrng || 0, magneticVariation || 0);
     console.log(`[App.tsx] True Bearing (calculated): ${(trueBrng || 0).toFixed(2)}°`);
     
@@ -370,7 +376,7 @@ const App: React.FC = () => {
       to,
       distance: dist,
       // Uses the magnetic track calculated by WMM. Fallback to 0 if undefined.
-      track: Math.round(magneticTrack || 0), 
+      track: Math.round(magneticTrack || 0),
       // Prevents division by zero if plannedSpeed is not set
       ete: formatTime(dist / (plannedSpeed || 100)),
       fuel: Math.round(dist * 1.3)
@@ -411,6 +417,7 @@ const App: React.FC = () => {
       aircraft: aircraftModel,
       speed: plannedSpeed
     };
+    
     const nextList = [...savedPlans, newPlan];
     setSavedPlans(nextList);
     localStorage.setItem(KEY_SAVED_PLANS, JSON.stringify(nextList));
@@ -428,8 +435,7 @@ const App: React.FC = () => {
     localStorage.setItem(KEY_SAVED_PLANS, JSON.stringify(nextList));
   };
 
-  if (loadingSession) {
-    // Render a loading spinner or null while session is being checked
+  if (loadingSession) { // Render a loading spinner or null while session is being checked
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0d1117]">
         <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
@@ -499,7 +505,7 @@ const App: React.FC = () => {
             onToggleLayer={handleToggleLayer}
             downloadedLayers={downloadedLayers}
           />
-
+          
           <MapContainer
             center={[-15.78, -47.93]}
             zoom={5}
@@ -516,7 +522,10 @@ const App: React.FC = () => {
             />
             
             <TileLayer
-              url={isNightMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"}
+              url={isNightMode
+                ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              }
             />
             
             {userPos && userPos[0] !== 0 && <Marker position={userPos} icon={planeIcon} zIndexOffset={1000} />}
@@ -541,7 +550,7 @@ const App: React.FC = () => {
                 zIndex={100}
               />
             )}
-            
+
             {activeLayers.includes('LOW') && (
               <WMSTileLayer
                 url="https://geoaisweb.decea.mil.br/geoserver/wms"
@@ -553,7 +562,7 @@ const App: React.FC = () => {
                 zIndex={100}
               />
             )}
-            
+
             {activeLayers.includes('WAC') && (
               <>
                 {/* WAC Group 1 (North/Northwest) */}
@@ -582,7 +591,7 @@ const App: React.FC = () => {
                   opacity={0.8}
                   zIndex={114}
                 />
-                
+
                 {/* WAC Group 2 (Center/Northeast) */}
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
@@ -609,7 +618,7 @@ const App: React.FC = () => {
                   opacity={0.8}
                   zIndex={114}
                 />
-                
+
                 {/* WAC Group 3 (South/Southeast) */}
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
@@ -639,7 +648,7 @@ const App: React.FC = () => {
                 />
               </>
             )}
-            
+
             {activeLayers.includes('REA') && (
               <>
                 {/* REA / CCV - Specialized Layer for Recife to ensure loading reliability */}
@@ -652,7 +661,7 @@ const App: React.FC = () => {
                   opacity={0.9}
                   zIndex={115}
                 />
-                
+
                 {/* REA / CCV Paper-style Georeferenced Charts (Group 1A) - v1.1.1 for raster compatibility */}
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
@@ -663,7 +672,7 @@ const App: React.FC = () => {
                   opacity={0.9}
                   zIndex={116}
                 />
-                
+
                 {/* REA / CCV Paper-style Georeferenced Charts (Group 1B) - v1.1.1 for raster compatibility */}
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
@@ -674,7 +683,7 @@ const App: React.FC = () => {
                   opacity={0.9}
                   zIndex={117}
                 />
-                
+
                 {/* REA / CCV Paper-style Georeferenced Charts (Group 2) - v1.1.1 for raster compatibility */}
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
@@ -687,7 +696,7 @@ const App: React.FC = () => {
                 />
               </>
             )}
-            
+
             {/* DYNAMIC NAVIGATION DATA (Airports, Navaids, Route) */}
             <NavigationLayer
               onPointSelect={(point) => handleAddWaypoint(point, 'WAYPOINT')}
@@ -695,8 +704,6 @@ const App: React.FC = () => {
               flightSegments={flightSegments}
             />
           </MapContainer>
-          
-          <StatusBar stats={stats} />
         </div>
       </div>
     </div>
