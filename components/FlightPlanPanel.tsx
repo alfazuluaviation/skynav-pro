@@ -218,7 +218,6 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
           </div>
         </div>
         
-        {/* List - Compact View */}
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0b0e14] p-4">
           <DragDropContext onDragEnd={handleOnDragEnd}>
             <Droppable droppableId="waypoints">
