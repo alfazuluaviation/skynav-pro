@@ -5,8 +5,7 @@ import { Waypoint, FlightSegment, SavedPlan } from '../types';
 import { NavPoint } from '../services/NavigationDataService';
 import { AutocompleteInput } from './AutocompleteInput';
 import { commonAircraft } from '../utils/aircraftData';
-// Import the magnetic declination utility
-import { getMagDeclination } from '../utils/geo'; 
+import { getMagDeclination } from '../utils/geo';
 import { 
   IconPlane, IconTrash, IconSwap, IconArrowUp, 
   IconArrowDown, IconLocation, IconMaximize, 
@@ -90,15 +89,15 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   };
 
   const handleClearAll = () => {
-    if (window.confirm("Are you sure you want to clear the entire Flight Plan?")) {
+    if (window.confirm("Deseja realmente limpar todo o plano de voo?")) {
       onClearWaypoints();
     }
   };
 
   return (
     <>
+      {/* SIDEBAR PRINCIPAL */}
       <section className="w-[420px] bg-slate-900/95 backdrop-blur-xl border-r border-slate-700/50 flex flex-col z-[1001] shadow-2xl shrink-0 animate-in slide-in-from-left duration-300 relative">
-        {/* Header / Info & Search Inputs */}
         <div className="p-4 bg-slate-900/50 border-b border-slate-800/50">
           <div className="flex items-start justify-between mb-4 gap-2">
             <div className="flex-1 relative">
@@ -198,96 +197,89 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
               <IconFolder />
             </button>
             <div className="w-px h-4 bg-slate-700 mx-1 self-center"></div>
-            <button onClick={() => setIsExpanded(true)} title="Visualizar Plano de Voo" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors flex items-center gap-1">
+            <button onClick={() => setIsExpanded(true)} title="Visualizar Detalhado" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors flex items-center gap-1">
               <IconMaximize />
             </button>
-            <button onClick={onInvertRoute} title="Inverter Plano de Voo" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors">
+            <button onClick={onInvertRoute} title="Inverter Rota" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors">
               <IconSwap />
             </button>
-            <button onClick={handleClearAll} title="Limpar Plano de Voo" className="p-1.5 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors">
+            <button onClick={handleClearAll} title="Limpar Tudo" className="p-1.5 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors">
               <IconTrash />
             </button>
           </div>
         </div>
         
-        <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0b0e14] p-4">
+        <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0b0e14]">
           <DragDropContext onDragEnd={handleOnDragEnd}>
-            <Droppable droppableId="waypoints-list">
-              {(provided) => (
-                <div 
-                  {...provided.droppableProps} 
-                  ref={provided.innerRef} 
-                  className="space-y-2"
-                >
-                  {waypoints.length === 0 ? (
-                    <div className="text-center py-8 opacity-30">
-                      <p className="text-[10px] uppercase font-bold">No route defined</p>
-                    </div>
-                  ) : (
-                    waypoints.map((wp, i) => {
-                      const segment = flightSegments[i];
-                      const isOrigin = wp.role === 'ORIGIN';
-                      const isDest = wp.role === 'DESTINATION';
-                      
+            <table className="w-full text-left border-collapse">
+              <Droppable droppableId="side-waypoints-list">
+                {(provided) => (
+                  <tbody 
+                    {...provided.droppableProps} 
+                    ref={provided.innerRef}
+                    className="text-sm font-bold text-slate-300 divide-y divide-slate-800"
+                  >
+                    {waypoints.map((wp, i) => {
+                      const inboundSegment = i > 0 ? flightSegments[i - 1] : null;
                       return (
                         <Draggable key={wp.id} draggableId={wp.id.toString()} index={i}>
                           {(draggableProvided, snapshot) => (
-                            <div 
+                            <tr 
                               ref={draggableProvided.innerRef}
                               {...draggableProvided.draggableProps}
-                              className={`relative group border rounded-xl p-3 transition-colors ${
-                                snapshot.isDragging ? 'ring-2 ring-purple-500 bg-slate-800 z-50' : 
-                                isOrigin ? 'bg-teal-500/10 border-teal-500/30' : 
-                                isDest ? 'bg-purple-500/10 border-purple-500/30' : 
-                                'bg-slate-800/20 border-slate-800 hover:bg-slate-800/40'
+                              className={`transition-colors ${
+                                snapshot.isDragging ? 'bg-slate-800 shadow-xl z-50' : 'hover:bg-slate-800/30'
                               }`}
                             >
-                              <div className="flex items-center justify-between mb-2">
+                              <td className="p-4">
                                 <div className="flex items-center gap-2">
-                                  <div {...draggableProvided.dragHandleProps} className="text-slate-600 hover:text-slate-400 cursor-grab active:cursor-grabbing">
+                                  <div {...draggableProvided.dragHandleProps} className="text-slate-600 hover:text-slate-400">
                                     <GripVertical size={14} />
                                   </div>
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded text-black ${
-                                    isOrigin ? 'bg-teal-400' : 
-                                    isDest ? 'bg-purple-400' : 
-                                    'bg-yellow-400'
-                                  }`}>
-                                    {isOrigin ? 'DEP' : isDest ? 'ARR' : (wp.type ? wp.type.substring(0, 3) : 'WPT')}
-                                  </span>
-                                  <span className="font-bold text-slate-200">{wp.icao || wp.name}</span>
+                                  <div className="flex flex-col">
+                                    <span className="text-white font-mono text-base">{wp.icao || wp.name}</span>
+                                    <span className={`text-[8px] font-black px-1 rounded w-fit ${
+                                      wp.role === 'ORIGIN' ? 'bg-teal-400 text-black' : 
+                                      wp.role === 'DESTINATION' ? 'bg-purple-400 text-black' : 
+                                      'bg-slate-700 text-slate-300'
+                                    }`}>
+                                      {wp.role || wp.type}
+                                    </span>
+                                  </div>
                                 </div>
-                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => onRemoveWaypoint(wp.id)} className="p-1 hover:text-red-400">
-                                    <IconTrash />
-                                  </button>
-                                </div>
-                              </div>
-                              {segment && (
-                                <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
-                                  <span>
-                                    {(() => {
-                                      const declination = getMagDeclination(wp.lat, wp.lng);
-                                      const magTrack = Math.round((segment.track - declination + 360) % 360);
-                                      return magTrack.toString().padStart(3, '0');
-                                    })()}°M / {segment.distance.toFixed(0)}NM
-                                  </span>
-                                  <span>{segment.ete}</span>
-                                </div>
-                              )}
-                            </div>
+                              </td>
+                              <td className="p-4 text-right font-mono">
+                                {inboundSegment ? (
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-purple-400">
+                                      {(() => {
+                                        const declination = getMagDeclination(wp.lat, wp.lng); 
+                                        const magTrack = Math.round((inboundSegment.track - declination + 360) % 360);
+                                        return `${magTrack.toString().padStart(3, '0')}°M`;
+                                      })()}
+                                    </span>
+                                    <span className="text-[10px] text-slate-500">{inboundSegment.distance.toFixed(0)} NM</span>
+                                  </div>
+                                ) : <span className="text-slate-700">---</span>}
+                              </td>
+                              <td className="p-4 text-right">
+                                <button onClick={() => onRemoveWaypoint(wp.id)} className="p-1.5 text-slate-600 hover:text-red-400 transition-colors">
+                                  <IconTrash />
+                                </button>
+                              </td>
+                            </tr>
                           )}
                         </Draggable>
                       );
-                    })
-                  )}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
+                    })}
+                    {provided.placeholder}
+                  </tbody>
+                )}
+              </Droppable>
+            </table>
           </DragDropContext>
         </div>
         
-        {/* Footer Totals */}
         {waypoints.length > 1 && (
           <div className="p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
             <div className="flex flex-col">
@@ -306,7 +298,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
         )}
       </section>
       
-      {/* EXPANDED MODAL */}
+      {/* MODAL EXPANDIDO (Onde estava o erro) */}
       {isExpanded && (
         <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-10 animate-in fade-in duration-200">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-5xl h-[80vh] flex flex-col overflow-hidden">
@@ -352,4 +344,105 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                           </span>
                         </td>
                         <td className="p-4 font-mono text-slate-500 text-xs">
-                          {wp.lat.toFixed(4)},
+                          {wp.lat.toFixed(4)}, {wp.lng.toFixed(4)}
+                        </td>
+                        <td className="p-4 text-right font-mono text-purple-400">
+                          {inboundSegment ? (() => {
+                            const declination = getMagDeclination(wp.lat, wp.lng); 
+                            const magTrack = Math.round((inboundSegment.track - declination + 360) % 360);
+                            return `${magTrack.toString().padStart(3, '0')}°M`;
+                          })() : '-'}
+                        </td>
+                        <td className="p-4 text-right font-mono">
+                          {inboundSegment ? inboundSegment.distance.toFixed(1) : '-'}
+                        </td>
+                        <td className="p-4 text-right font-mono text-teal-400">
+                          {inboundSegment ? inboundSegment.ete : '-'}
+                        </td>
+                        <td className="p-4 text-right font-mono text-slate-400">
+                          {accumulatedDist > 0 ? accumulatedDist.toFixed(1) : '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* MODAL SALVAR */}
+      {isSaveModalOpen && (
+        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h3 className="text-xl font-black text-white mb-4">Salvar Plano de Voo</h3>
+            <form onSubmit={handleSaveSubmit}>
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Nome do Plano</label>
+                <input
+                  type="text"
+                  autoFocus
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-green-500/50 focus:outline-none"
+                  placeholder="Ex: Voo SBGR-SBRJ"
+                  value={planName}
+                  onChange={e => setPlanName(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button type="button" onClick={() => setIsSaveModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white font-bold">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white font-bold">Salvar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CARREGAR */}
+      {isLoadModalOpen && (
+        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh]">
+            <div className="p-6 border-b border-slate-800">
+              <h3 className="text-xl font-black text-white mb-1">Carregar Plano</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {savedPlans.length === 0 ? (
+                <div className="text-center py-8 text-slate-600 font-bold text-xs uppercase">Nenhum plano salvo.</div>
+              ) : (
+                savedPlans.map((plan, i) => (
+                  <div 
+                    key={i} 
+                    className="flex items-center justify-between p-3 bg-slate-800/30 border border-slate-800 hover:bg-slate-800 hover:border-blue-500/30 rounded-lg group transition-colors cursor-pointer"
+                    onClick={() => {
+                      onLoadPlan(plan);
+                      setIsLoadModalOpen(false);
+                    }}
+                  >
+                    <div>
+                      <div className="font-bold text-white text-sm">{plan.name}</div>
+                      <div className="text-[10px] text-slate-500 font-mono mt-1">
+                        {new Date(plan.date).toLocaleDateString()} • {plan.waypoints.length} pontos
+                      </div>
+                    </div>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('Deletar este plano?')) onDeletePlan(plan.name);
+                      }} 
+                      className="p-2 text-slate-600 hover:text-red-400 transition-colors"
+                    >
+                      <IconTrash />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="p-4 border-t border-slate-800 flex justify-end">
+              <button onClick={() => setIsLoadModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white font-bold">Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
