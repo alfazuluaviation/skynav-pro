@@ -351,14 +351,14 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                             wp.role === 'DESTINATION' ? 'bg-purple-400' : 
                             'bg-yellow-400'
                           }`}>
-                            {wp.role === 'ORIGIN' ? 'ORIGEM' : wp.role === 'DESTINATION' ? 'DESTINO' : wp.type}
+                            {wp.role === 'ORIGIN' ? 'ORIGIN' : wp.role === 'DESTINATION' ? 'DESTINATION' : wp.type}
                           </span>
                         </td>
-                        <td className="p-4 font-mono text-slate-500 text-xs text-[10px]">
+                        <td className="p-4 font-mono text-slate-500 text-xs">
                           {wp.lat.toFixed(4)}, {wp.lng.toFixed(4)}
                         </td>
                         <td className="p-4 text-right font-mono text-purple-400">
-                          {inboundSegment ? `${inboundSegment.track}°` : '-'}
+                          {inboundSegment ? `${inboundSegment.track.toString().padStart(3, '0')}°M` : '-'}
                         </td>
                         <td className="p-4 text-right font-mono">
                           {inboundSegment ? inboundSegment.distance.toFixed(1) : '-'}
