@@ -238,7 +238,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                       const isDest = wp.role === 'DESTINATION';
                       
                       return (
-                        <Draggable key={wp.id} draggableId={wp.id} index={i}>
+                        <Draggable key={wp.id} draggableId={String(wp.id)} index={i}>
                           {(provided, snapshot) => (
                             <div 
                               ref={provided.innerRef}
