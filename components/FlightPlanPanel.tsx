@@ -220,73 +220,73 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
         
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0b0e14] p-4">
           <DragDropContext onDragEnd={handleOnDragEnd}>
-            <Droppable droppableId="waypoints">
-              {(provided) => (
-                <div 
-                  {...provided.droppableProps} 
-                  ref={provided.innerRef} 
-                  className="space-y-2"
+  <Droppable droppableId="table-waypoints">
+    {(provided) => (
+      <tbody 
+        {...provided.droppableProps} 
+        ref={provided.innerRef} 
+        className="text-sm font-bold text-slate-300 divide-y divide-slate-800"
+      >
+        {waypoints.map((wp, i) => {
+          const segment = flightSegments[i];
+          const inboundSegment = i > 0 ? flightSegments[i - 1] : null;
+          const accumulatedDist = flightSegments.slice(0, i).reduce((acc, s) => acc + s.distance, 0);
+          
+          return (
+            <Draggable key={wp.id} draggableId={wp.id.toString()} index={i}>
+              {(draggableProvided, snapshot) => (
+                <tr 
+                  ref={draggableProvided.innerRef}
+                  {...draggableProvided.draggableProps}
+                  {...draggableProvided.dragHandleProps}
+                  className={`transition-colors ${
+                    snapshot.isDragging ? 'bg-slate-700 shadow-lg' : 'hover:bg-slate-800/30'
+                  }`}
                 >
-                  {waypoints.length === 0 ? (
-                    <div className="text-center py-8 opacity-30">
-                      <p className="text-[10px] uppercase font-bold">No route defined</p>
+                  <td className="p-4 font-mono text-white text-base">
+                    <div className="flex items-center gap-2">
+                      <GripVertical size={14} className="text-slate-500" />
+                      {wp.icao || wp.name}
                     </div>
-                  ) : (
-                    waypoints.map((wp, i) => {
-                      const segment = flightSegments[i];
-                      const isOrigin = wp.role === 'ORIGIN';
-                      const isDest = wp.role === 'DESTINATION';
-                      
-                      return (
-                        <Draggable key={wp.id} draggableId={String(wp.id)} index={i}>
-                          {(provided, snapshot) => (
-                            <div 
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              className={`relative group border rounded-xl p-3 transition-colors ${
-                                snapshot.isDragging ? 'ring-2 ring-purple-500 bg-slate-800' : 
-                                isOrigin ? 'bg-teal-500/10 border-teal-500/30' : 
-                                isDest ? 'bg-purple-500/10 border-purple-500/30' : 
-                                'bg-slate-800/20 border-slate-800 hover:bg-slate-800/40'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  <div {...provided.dragHandleProps} className="text-slate-600 hover:text-slate-400 cursor-grab active:cursor-grabbing">
-                                    <GripVertical size={14} />
-                                  </div>
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded text-black ${
-                                    isOrigin ? 'bg-teal-400' : 
-                                    isDest ? 'bg-purple-400' : 
-                                    'bg-yellow-400'
-                                  }`}>
-                                    {isOrigin ? 'DEP' : isDest ? 'ARR' : (wp.type ? wp.type.substring(0, 3) : 'WPT')}
-                                  </span>
-                                  <span className="font-bold text-slate-200">{wp.icao || wp.name}</span>
-                                </div>
-                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => onRemoveWaypoint(wp.id)} className="p-1 hover:text-red-400">
-                                    <IconTrash />
-                                  </button>
-                                </div>
-                              </div>
-                              {segment && (
-                                <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
-                                  <span>{segment.track.toString().padStart(3, '0')}°M / {segment.distance.toFixed(0)}NM</span>
-                                  <span>{segment.ete}</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </Draggable>
-                      );
-                    })
-                  )}
-                  {provided.placeholder}
-                </div>
+                  </td>
+                  <td className="p-4">
+                    <span className={`text-[9px] font-bold px-2 py-1 rounded text-black ${
+                      wp.role === 'ORIGIN' ? 'bg-teal-400' : 
+                      wp.role === 'DESTINATION' ? 'bg-purple-400' : 
+                      'bg-yellow-400'
+                    }`}>
+                      {wp.role === 'ORIGIN' ? 'ORIGIN' : wp.role === 'DESTINATION' ? 'DESTINATION' : wp.type}
+                    </span>
+                  </td>
+                  <td className="p-4 font-mono text-slate-500 text-xs">
+                    {wp.lat.toFixed(4)}, {wp.lng.toFixed(4)}
+                  </td>
+                  <td className="p-4 text-right font-mono text-purple-400">
+                    {inboundSegment ? (() => {
+                      const declination = getMagDeclination(wp.lat, wp.lng); 
+                      const magTrack = Math.round((inboundSegment.track - declination + 360) % 360);
+                      return `${magTrack.toString().padStart(3, '0')}°M`;
+                    })() : '-'}
+                  </td>
+                  <td className="p-4 text-right font-mono">
+                    {inboundSegment ? inboundSegment.distance.toFixed(1) : '-'}
+                  </td>
+                  <td className="p-4 text-right font-mono text-teal-400">
+                    {inboundSegment ? inboundSegment.ete : '-'}
+                  </td>
+                  <td className="p-4 text-right font-mono text-slate-400">
+                    {accumulatedDist > 0 ? accumulatedDist.toFixed(1) : '-'}
+                  </td>
+                </tr>
               )}
-            </Droppable>
-          </DragDropContext>
+            </Draggable>
+          );
+        })}
+        {provided.placeholder}
+      </tbody>
+    )}
+  </Droppable>
+</DragDropContext>
         </div>
         
         {/* Footer Totals */}
