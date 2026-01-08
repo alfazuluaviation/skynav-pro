@@ -7,7 +7,6 @@ import {
 import { Waypoint, FlightSegment, SavedPlan } from '../types';
 import { AutocompleteInput } from './AutocompleteInput';
 
-// Interface adicionada para garantir que o código funcione
 interface FlightPlanPanelProps {
   waypoints: Waypoint[];
   flightSegments: FlightSegment[];
@@ -70,14 +69,13 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   return (
     <>
       <section className="w-[420px] bg-[#0b0e14] border-r border-slate-800 flex flex-col z-[1001] shadow-2xl h-full relative">
-        {/* 1. TOP SELECTION AREA */}
         <div className="p-4 bg-slate-900/50 border-b border-slate-800 space-y-4">
           <div className="flex gap-2">
             <div className="flex-1">
               <label className="text-[10px] text-slate-500 font-black uppercase mb-1 block tracking-tighter">Selected Aircraft</label>
               <div className="relative group">
                 <Plane className="absolute left-3 top-2.5 text-purple-400" size={14} />
-                <input className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 py-2 text-xs font-bold text-white uppercase outline-none" value={aircraftModel.label} readOnly />
+                <input className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 py-2 text-xs font-bold text-white uppercase outline-none" value={aircraftModel?.label || 'UNKNOWN'} readOnly />
               </div>
             </div>
             <div className="w-24">
@@ -92,20 +90,18 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
           </div>
         </div>
 
-        {/* 2. TOOLBAR */}
         <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Flight Plan</span>
           <div className="flex gap-1 items-center">
-            <button onClick={() => setIsSaveModalOpen(true)} title="Save Plan" className="p-2 rounded hover:bg-green-500/10 text-slate-500 hover:text-green-400 transition-all"><Save size={18}/></button>
-            <button onClick={() => setIsLibraryOpen(true)} title="Open Library" className="p-2 rounded hover:bg-blue-500/10 text-slate-500 hover:text-blue-400 transition-all"><FolderOpen size={18}/></button>
+            <button onClick={() => setIsSaveModalOpen(true)} className="p-2 rounded hover:bg-green-500/10 text-slate-500 hover:text-green-400 transition-all"><Save size={18}/></button>
+            <button onClick={() => setIsLibraryOpen(true)} className="p-2 rounded hover:bg-blue-500/10 text-slate-500 hover:text-blue-400 transition-all"><FolderOpen size={18}/></button>
             <div className="w-px h-4 bg-slate-700 mx-1"></div>
-            <button onClick={() => setIsExpanded(true)} title="Expand" className={`p-2 rounded transition-all ${isExpanded ? 'bg-slate-700 text-white' : 'hover:bg-slate-800 text-slate-500 hover:text-white'}`}><Maximize2 size={18}/></button>
-            <button onClick={onInvertRoute} title="Invert" className="p-2 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-all"><ArrowLeftRight size={18}/></button>
-            <button onClick={() => onClearWaypoints()} title="Clear" className="p-2 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all"><Trash2 size={18}/></button>
+            <button onClick={() => setIsExpanded(true)} className={`p-2 rounded transition-all ${isExpanded ? 'bg-slate-700 text-white' : 'hover:bg-slate-800 text-slate-500 hover:text-white'}`}><Maximize2 size={18}/></button>
+            <button onClick={onInvertRoute} className="p-2 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-all"><ArrowLeftRight size={18}/></button>
+            <button onClick={() => onClearWaypoints()} className="p-2 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all"><Trash2 size={18}/></button>
           </div>
         </div>
 
-        {/* 3. WAYPOINT LIST */}
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0b0e14]">
           <DragDropContext onDragEnd={handleDragEnd}>
             <Droppable droppableId="side-route-list">
@@ -147,20 +143,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
         </div>
       </section>
 
-      {/* 4. MODALS */}
-      {isSaveModalOpen && (
-        <div className="fixed inset-0 z-[3000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-sm shadow-2xl">
-            <h3 className="text-white font-black uppercase text-sm mb-4">Save Flight Plan</h3>
-            <input autoFocus className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white mb-6 outline-none focus:border-green-500 font-bold uppercase" placeholder="PLAN NAME..." value={planName} onChange={(e) => setPlanName(e.target.value.toUpperCase())} />
-            <div className="flex justify-end gap-3 font-black text-xs">
-              <button onClick={() => setIsSaveModalOpen(false)} className="text-slate-500 uppercase">Cancel</button>
-              <button onClick={handleSaveAction} className="bg-green-600 px-6 py-2 rounded-lg text-white uppercase">Confirm Save</button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* MODAL LIBRARY CORRIGIDO */}
       {isLibraryOpen && (
         <div className="fixed inset-0 z-[5000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#0b0e14] border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
@@ -176,15 +159,36 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                 <p className="text-slate-600 text-center py-10 text-[10px] font-black uppercase italic">No plans saved</p>
               ) : (
                 savedPlans.map((plan) => (
-                  <div key={plan.id} className="w-full bg-slate-800/30 border border-slate-800/50 p-4 rounded-xl flex justify-between items-center group">
+                  <div key={plan.id || Math.random()} className="w-full bg-slate-800/30 border border-slate-800/50 p-4 rounded-xl flex justify-between items-center group">
                     <div className="text-left">
-                      <div className="text-white font-black text-xs uppercase">{plan.name}</div>
-                      <div className="text-[9px] text-slate-500 font-bold uppercase">{plan.aircraft} • {plan.waypointsCount} pts</div>
+                      <div className="text-white font-black text-xs uppercase">{plan.name || 'UNNAMED PLAN'}</div>
+                      <div className="text-[9px] text-slate-500 font-bold uppercase">
+                        {plan.aircraft || 'No Aircraft'} • {plan.waypointsCount || 0} pts
+                      </div>
                     </div>
-                    <button onClick={() => { onLoadPlan?.(plan); setIsLibraryOpen(false); }} className="bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black px-3 py-1.5 rounded uppercase">Load</button>
+                    <button 
+                      onClick={() => { if(plan) { onLoadPlan?.(plan); setIsLibraryOpen(false); } }} 
+                      className="bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black px-3 py-1.5 rounded uppercase transition-colors"
+                    >
+                      Load
+                    </button>
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OUTROS MODALS */}
+      {isSaveModalOpen && (
+        <div className="fixed inset-0 z-[3000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-sm shadow-2xl">
+            <h3 className="text-white font-black uppercase text-sm mb-4">Save Flight Plan</h3>
+            <input autoFocus className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white mb-6 outline-none focus:border-green-500 font-bold uppercase" placeholder="PLAN NAME..." value={planName} onChange={(e) => setPlanName(e.target.value.toUpperCase())} />
+            <div className="flex justify-end gap-3 font-black text-xs">
+              <button onClick={() => setIsSaveModalOpen(false)} className="text-slate-500 uppercase">Cancel</button>
+              <button onClick={handleSaveAction} className="bg-green-600 px-6 py-2 rounded-lg text-white uppercase">Confirm Save</button>
             </div>
           </div>
         </div>
@@ -197,7 +201,6 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
         </div>
       )}
 
-      {/* 5. NAVIGATION LOG */}
       {isExpanded && (
         <div className="fixed inset-0 z-[3000] bg-black/90 backdrop-blur-xl flex items-center justify-center p-8">
           <div className="bg-[#0b0e14] border border-slate-800 rounded-2xl w-full max-w-6xl h-full flex flex-col overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]">
@@ -206,7 +209,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                 <div className="p-3 bg-purple-500/10 rounded-xl"><Navigation2 className="text-purple-400" /></div>
                 <div>
                   <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter">SkyNav Navigation Log</h2>
-                  <p className="text-xs text-slate-500 font-bold uppercase">{aircraftModel.label} • TAS {plannedSpeed} KT</p>
+                  <p className="text-xs text-slate-500 font-bold uppercase">{aircraftModel?.label || 'UNKNOWN'} • TAS {plannedSpeed} KT</p>
                 </div>
               </div>
               <button onClick={() => setIsExpanded(false)} className="p-2 hover:bg-red-500/10 text-slate-500 hover:text-red-400 rounded-full transition-all"><X size={28}/></button>
