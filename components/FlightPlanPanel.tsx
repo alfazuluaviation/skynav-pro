@@ -211,7 +211,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
           <span className="font-black uppercase text-xs">Saved successfully!</span>
         </div>
       )}
-
+      
       {/* 5. PRESERVED EXPANDED LOG DESIGN */}
       {isExpanded && (
         <div className="fixed inset-0 z-[3000] bg-black/90 backdrop-blur-xl flex items-center justify-center p-8">
