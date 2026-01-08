@@ -206,4 +206,21 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                       <tr key={wp.id} className="hover:bg-slate-800/30">
                         <td className="p-4 font-mono text-white">{wp.icao || wp.name}</td>
                         <td className="p-4"><span className="px-2 py-1 bg-slate-700 rounded text-[10px]">{wp.role || wp.type}</span></td>
-                        <td className="p-4 font-mono text-slate-500 text-xs">{wp.lat.
+                        <td className="p-4 font-mono text-slate-500 text-xs">{wp.lat.toFixed(4)}, {wp.lng.toFixed(4)}</td>
+                        <td className="p-4 text-right font-mono text-purple-400">
+                          {segment ? `${Math.round((segment.track - calculateMagDeclination(wp.lat, wp.lng) + 360) % 360).toString().padStart(3, '0')}°M` : '-'}
+                        </td>
+                        <td className="p-4 text-right font-mono">{segment ? segment.distance.toFixed(1) : '-'}</td>
+                        <td className="p-4 text-right font-mono text-teal-400">{segment ? segment.ete : '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
