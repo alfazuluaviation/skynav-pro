@@ -143,7 +143,45 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
           </div>
         </div>
       )}
+      {isLibraryOpen && (
+        <div className="fixed inset-0 z-[5000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0b0e14] border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+              <div className="flex items-center gap-2">
+                <FolderOpen size={18} className="text-blue-400" />
+                <h3 className="text-white font-black uppercase text-xs tracking-widest">Library</h3>
+              </div>
+              <button onClick={() => setIsLibraryOpen(false)} className="text-slate-500 hover:text-white"><X size={24}/></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+              {(!savedPlans || savedPlans.length === 0) ? (
+                <p className="text-slate-600 text-center py-10 text-[10px] font-black uppercase italic">No plans saved</p>
+              ) : (
+                savedPlans.map((plan) => (
+                  <div key={plan.id} className="w-full bg-slate-800/30 border border-slate-800/50 p-4 rounded-xl flex justify-between items-center group">
+                    <div className="text-left">
+                      <div className="text-white font-black text-xs uppercase">{plan.name}</div>
+                      <div className="text-[9px] text-slate-500 font-bold uppercase">{plan.aircraft} • {plan.waypointsCount} pts</div>
+                    </div>
+                    <button onClick={() => { onLoadPlan?.(plan); setIsLibraryOpen(false); }} className="bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black px-3 py-1.5 rounded uppercase">Load</button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
+      {/* 2. Procure o Log de Navegação Expandido (isExpanded) */}
+      {isExpanded && (
+        <div className="fixed inset-0 z-[3000] ...">
+           {/* ... conteúdo do seu log expandido que você restaurou ... */}
+        </div>
+      )}
+
+    </> // Este é o fechamento final do componente
+  );
+};
       {isLibraryOpen && (
         <div className="fixed inset-0 z-[3000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
