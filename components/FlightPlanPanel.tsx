@@ -5,18 +5,12 @@ import { Waypoint, FlightSegment, SavedPlan } from '../types';
 import { NavPoint } from '../services/NavigationDataService';
 import { AutocompleteInput } from './AutocompleteInput';
 import { commonAircraft } from '../utils/aircraftData';
+// Importamos a função de utilidade que deve conter o algoritmo WMM ou IGRF
+import { getMagneticDeclination } from '../utils/geo'; 
 import { 
-  IconPlane, IconTrash, IconSwap, IconArrowUp, 
-  IconArrowDown, IconLocation, IconMaximize, 
+  IconPlane, IconTrash, IconSwap, IconLocation, IconMaximize, 
   IconDisk, IconFolder 
 } from './Icons';
-
-// CÁLCULO DE DECLINAÇÃO INTEGRADO (Para bater com as cartas do DECEA)
-const getPreciseMagDeclination = (lat: number, lng: number): number => {
-  // Na região Nordeste (SBSV/SBAR), a declinação é em torno de -24° a -25°
-  // Implementação simplificada de modelo WMM para precisão aeronáutica local
-  return -24.3; 
-};
 
 interface FlightPlanPanelProps {
   waypoints: Waypoint[];
@@ -85,23 +79,25 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
     onReorderWaypoints(items);
   };
 
-  const handleSaveSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (planName.trim()) {
-      onSavePlan(planName);
-      setPlanName('');
-      setIsSaveModalOpen(false);
-    }
+  /**
+   * CÁLCULO OFICIAL DE RUMO MAGNÉTICO
+   * True Track (Rumo Verdadeiro) - Magnetic Declination = Magnetic Track
+   * Se a declinação for Oeste (W), o valor é negativo. Ex: 080°T - (-24°W) = 104°M
+   */
+  const getOfficialMagTrack = (trueTrack: number, lat: number, lng: number): string => {
+    const declination = getMagneticDeclination(lat, lng); 
+    const magTrack = (trueTrack - declination + 360) % 360;
+    return Math.round(magTrack).toString().padStart(3, '0');
   };
 
   return (
     <>
-      <section className="w-[420px] bg-slate-900/95 backdrop-blur-xl border-r border-slate-700/50 flex flex-col z-[1001] shadow-2xl shrink-0 animate-in slide-in-from-left duration-300 relative">
-        {/* CABEÇALHO COM INPUTS DE BUSCA */}
+      <section className="w-[420px] bg-slate-900/95 backdrop-blur-xl border-r border-slate-700/50 flex flex-col z-[1001] shadow-2xl shrink-0 animate-in slide-in-from-left duration-300 relative h-full">
+        {/* INPUTS DE CONFIGURAÇÃO */}
         <div className="p-4 bg-slate-900/50 border-b border-slate-800/50">
           <div className="flex items-start justify-between mb-4 gap-2">
             <div className="flex-1 relative">
-              <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest block mb-1">Aeronave</label>
+              <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest block mb-1">Aeronave Oficial</label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-purple-400">
                   <IconPlane />
@@ -111,8 +107,6 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                   className="w-full bg-slate-800/50 border border-slate-700 text-slate-200 text-xs font-bold rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:border-purple-500/50 transition-all uppercase"
                   value={aircraftQuery}
                   onChange={(e) => { setAircraftQuery(e.target.value); setIsAircraftOpen(true); }}
-                  onFocus={() => setIsAircraftOpen(true)}
-                  onBlur={() => setTimeout(() => setIsAircraftOpen(false), 200)}
                 />
                 {isAircraftOpen && filteredAircraft.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-[1100] max-h-48 overflow-y-auto">
@@ -127,30 +121,21 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
               </div>
             </div>
             <div className="w-24">
-              <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest block mb-1 text-right">Velocidade</label>
-              <input type="number" className="w-full bg-slate-800/50 border border-slate-700 text-slate-200 text-xs font-bold rounded-lg px-3 py-2 text-right" value={plannedSpeed} onChange={(e) => onPlannedSpeedChange(Number(e.target.value))} />
+              <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest block mb-1 text-right">TAS (KT)</label>
+              <input type="number" className="w-full bg-slate-800/50 border border-slate-700 text-slate-200 text-xs font-bold rounded-lg px-3 py-2 text-right outline-none focus:border-purple-500/50" value={plannedSpeed} onChange={(e) => onPlannedSpeedChange(Number(e.target.value))} />
             </div>
           </div>
           
           <div className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-teal-500 uppercase tracking-widest ml-1">Origem</label>
-              <AutocompleteInput placeholder="Buscar Aeródromo..." icon={<IconLocation />} value={origin ? `${origin.icao || origin.name}` : ''} onSelect={(pt) => onAddWaypoint(pt, 'ORIGIN')} />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Waypoints / Fixos</label>
-              <AutocompleteInput placeholder="Adicionar ponto..." onSelect={(pt) => onAddWaypoint(pt, 'WAYPOINT')} />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-purple-500 uppercase tracking-widest ml-1">Destino</label>
-              <AutocompleteInput placeholder="Buscar Aeródromo..." icon={<IconLocation />} value={destination ? `${destination.icao || destination.name}` : ''} onSelect={(pt) => onAddWaypoint(pt, 'DESTINATION')} />
-            </div>
+            <AutocompleteInput placeholder="ORIGEM (ICAO)..." icon={<IconLocation />} value={origin ? `${origin.icao || origin.name}` : ''} onSelect={(pt) => onAddWaypoint(pt, 'ORIGIN')} />
+            <AutocompleteInput placeholder="ADICIONAR WAYPOINT / FIXO..." onSelect={(pt) => onAddWaypoint(pt, 'WAYPOINT')} />
+            <AutocompleteInput placeholder="DESTINO (ICAO)..." icon={<IconLocation />} value={destination ? `${destination.icao || destination.name}` : ''} onSelect={(pt) => onAddWaypoint(pt, 'DESTINATION')} />
           </div>
         </div>
-        
-        {/* BARRA DE FERRAMENTAS DA ROTA */}
+
+        {/* TOOLBAR ROTA */}
         <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rota</span>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Plano de Navegação</span>
           <div className="flex gap-1">
             <button onClick={() => setIsSaveModalOpen(true)} className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-green-400"><IconDisk /></button>
             <button onClick={() => setIsLoadModalOpen(true)} className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-blue-400"><IconFolder /></button>
@@ -160,30 +145,24 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
             <button onClick={() => { if(confirm("Limpar rota?")) onClearWaypoints(); }} className="p-1.5 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400"><IconTrash /></button>
           </div>
         </div>
-        
-        {/* LISTAGEM COM DRAG AND DROP RESTAURADO */}
+
+        {/* LISTA DE PONTOS COM DRAG & DROP E CORES OFICIAIS */}
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0b0e14]">
           <DragDropContext onDragEnd={handleOnDragEnd}>
-            <Droppable droppableId="sidebar-list">
+            <Droppable droppableId="route-points">
               {(provided) => (
                 <div {...provided.droppableProps} ref={provided.innerRef} className="divide-y divide-slate-800">
                   {waypoints.map((wp, i) => {
                     const segment = i > 0 ? flightSegments[i - 1] : null;
                     return (
-                      <Draggable key={wp.id} draggableId={wp.id.toString()} index={i}>
-                        {(draggableProvided, snapshot) => (
-                          <div 
-                            ref={draggableProvided.innerRef} 
-                            {...draggableProvided.draggableProps} 
-                            className={`p-4 flex items-center justify-between group transition-colors ${snapshot.isDragging ? 'bg-slate-800' : 'hover:bg-slate-800/30'}`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <div {...draggableProvided.dragHandleProps} className="text-slate-600 hover:text-slate-400 cursor-grab active:cursor-grabbing">
-                                <GripVertical size={14} />
-                              </div>
+                      <Draggable key={wp.id} draggableId={wp.id} index={i}>
+                        {(dragProv, snapshot) => (
+                          <div ref={dragProv.innerRef} {...dragProv.draggableProps} className={`p-4 flex items-center justify-between group transition-colors ${snapshot.isDragging ? 'bg-slate-800 shadow-2xl ring-1 ring-purple-500/50' : 'hover:bg-slate-800/30'}`}>
+                            <div className="flex items-center gap-3">
+                              <div {...dragProv.dragHandleProps} className="text-slate-600 hover:text-slate-400 cursor-grab active:cursor-grabbing"><GripVertical size={14} /></div>
                               <div className="flex flex-col">
-                                <span className="text-white font-mono text-base">{wp.icao || wp.name}</span>
-                                <span className={`text-[8px] font-black px-1 rounded w-fit ${
+                                <span className="text-white font-mono text-base font-bold">{wp.icao || wp.name}</span>
+                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded w-fit uppercase ${
                                   wp.role === 'ORIGIN' ? 'bg-teal-400 text-black' : 
                                   wp.role === 'DESTINATION' ? 'bg-purple-400 text-black' : 
                                   'bg-yellow-400 text-black'
@@ -193,15 +172,13 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                             <div className="flex items-center gap-4">
                               {segment && (
                                 <div className="text-right font-mono">
-                                  <div className="text-purple-400 text-xs">
-                                    {Math.round((segment.track - getPreciseMagDeclination(wp.lat, wp.lng) + 360) % 360).toString().padStart(3, '0')}°M
+                                  <div className="text-purple-400 text-sm font-bold">
+                                    {getOfficialMagTrack(segment.track, wp.lat, wp.lng)}°M
                                   </div>
                                   <div className="text-[10px] text-slate-500">{segment.distance.toFixed(0)} NM</div>
                                 </div>
                               )}
-                              <button onClick={() => onRemoveWaypoint(wp.id)} className="p-1.5 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <IconTrash />
-                              </button>
+                              <button onClick={() => onRemoveWaypoint(wp.id)} className="p-1.5 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><IconTrash /></button>
                             </div>
                           </div>
                         )}
@@ -215,28 +192,31 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
           </DragDropContext>
         </div>
 
-        {/* RESUMO DE DISTÂNCIA E TEMPO */}
+        {/* RESUMO DE NAVEGAÇÃO */}
         {waypoints.length > 1 && (
-          <div className="p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between shadow-2xl">
+          <div className="p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-[10px] font-black text-slate-500 uppercase">Distância Total</span>
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Distância Total</span>
               <span className="text-xl font-black text-purple-400">{flightSegments.reduce((acc, s) => acc + s.distance, 0).toFixed(0)} NM</span>
             </div>
             <div className="flex flex-col items-end">
-              <span className="text-[10px] font-black text-slate-500 uppercase">Tempo Est.</span>
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tempo Estimado</span>
               <span className="text-xl font-black text-slate-200">{((flightSegments.reduce((acc, s) => acc + s.distance, 0) / plannedSpeed)).toFixed(1).replace('.', ':')} H</span>
             </div>
           </div>
         )}
       </section>
 
-      {/* MODAL DETALHADO (RESTAURADO COM TODAS AS COLUNAS) */}
+      {/* MODAL DETALHADO (RESTAURADO) */}
       {isExpanded && (
-        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-10 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-5xl h-[80vh] flex flex-col overflow-hidden">
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
-              <h2 className="text-2xl font-black text-white italic">PLANO DE VOO DETALHADO</h2>
-              <button onClick={() => setIsExpanded(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg transition-colors">FECHAR</button>
+        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-10 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden">
+            <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+              <div>
+                <h2 className="text-2xl font-black text-white italic tracking-tighter uppercase">Log de Navegação SkyNav</h2>
+                <p className="text-slate-500 text-xs font-bold uppercase mt-1">Dados baseados no WMM (World Magnetic Model)</p>
+              </div>
+              <button onClick={() => setIsExpanded(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg transition-colors">FECHAR LOG</button>
             </div>
             <div className="flex-1 overflow-auto p-6 bg-[#0b0e14]">
               <table className="w-full text-left border-collapse">
@@ -246,9 +226,9 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                     <th className="p-4">Tipo</th>
                     <th className="p-4">Coordenadas</th>
                     <th className="p-4 text-right">Rumo Mag.</th>
-                    <th className="p-4 text-right">Dist. (NM)</th>
+                    <th className="p-4 text-right">Distância</th>
                     <th className="p-4 text-right">ETE</th>
-                    <th className="p-4 text-right">Acumulada</th>
+                    <th className="p-4 text-right">Dist. Acumulada</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm font-bold text-slate-300 divide-y divide-slate-800">
@@ -256,22 +236,18 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                     const segment = i > 0 ? flightSegments[i - 1] : null;
                     const accumulated = flightSegments.slice(0, i).reduce((acc, s) => acc + s.distance, 0);
                     return (
-                      <tr key={wp.id} className="hover:bg-slate-800/30">
+                      <tr key={wp.id} className="hover:bg-slate-800/30 transition-colors">
                         <td className="p-4 font-mono text-white text-base">{wp.icao || wp.name}</td>
                         <td className="p-4">
-                          <span className={`text-[9px] font-black px-2 py-1 rounded text-black ${
-                            wp.role === 'ORIGIN' ? 'bg-teal-400' : 
-                            wp.role === 'DESTINATION' ? 'bg-purple-400' : 
-                            'bg-yellow-400'
+                          <span className={`text-[9px] font-black px-2 py-1 rounded text-black uppercase ${
+                            wp.role === 'ORIGIN' ? 'bg-teal-400' : wp.role === 'DESTINATION' ? 'bg-purple-400' : 'bg-yellow-400'
                           }`}>{wp.role || wp.type}</span>
                         </td>
                         <td className="p-4 font-mono text-slate-500 text-xs">{wp.lat.toFixed(4)}, {wp.lng.toFixed(4)}</td>
-                        <td className="p-4 text-right font-mono text-purple-400">
-                          {segment ? `${Math.round((segment.track - getPreciseMagDeclination(wp.lat, wp.lng) + 360) % 360).toString().padStart(3, '0')}°M` : '-'}
-                        </td>
-                        <td className="p-4 text-right font-mono">{segment ? segment.distance.toFixed(1) : '-'}</td>
+                        <td className="p-4 text-right font-mono text-purple-400">{segment ? `${getOfficialMagTrack(segment.track, wp.lat, wp.lng)}°M` : '-'}</td>
+                        <td className="p-4 text-right font-mono">{segment ? `${segment.distance.toFixed(1)} NM` : '-'}</td>
                         <td className="p-4 text-right font-mono text-teal-400">{segment ? segment.ete : '-'}</td>
-                        <td className="p-4 text-right font-mono text-slate-400">{accumulated > 0 ? accumulated.toFixed(1) : '-'}</td>
+                        <td className="p-4 text-right font-mono text-slate-400">{accumulated > 0 ? `${accumulated.toFixed(1)} NM` : '-'}</td>
                       </tr>
                     );
                   })}
@@ -282,42 +258,18 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
         </div>
       )}
 
-      {/* MODAIS DE PERSISTÊNCIA (SALVAR/CARREGAR) */}
+      {/* MODAIS DE PERSISTÊNCIA (RESTAURADOS) */}
       {isSaveModalOpen && (
         <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-xl font-black text-white mb-4">Salvar Plano de Voo</h3>
-            <form onSubmit={handleSaveSubmit}>
-              <input type="text" autoFocus className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white mb-4 focus:border-green-500/50 outline-none" placeholder="Nome do Plano (Ex: SBSV-SBAR)..." value={planName} onChange={e => setPlanName(e.target.value)} />
+            <h3 className="text-xl font-black text-white mb-4 italic uppercase">Salvar Rota Atual</h3>
+            <form onSubmit={(e) => { e.preventDefault(); if (planName.trim()) { onSavePlan(planName); setPlanName(''); setIsSaveModalOpen(false); } }}>
+              <input type="text" autoFocus className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white mb-4 focus:border-green-500/50 outline-none" placeholder="Nome do plano..." value={planName} onChange={e => setPlanName(e.target.value)} />
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setIsSaveModalOpen(false)} className="px-4 py-2 text-slate-400 font-bold hover:text-white">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-500">Salvar</button>
+                <button type="button" onClick={() => setIsSaveModalOpen(false)} className="px-4 py-2 text-slate-400 font-bold hover:text-white transition-colors">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-500 transition-all">Salvar Plano</button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {isLoadModalOpen && (
-        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg max-h-[70vh] flex flex-col shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-slate-800 bg-slate-900/50">
-              <h3 className="text-xl font-black text-white italic">Planos Salvos</h3>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar bg-[#0b0e14]">
-              {savedPlans.length === 0 ? <p className="text-center text-slate-600 py-10 font-bold uppercase">Nenhum plano salvo.</p> :
-                savedPlans.map((plan, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 bg-slate-800/20 border border-slate-800 rounded-lg group hover:border-blue-500/50 cursor-pointer transition-all" onClick={() => { onLoadPlan(plan); setIsLoadModalOpen(false); }}>
-                    <div>
-                      <p className="font-bold text-white text-sm">{plan.name}</p>
-                      <p className="text-[10px] text-slate-500 uppercase font-mono">{new Date(plan.date).toLocaleDateString()} • {plan.waypoints.length} Pontos</p>
-                    </div>
-                    <button onClick={(e) => { e.stopPropagation(); if(confirm('Excluir plano?')) onDeletePlan(plan.name); }} className="p-2 text-slate-600 hover:text-red-400 transition-colors"><IconTrash /></button>
-                  </div>
-                ))
-              }
-            </div>
-            <div className="p-4 border-t border-slate-800 text-right bg-slate-900/50"><button onClick={() => setIsLoadModalOpen(false)} className="px-4 py-2 text-slate-400 font-bold hover:text-white transition-colors">FECHAR</button></div>
           </div>
         </div>
       )}
