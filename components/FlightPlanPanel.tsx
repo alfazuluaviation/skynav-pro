@@ -358,17 +358,21 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                           {wp.lat.toFixed(4)}, {wp.lng.toFixed(4)}
                         </td>
                         <td className="p-4 text-right font-mono text-purple-400">
-                          {inboundSegment ? `${inboundSegment.track.toString().padStart(3, '0')}°M` : '-'}
-                        </td>
-                        <td className="p-4 text-right font-mono">
-                          {inboundSegment ? inboundSegment.distance.toFixed(1) : '-'}
-                        </td>
-                        <td className="p-4 text-right font-mono text-teal-400">
-                          {inboundSegment ? inboundSegment.ete : '-'}
-                        </td>
-                        <td className="p-4 text-right font-mono text-slate-400">
-                          {accumulatedDist > 0 ? accumulatedDist.toFixed(1) : '-'}
-                        </td>
+  {inboundSegment ? (() => {
+    const declination = getMagDeclination(wp.lat, wp.lng); 
+    const magTrack = Math.round((inboundSegment.track - declination + 360) % 360);
+    return `${magTrack.toString().padStart(3, '0')}°M`;
+  })() : '-'}
+</td>
+<td className="p-4 text-right font-mono">
+  {inboundSegment ? inboundSegment.distance.toFixed(1) : '-'}
+</td>
+<td className="p-4 text-right font-mono text-teal-400">
+  {inboundSegment ? inboundSegment.ete : '-'}
+</td>
+<td className="p-4 text-right font-mono text-slate-400">
+  {accumulatedDist > 0 ? accumulatedDist.toFixed(1) : '-'}
+</td>
                       </tr>
                     );
                   })}
