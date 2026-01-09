@@ -15,6 +15,7 @@ import { getAiracCycleInfo } from './services/airacService';
 import { ENRC_SEGMENTS } from './config/chartConfig';
 import { WMSTileLayer } from 'react-leaflet';
 import { NavigationLayer } from './components/NavigationLayer';
+import { TopLeftMenu } from './components/TopLeftMenu';
 
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -36,32 +37,26 @@ const planeIcon = L.divIcon({
   iconAnchor: [20, 20],
 });
 
-// Component to handle map resize and follow user
-function MapUIControls({ userPos, isFollowing, setIsFollowing, showPlanPanel }: { userPos: [number, number] | null, isFollowing: boolean, setIsFollowing: (v: boolean) => void, showPlanPanel: boolean }) {
+// Component to handle map resize
+function MapUIControls({ showPlanPanel }: { showPlanPanel: boolean }) {
   const map = useMap();
-  
+
   useEffect(() => {
     setTimeout(() => {
       map.invalidateSize();
     }, 300);
   }, [showPlanPanel, map]);
 
-  useEffect(() => {
-    if (isFollowing && userPos) {
-      map.setView(userPos, map.getZoom(), { animate: true });
-    }
-  }, [userPos, isFollowing, map]);
-
   return null;
 }
 
 const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
-  const [loadingSession, setLoadingSession] = useState(true); // New state for session loading
+  const [loadingSession, setLoadingSession] = useState(true);
   const [showPlanPanel, setShowPlanPanel] = useState(false);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [userPos, setUserPos] = useState<[number, number]>([-12.9714, -38.5014]);
-  
+
   useEffect(() => {
     const fetchAircraftPosition = async () => {
       // Busca a posição mais recente do callsign SKYN01
@@ -70,17 +65,17 @@ const App: React.FC = () => {
         .select('latitude, longitude')
         .eq('callsign', 'SKYN01')
         .single();
-      
+
       if (data && !error) {
         // Atualiza a posição do ícone no mapa com os dados do banco
         setUserPos([data.latitude, data.longitude]);
       }
     };
-    
+
     // Chama a função imediatamente e repete a cada 5 segundos (Transponder)
     fetchAircraftPosition();
     const interval = setInterval(fetchAircraftPosition, 5000);
-    
+
     return () => clearInterval(interval); // Limpa o timer se fechar o app
   }, []);
 
@@ -116,9 +111,9 @@ const App: React.FC = () => {
       setSession(session);
       setLoadingSession(false); // Session loading is complete
     };
-    
+
     checkSession();
-    
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -196,7 +191,7 @@ const App: React.FC = () => {
         timeout: 5000,
         maximumAge: 0
       });
-      
+
       return () => navigator.geolocation.clearWatch(watchId);
     }
   }, [waypoints]);
@@ -204,7 +199,7 @@ const App: React.FC = () => {
   const handleSync = async () => {
     try {
       const airacData = getAiracCycleInfo();
-      
+
       // Transform Date to string for the existing type/component
       const airacObj: AiracCycle = {
         current: airacData.current.current,
@@ -213,7 +208,7 @@ const App: React.FC = () => {
         nextCycleDate: airacData.current.nextCycleDate.toLocaleDateString(),
         status: 'CURRENT'
       };
-      
+
       setAirac(airacObj);
       localStorage.setItem('sky_nav_airac', JSON.stringify(airacObj));
     } catch (e) {
@@ -223,19 +218,19 @@ const App: React.FC = () => {
 
   const handleChartDownload = async (layer: string) => {
     if (syncingLayers[layer] !== undefined) return;
-    
+
     // Iniciar progresso
     for (let p = 0; p <= 100; p += 10) {
       setSyncingLayers(prev => ({ ...prev, [layer]: p }));
       await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 500));
     }
-    
+
     setDownloadedLayers(prev => {
       const next = prev.includes(layer) ? prev : [...prev, layer];
       localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
       return next;
     });
-    
+
     setSyncingLayers(prev => {
       const next = { ...prev };
       delete next[layer];
@@ -246,7 +241,7 @@ const App: React.FC = () => {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery) return;
-    
+
     const result = await searchAerodrome(searchQuery);
     if (result) {
       const wp: Waypoint = {
@@ -278,7 +273,7 @@ const App: React.FC = () => {
 
     setWaypoints(prev => {
       let next = [...prev];
-      
+
       if (insertionType === 'ORIGIN') {
         // Sempre substitui o índice 0
         if (next.length > 0) {
@@ -313,7 +308,7 @@ const App: React.FC = () => {
           next.push({ ...wp, role: 'WAYPOINT' });
         }
       }
-      
+
       return next;
     });
   };
@@ -321,14 +316,14 @@ const App: React.FC = () => {
   const handleInvertRoute = () => {
     setWaypoints(prev => {
       if (prev.length < 2) return prev;
-      
+
       const newWaypoints = [...prev].reverse().map((wp, index, arr) => {
         let role: 'ORIGIN' | 'DESTINATION' | 'WAYPOINT' = 'WAYPOINT';
         if (index === 0) role = 'ORIGIN';
         else if (index === arr.length - 1) role = 'DESTINATION';
         return { ...wp, role };
       });
-      
+
       return newWaypoints;
     });
   };
@@ -337,14 +332,14 @@ const App: React.FC = () => {
     setWaypoints(prev => {
       const index = prev.findIndex(w => w.id === id);
       if (index === -1) return prev;
-      
+
       const newWaypoints = [...prev];
       if (direction === 'UP' && index > 0) {
         [newWaypoints[index], newWaypoints[index - 1]] = [newWaypoints[index - 1], newWaypoints[index]];
       } else if (direction === 'DOWN' && index < prev.length - 1) {
         [newWaypoints[index], newWaypoints[index + 1]] = [newWaypoints[index + 1], newWaypoints[index]];
       }
-      
+
       return newWaypoints;
     });
   };
@@ -360,17 +355,17 @@ const App: React.FC = () => {
     const to = waypoints[i + 1];
     const dist = calculateDistance(from.lat, from.lng, to.lat, to.lng);
     const trueBrng = calculateBearing(from.lat, from.lng, to.lat, to.lng);
-    
+
     // Calculate magnetic variation dynamically using WMM
     const magneticVariation = getMagneticDeclination(from.lat, from.lng, 0, new Date()); // Assuming altitude 0 for now
-    
+
     console.log(`[App.tsx] Segment ${i}: From ${from.icao || from.name} (Lat: ${(from.lat || 0).toFixed(6)}, Lng: ${(from.lng || 0).toFixed(6)})`);
     console.log(`[App.tsx] True Bearing (calculated): ${trueBrng.toFixed(2)}°`);
     console.log(`[App.tsx] Magnetic Declination (WMM): ${((magneticVariation || 0)).toFixed(2)}°`);
-    
+
     const magneticTrack = applyMagneticVariation(trueBrng || 0, magneticVariation || 0);
     console.log(`[App.tsx] True Bearing (calculated): ${(trueBrng || 0).toFixed(2)}°`);
-    
+
     flightSegments.push({
       from,
       to,
@@ -388,7 +383,6 @@ const App: React.FC = () => {
   const handleCenterOnUser = () => {
     if (userPos) {
       mapRef?.setView(userPos, mapRef.getZoom(), { animate: true });
-      setIsFollowing(true);
     }
   };
 
@@ -396,13 +390,13 @@ const App: React.FC = () => {
     setActiveLayers(prev => {
       const isActivating = !prev.includes(layer);
       let next = isActivating ? [...prev, layer] : prev.filter(l => l !== layer);
-      
+
       if (isActivating) {
         if (layer === 'HIGH') next = next.filter(l => l !== 'LOW' && l !== 'WAC');
         if (layer === 'LOW') next = next.filter(l => l !== 'HIGH' && l !== 'WAC');
         if (layer === 'WAC') next = next.filter(l => l !== 'HIGH' && l !== 'LOW');
       }
-      
+
       localStorage.setItem('sky_nav_active_layers', JSON.stringify(next));
       return next;
     });
@@ -417,7 +411,7 @@ const App: React.FC = () => {
       aircraft: aircraftModel,
       speed: plannedSpeed
     };
-    
+
     const nextList = [...savedPlans, newPlan];
     setSavedPlans(nextList);
     localStorage.setItem(KEY_SAVED_PLANS, JSON.stringify(nextList));
@@ -435,6 +429,17 @@ const App: React.FC = () => {
     localStorage.setItem(KEY_SAVED_PLANS, JSON.stringify(nextList));
   };
 
+  // Handlers for the new menu
+  const handleOpenCharts = () => {
+    console.log("Opening charts menu");
+    alert("Funcionalidade de Cartas em desenvolvimento");
+  };
+
+  const handleOpenAerodromes = () => {
+    console.log("Opening aerodromes menu");
+    alert("Funcionalidade de Aeródromos em desenvolvimento");
+  };
+
   if (loadingSession) { // Render a loading spinner or null while session is being checked
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0d1117]">
@@ -448,7 +453,13 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className={`flex h-screen w-screen bg-[#0d1117] text-slate-100 overflow-hidden font-sans select-none transition-colors duration-500 ${!isNightMode ? 'bg-slate-200' : ''}`}>
+    <div className="flex h-screen w-screen bg-[#0d1117] text-slate-100 overflow-hidden font-sans select-none">
+      {/* TOP LEFT MENU */}
+      <TopLeftMenu 
+        onOpenCharts={handleOpenCharts}
+        onOpenAerodromes={handleOpenAerodromes}
+      />
+
       {/* SIDEBAR */}
       <Sidebar
         showPlanPanel={showPlanPanel}
@@ -493,11 +504,10 @@ const App: React.FC = () => {
         )}
 
         {/* MAP CONTENT */}
-        <div className="flex-1 relative bg-slate-950">
+        <div className="flex-1 relative">
           <MapControls
             isFollowing={isFollowing}
             onToggleFollowing={() => setIsFollowing(!isFollowing)}
-            onZoomIn={handleZoomIn}
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
             onCenterOnUser={handleCenterOnUser}
@@ -505,31 +515,28 @@ const App: React.FC = () => {
             onToggleLayer={handleToggleLayer}
             downloadedLayers={downloadedLayers}
           />
-          
+
           <MapContainer
             center={[-15.78, -47.93]}
             zoom={5}
-            className={`h-full w-full transition-opacity duration-500 ${!isNightMode ? 'opacity-90' : 'opacity-100'}`}
+            className="h-full w-full"
             zoomControl={false}
             attributionControl={false}
             ref={setMapRef}
           >
             <MapUIControls
-              userPos={userPos}
-              isFollowing={isFollowing}
-              setIsFollowing={setIsFollowing}
               showPlanPanel={showPlanPanel}
             />
-            
+
             <TileLayer
               url={isNightMode
                 ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                 : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               }
             />
-            
+
             {userPos && userPos[0] !== 0 && <Marker position={userPos} icon={planeIcon} zIndexOffset={1000} />}
-            
+
             {waypoints.map((wp) => (
               <Marker key={wp.id} position={[wp.lat, wp.lng]} icon={defaultIcon}>
                 <Popup><div className="p-2 font-black text-[10px] uppercase text-purple-400">{wp.name}</div></Popup>
@@ -702,6 +709,7 @@ const App: React.FC = () => {
               onPointSelect={(point) => handleAddWaypoint(point, 'WAYPOINT')}
               waypoints={waypoints}
               flightSegments={flightSegments}
+              aircraftPosition={userPos}
             />
           </MapContainer>
         </div>
