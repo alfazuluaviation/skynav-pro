@@ -15,6 +15,7 @@
     "geomag": "^1.0.0",
     "geomagnetism": "^0.2.0",
     "leaflet": "^1.9.4",
+    "lovable-tagger": "^1.1.13",
     "lucide-react": "^0.562.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
