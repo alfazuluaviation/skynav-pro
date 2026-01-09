@@ -17,8 +17,8 @@
     "leaflet": "^1.9.4",
     "lovable-tagger": "^1.1.13",
     "lucide-react": "^0.562.0",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
     "react-leaflet": "^5.0.0"
   },
   "devDependencies": {
