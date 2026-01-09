@@ -23,30 +23,25 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({ onOpenCharts, onOpenAe
       {/* Dropdown Menu */}
       {isOpen && (
         <div 
-          className="absolute top-full mt-2 left-0 w-48 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden z-[2002]"
-          style={{ 
-            transform: 'translateY(0)',
-            opacity: 1,
-            transition: 'opacity 0.2s ease, transform 0.2s ease'
-          }}
+          className="absolute top-full mt-2 left-0 w-52 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl p-3 z-[2002] flex flex-col gap-2"
         >
           <button
             onClick={() => {
               onOpenCharts();
               setIsOpen(false);
             }}
-            className="w-full px-4 py-3 text-left text-sm font-bold text-slate-200 hover:bg-slate-800/50 transition-colors border-b border-slate-800/50 last:border-0"
+            className="w-full px-4 py-3 text-center text-sm font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25"
           >
-            Cartas
+            📄 Cartas
           </button>
           <button
             onClick={() => {
               onOpenAerodromes();
               setIsOpen(false);
             }}
-            className="w-full px-4 py-3 text-left text-sm font-bold text-slate-200 hover:bg-slate-800/50 transition-colors border-b border-slate-800/50 last:border-0"
+            className="w-full px-4 py-3 text-center text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all shadow-lg hover:shadow-emerald-500/25"
           >
-            Aeródromos
+            🛫 Aeródromos
           </button>
         </div>
       )}
