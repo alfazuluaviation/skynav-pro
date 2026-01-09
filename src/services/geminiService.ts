@@ -1,113 +1,66 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { Waypoint, AiracCycle, ChartConfig } from "../types";
+import { supabase } from "@/integrations/supabase/client";
+import { AiracCycle, ChartConfig } from "../types";
 
 export const syncAeronauticalData = async (): Promise<{ airac: AiracCycle, charts: ChartConfig[] }> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const today = new Date().toISOString();
+  const { data, error } = await supabase.functions.invoke('sync-aeronautical-data');
   
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Today is ${today}. 
-    1. Identify the current active AIRAC cycle for Brazil (DECEA).
-    2. Provide the exact GPS bounding box coordinates for the Brazil ENRC Low (ENRC L) and ENRC High (ENRC H) aeronautical charts. 
-    3. The bounds must be in format [[lat_max, lng_min], [lat_min, lng_max]] covering the Brazilian FIR.
-    4. Provide valid placeholder URLs for thumbnails if official ones are not known.
-    5. Return a professional JSON structure.`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          airac: {
-            type: Type.OBJECT,
-            properties: {
-              current: { type: Type.STRING },
-              effectiveDate: { type: Type.STRING },
-              expiryDate: { type: Type.STRING },
-              nextCycleDate: { type: Type.STRING },
-            }
-          },
-          charts: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                name: { type: Type.STRING },
-                shortName: { type: Type.STRING },
-                type: { type: Type.STRING },
-                bounds: { 
-                  type: Type.ARRAY,
-                  items: { 
-                    type: Type.ARRAY, 
-                    items: { type: Type.NUMBER } 
-                  }
-                },
-                thumbnail: { type: Type.STRING }
-              }
-            }
-          }
-        }
-      }
-    }
-  });
-
-  const data = JSON.parse(response.text.trim());
-  return {
-    airac: { ...data.airac, status: 'CURRENT' },
-    charts: data.charts
-  };
+  if (error) {
+    console.error("[GeminiService] Error calling sync-aeronautical-data:", error);
+    throw error;
+  }
+  
+  if (data?.error) {
+    console.error("[GeminiService] API error:", data.error);
+    throw new Error(data.error);
+  }
+  
+  return data;
 };
 
 export const searchAerodrome = async (query: string): Promise<{ icao: string, name: string, lat: number, lng: number } | null> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.error("[GeminiService] GEMINI_API_KEY is not set. Please ensure VITE_GEMINI_API_KEY is in your .env.local file.");
+  if (!query || query.trim().length < 2) {
+    console.warn("[GeminiService] Query too short");
     return null;
   }
   
-  const normalizedQuery = query.toUpperCase();
-  const cachedResult = JSON.parse(localStorage.getItem(`aerodromeCache_${normalizedQuery}`) || 'null');
+  const normalizedQuery = query.trim().toUpperCase();
+  
+  // Check cache first
+  const cachedResult = localStorage.getItem(`aerodromeCache_${normalizedQuery}`);
   if (cachedResult) {
+    try {
       console.log(`[GeminiService] Full aerodrome data for ${query} found in cache.`);
-      return cachedResult;
+      return JSON.parse(cachedResult);
+    } catch {
+      // Invalid cache, continue with API call
+    }
   }
 
-  const ai = new GoogleGenAI({ apiKey });
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Encontre as coordenadas e o nome oficial do aeródromo ou ponto aeronáutico: ${query}. Forneça apenas dados reais e precisos para navegação aérea no Brasil.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            icao: { type: Type.STRING },
-            name: { type: Type.STRING },
-            lat: { type: Type.NUMBER },
-            lng: { type: Type.NUMBER },
-          },
-          required: ["icao", "name", "lat", "lng"]
-        }
-      }
+    const { data, error } = await supabase.functions.invoke('search-aerodrome', {
+      body: { query: normalizedQuery }
     });
-
-    const text = response.text.trim();
-    if (!text) {
-      console.warn(`[GeminiService] Gemini API returned empty response for query: ${query}`);
+    
+    if (error) {
+      console.error(`[GeminiService] Error calling search-aerodrome:`, error);
       return null;
     }
-    const result = JSON.parse(text);
-    console.log(`[GeminiService] searchAerodrome for "${query}" returned:`, result);
+    
+    if (data?.error) {
+      console.error(`[GeminiService] API error:`, data.error);
+      return null;
+    }
+    
+    console.log(`[GeminiService] searchAerodrome for "${query}" returned:`, data);
 
     // Cache the result
-    if (result && result.icao) {
-        localStorage.setItem(`aerodromeCache_${result.icao.toUpperCase()}`, JSON.stringify(result));
+    if (data && data.icao) {
+      localStorage.setItem(`aerodromeCache_${data.icao.toUpperCase()}`, JSON.stringify(data));
     }
-    return result;
+    
+    return data;
   } catch (e) {
-    console.error(`[GeminiService] Error calling Gemini API for query "${query}":`, e);
+    console.error(`[GeminiService] Error calling search-aerodrome for query "${query}":`, e);
     return null;
   }
 };
