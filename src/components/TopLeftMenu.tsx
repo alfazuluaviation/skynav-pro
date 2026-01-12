@@ -9,14 +9,14 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
   onOpenAerodromes
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  return <div className="absolute top-4 left-4 z-[2000]">
+  return <div className="absolute top-4 left-18z-[2000]">
       {/* Hamburger Icon Button */}
       <button onClick={() => setIsOpen(!isOpen)} className="p-3 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-800 transition-all z-[2001] relative" aria-label="Toggle menu">
         <IconMenu />
       </button>
 
       {/* Dropdown Menu */}
-      {isOpen && <div className="absolute top-full mt-2 left-0 w-52 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-3 z-[2002] gap-2 items-start justify-start px-[20px] py-[20px] my-0 shadow-inner flex flex-row">
+      {isOpen && <div className="absolute top-full mt-2 left-14 w-52 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-3 z-[2002] gap-2 items-start justify-start px-[20px] py-[20px] my-0 shadow-inner flex flex-row">
           <button onClick={() => {
         onOpenCharts();
         setIsOpen(false);
