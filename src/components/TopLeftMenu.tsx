@@ -16,7 +16,7 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
       </button>
 
       {/* Dropdown Menu */}
-      {isOpen && <div className="absolute top-full mt-2 left-14 w-52 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-3 z-[2002] gap-2 items-start justify-start px-[20px] py-[20px] my-0 shadow-inner flex flex-row">
+      {isOpen && <div className="absolute top-full mt-2 left-14 w-52 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-3 z-[2002] gap-2 items-start justify-start px-[20px] py-[20px] my-0 shadow-inner flex flex-row mx-[10px]">
           <button onClick={() => {
         onOpenCharts();
         setIsOpen(false);
@@ -26,7 +26,7 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
           <button onClick={() => {
         onOpenAerodromes();
         setIsOpen(false);
-      }} className="w-full px-4 py-3 text-center text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all shadow-lg hover:shadow-emerald-500/25">
+      }} className="w-full px-4 py-3 text-center text-sm font-bold text-white bg-sky-600 hover:bg-emerald-500 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25">
             🛫 Aeródromos
           </button>
         </div>}
