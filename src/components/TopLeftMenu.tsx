@@ -16,7 +16,7 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
       </button>
 
       {/* Dropdown Menu */}
-      {isOpen && <div className="absolute top-full mt-2 left-0 w-52 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl p-3 z-[2002] flex-col gap-2 flex items-start justify-start">
+      {isOpen && <div className="absolute top-full mt-2 left-0 w-52 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-3 z-[2002] flex-col gap-2 flex items-start justify-start px-[20px] py-[20px] my-0 shadow-inner">
           <button onClick={() => {
         onOpenCharts();
         setIsOpen(false);
