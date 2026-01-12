@@ -11,7 +11,7 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   return <div className="absolute top-4 left-18z-[2000]">
       {/* Hamburger Icon Button */}
-      <button onClick={() => setIsOpen(!isOpen)} aria-label="Toggle menu" className="p-3 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-800 transition-all z-[2001] relative text-center">
+      <button onClick={() => setIsOpen(!isOpen)} aria-label="Toggle menu" className="p-3 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-800 transition-all z-[2001] relative text-center mx-[5px]">
         <IconMenu />
       </button>
 
