@@ -20,13 +20,13 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
           <button onClick={() => {
         onOpenCharts();
         setIsOpen(false);
-      }} className="w-full px-4 py-3 text-center text-sm font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25">
+      }} className="w-[160px] px-4 py-3 text-center text-sm font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25">
             📄 Cartas
           </button>
           <button onClick={() => {
         onOpenAerodromes();
         setIsOpen(false);
-      }} className="w-full px-4 py-3 text-center text-sm font-bold text-white bg-sky-600 hover:bg-emerald-500 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25">
+      }} className="w-[160px] px-4 py-3 text-center text-sm font-bold text-white bg-sky-600 hover:bg-emerald-500 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25">
             🛫 Aeródromos
           </button>
         </div>}
