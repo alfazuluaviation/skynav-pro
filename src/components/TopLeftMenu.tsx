@@ -1,58 +1,37 @@
 import React, { useState } from 'react';
 import { IconMenu } from './Icons';
-
 interface TopLeftMenuProps {
   onOpenCharts: () => void;
   onOpenAerodromes: () => void;
 }
-
-export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({ onOpenCharts, onOpenAerodromes }) => {
+export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
+  onOpenCharts,
+  onOpenAerodromes
+}) => {
   const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <div className="absolute top-4 left-4 z-[2000]">
+  return <div className="absolute top-4 left-4 z-[2000]">
       {/* Hamburger Icon Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="p-3 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-800 transition-all z-[2001] relative"
-        aria-label="Toggle menu"
-      >
+      <button onClick={() => setIsOpen(!isOpen)} className="p-3 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-800 transition-all z-[2001] relative" aria-label="Toggle menu">
         <IconMenu />
       </button>
 
       {/* Dropdown Menu */}
-      {isOpen && (
-        <div 
-          className="absolute top-full mt-2 left-0 w-52 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl p-3 z-[2002] flex flex-col gap-2"
-        >
-          <button
-            onClick={() => {
-              onOpenCharts();
-              setIsOpen(false);
-            }}
-            className="w-full px-4 py-3 text-center text-sm font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25"
-          >
+      {isOpen && <div className="absolute top-full mt-2 left-0 w-52 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl p-3 z-[2002] flex-col gap-2 flex items-center justify-start">
+          <button onClick={() => {
+        onOpenCharts();
+        setIsOpen(false);
+      }} className="w-full px-4 py-3 text-center text-sm font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25">
             📄 Cartas
           </button>
-          <button
-            onClick={() => {
-              onOpenAerodromes();
-              setIsOpen(false);
-            }}
-            className="w-full px-4 py-3 text-center text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all shadow-lg hover:shadow-emerald-500/25"
-          >
+          <button onClick={() => {
+        onOpenAerodromes();
+        setIsOpen(false);
+      }} className="w-full px-4 py-3 text-center text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all shadow-lg hover:shadow-emerald-500/25">
             🛫 Aeródromos
           </button>
-        </div>
-      )}
+        </div>}
 
       {/* Click outside to close */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 z-[1999]"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
-    </div>
-  );
+      {isOpen && <div className="fixed inset-0 z-[1999]" onClick={() => setIsOpen(false)} />}
+    </div>;
 };
