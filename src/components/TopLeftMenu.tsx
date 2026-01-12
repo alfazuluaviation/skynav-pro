@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { IconMenu } from './Icons';
+import aerodromosIcon from '@/assets/aerodromos-icon.jpg';
 interface TopLeftMenuProps {
   onOpenCharts: () => void;
   onOpenAerodromes: () => void;
@@ -26,8 +27,9 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
           <button onClick={() => {
         onOpenAerodromes();
         setIsOpen(false);
-      }} className="w-[160px] px-4 py-3 text-center text-sm font-bold text-white bg-sky-600 hover:bg-emerald-500 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25">
-            🛫 Aeródr
+      }} className="w-[160px] px-4 py-3 text-center text-sm font-bold text-white bg-sky-600 hover:bg-emerald-500 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center gap-2">
+            <img src={aerodromosIcon} alt="Aeródromos" className="w-6 h-6 rounded object-cover" />
+            Aeródr
           </button>
         </div>}
 
