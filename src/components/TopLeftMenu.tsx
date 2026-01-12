@@ -27,7 +27,7 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
         onOpenAerodromes();
         setIsOpen(false);
       }} className="w-[160px] px-4 py-3 text-center text-sm font-bold text-white bg-sky-600 hover:bg-emerald-500 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25">
-            🛫 Aeródromos
+            🛫 Aeródr
           </button>
         </div>}
 
