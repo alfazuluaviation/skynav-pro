@@ -27,8 +27,8 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
           <button onClick={() => {
         onOpenAerodromes();
         setIsOpen(false);
-      }} className="w-[60px] h-[48px] p-2 bg-sky-600 hover:bg-emerald-500 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center">
-            <img src={aerodromosIcon} alt="Aeródromos" className="w-full h-full object-contain" />
+      }} className="w-[60px] h-[48px] p-0 overflow-hidden rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center">
+            <img src={aerodromosIcon} alt="Aeródromos" className="w-full h-full object-cover rounded-xl" />
           </button>
         </div>}
 
