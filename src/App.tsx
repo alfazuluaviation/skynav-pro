@@ -16,6 +16,7 @@ import { ENRC_SEGMENTS } from './config/chartConfig';
 import { WMSTileLayer } from 'react-leaflet';
 import { NavigationLayer } from './components/NavigationLayer';
 import { TopLeftMenu } from './components/TopLeftMenu';
+import { ChartsModal } from './components/ChartsModal';
 
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -100,6 +101,7 @@ const App: React.FC = () => {
   const [downloadedLayers, setDownloadedLayers] = useState<string[]>([]);
   const [syncingLayers, setSyncingLayers] = useState<Record<string, number>>({});
   const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
+  const [showChartsModal, setShowChartsModal] = useState(false);
 
   // Persistence Keys
   const KEY_CURRENT_PLAN = 'flight_plan_v1';
@@ -432,7 +434,7 @@ const App: React.FC = () => {
   // Handlers for the new menu
   const handleOpenCharts = () => {
     console.log("Opening charts menu");
-    alert("Funcionalidade de Cartas em desenvolvimento");
+    setShowChartsModal(true);
   };
 
   const handleOpenAerodromes = () => {
@@ -714,6 +716,12 @@ const App: React.FC = () => {
           </MapContainer>
         </div>
       </div>
+
+      {/* Charts Modal */}
+      <ChartsModal 
+        isOpen={showChartsModal} 
+        onClose={() => setShowChartsModal(false)} 
+      />
     </div>
   );
 };
