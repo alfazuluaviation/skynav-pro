@@ -19,16 +19,24 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && <div className="absolute top-full mt-2 left-14 w-52 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-3 z-[2002] gap-2 items-start justify-start px-[20px] py-[20px] my-0 shadow-inner flex flex-row mx-[10px]">
-          <button onClick={() => {
-        onOpenCharts();
-        setIsOpen(false);
-      }} className="w-[60px] h-[48px] p-0 overflow-hidden rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center">
+          <button 
+            onClick={() => {
+              onOpenCharts();
+              setIsOpen(false);
+            }} 
+            title="Cartas"
+            className="w-[60px] h-[48px] p-0 overflow-hidden rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center"
+          >
             <img src={cartasIcon} alt="Cartas" className="w-full h-full object-cover rounded-xl" />
           </button>
-          <button onClick={() => {
-        onOpenAerodromes();
-        setIsOpen(false);
-      }} className="w-[60px] h-[48px] p-0 overflow-hidden rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center">
+          <button 
+            onClick={() => {
+              onOpenAerodromes();
+              setIsOpen(false);
+            }} 
+            title="Aeródromos"
+            className="w-[60px] h-[48px] p-0 overflow-hidden rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center"
+          >
             <img src={aerodromosIcon} alt="Aeródromos" className="w-full h-full object-cover rounded-xl" />
           </button>
         </div>}
