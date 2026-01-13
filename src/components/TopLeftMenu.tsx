@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { IconMenu } from './Icons';
 import aerodromosIcon from '@/assets/aerodromos-icon.jpg';
+import cartasIcon from '@/assets/cartas-icon.jpg';
 interface TopLeftMenuProps {
   onOpenCharts: () => void;
   onOpenAerodromes: () => void;
@@ -21,8 +22,8 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
           <button onClick={() => {
         onOpenCharts();
         setIsOpen(false);
-      }} className="w-[160px] px-4 py-3 text-center text-sm font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25">
-            📄 Cartas
+      }} className="w-[60px] h-[48px] p-0 overflow-hidden rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center">
+            <img src={cartasIcon} alt="Cartas" className="w-full h-full object-cover rounded-xl" />
           </button>
           <button onClick={() => {
         onOpenAerodromes();
