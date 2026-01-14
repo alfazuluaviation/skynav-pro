@@ -19,6 +19,12 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   plannedSpeed
 }) => {
   const [downloadFormat, setDownloadFormat] = useState<'txt' | 'csv' | 'json'>('txt');
+  const [chartAvailability, setChartAvailability] = useState<Record<string, boolean>>({
+    enrcHigh: false,
+    enrcLow: true,
+    rea: false,
+    wac: false
+  });
 
   if (!isOpen) return null;
 
@@ -169,8 +175,18 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const totalDistance = flightSegments.reduce((sum, s) => sum + s.distance, 0);
-  const totalFuel = flightSegments.reduce((sum, s) => sum + s.fuel, 0);
+  const handleChartDownload = (chartType: string) => {
+    // TODO: Implementar download real das cartas
+    console.log(`Download da carta: ${chartType}`);
+    alert(`Download da carta ${chartType} será implementado em breve.`);
+  };
+
+  const chartOptions = [
+    { id: 'enrcHigh', label: 'ENRC HIGH', available: chartAvailability.enrcHigh },
+    { id: 'enrcLow', label: 'ENRC LOW', available: chartAvailability.enrcLow },
+    { id: 'rea', label: 'REA', available: chartAvailability.rea },
+    { id: 'wac', label: 'WAC', available: chartAvailability.wac },
+  ];
 
   return (
     <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -181,7 +197,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            Download do Plano de Voo
+            Download
           </h2>
           <button
             onClick={onClose}
@@ -195,50 +211,51 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          {/* Summary */}
-          <div className="bg-slate-800/50 rounded-xl p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Resumo do Plano</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-slate-400">Aeronave:</span>
-                <span className="ml-2 text-white font-medium">{aircraftModel.id}</span>
-              </div>
-              <div>
-                <span className="text-slate-400">Velocidade:</span>
-                <span className="ml-2 text-white font-medium">{plannedSpeed} kt</span>
-              </div>
-              <div>
-                <span className="text-slate-400">Waypoints:</span>
-                <span className="ml-2 text-white font-medium">{waypoints.length}</span>
-              </div>
-              <div>
-                <span className="text-slate-400">Legs:</span>
-                <span className="ml-2 text-white font-medium">{flightSegments.length}</span>
-              </div>
-              <div>
-                <span className="text-slate-400">Distância:</span>
-                <span className="ml-2 text-sky-400 font-medium">{totalDistance.toFixed(1)} NM</span>
-              </div>
-              <div>
-                <span className="text-slate-400">Combustível:</span>
-                <span className="ml-2 text-amber-400 font-medium">{totalFuel} L</span>
-              </div>
+          {/* Chart Download Options */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              {chartOptions.slice(0, 3).map((chart) => (
+                <button
+                  key={chart.id}
+                  onClick={() => handleChartDownload(chart.id)}
+                  className="p-4 rounded-xl border-2 border-slate-700 bg-slate-800/50 hover:border-slate-600 transition-all flex flex-col items-center"
+                >
+                  <div className="text-sm font-bold text-white mb-1">{chart.label}</div>
+                  {chart.available ? (
+                    <div className="flex items-center gap-1 text-xs text-emerald-400">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                      DISPONÍVEL
+                    </div>
+                  ) : (
+                    <div className="text-xs text-slate-500">BAIXAR</div>
+                  )}
+                </button>
+              ))}
             </div>
-            
-            {/* Route display */}
-            {waypoints.length > 0 && (
-              <div className="pt-3 border-t border-slate-700/50">
-                <span className="text-slate-400 text-sm">Rota: </span>
-                <span className="text-white font-mono text-sm">
-                  {waypoints.map(wp => wp.icao || wp.name.substring(0, 4).toUpperCase()).join(' → ')}
-                </span>
-              </div>
-            )}
+            <div className="flex justify-center">
+              <button
+                onClick={() => handleChartDownload('wac')}
+                className="p-4 rounded-xl border-2 border-slate-700 bg-slate-800/50 hover:border-slate-600 transition-all flex flex-col items-center w-1/3"
+              >
+                <div className="text-sm font-bold text-white mb-1">WAC</div>
+                {chartAvailability.wac ? (
+                  <div className="flex items-center gap-1 text-xs text-emerald-400">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    DISPONÍVEL
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500">BAIXAR</div>
+                )}
+              </button>
+            </div>
           </div>
 
-          {/* Format Selection */}
+          {/* Separator */}
+          <div className="border-t border-slate-700/50"></div>
+
+          {/* Flight Plan Format Selection */}
           <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Formato de Download</h3>
+            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Plano de Voo</h3>
             <div className="grid grid-cols-3 gap-3">
               <button
                 onClick={() => setDownloadFormat('txt')}
