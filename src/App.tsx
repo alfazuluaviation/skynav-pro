@@ -462,6 +462,7 @@ const App: React.FC = () => {
       <TopLeftMenu 
         onOpenCharts={handleOpenCharts}
         onOpenAerodromes={handleOpenAerodromes}
+        onOpenDownload={() => {/* TODO: implementar funcionalidade de download */}}
       />
 
       {/* SIDEBAR */}
