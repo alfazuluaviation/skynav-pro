@@ -2,7 +2,7 @@ import { LatLngBounds } from 'leaflet';
 import { NavPoint } from '../types';
 import { searchAerodrome } from './geminiService'; // Import searchAerodrome
 
-const BASE_WFS_URL = '/geoserver/wfs';
+const BASE_WFS_URL = 'https://geoaisweb.decea.mil.br/geoserver/wfs';
 
 // Sanitize user input for CQL queries to prevent injection attacks
 const sanitizeCQLInput = (input: string): string => {
