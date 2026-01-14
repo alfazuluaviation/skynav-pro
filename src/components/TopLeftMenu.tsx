@@ -2,13 +2,17 @@ import React, { useState } from 'react';
 import { IconMenu } from './Icons';
 import aerodromosIcon from '@/assets/aerodromos-icon.jpg';
 import cartasIcon from '@/assets/cartas-icon.jpg';
+import downloadIcon from '@/assets/download-icon.jpg';
+
 interface TopLeftMenuProps {
   onOpenCharts: () => void;
   onOpenAerodromes: () => void;
+  onOpenDownload: () => void;
 }
 export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
   onOpenCharts,
-  onOpenAerodromes
+  onOpenAerodromes,
+  onOpenDownload
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   return <div className="absolute top-4 left-18z-[2000]">
@@ -38,6 +42,16 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
             className="w-[60px] h-[48px] p-0 overflow-hidden rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center"
           >
             <img src={aerodromosIcon} alt="Aeródromos" className="w-full h-full object-cover rounded-xl" />
+          </button>
+          <button 
+            onClick={() => {
+              onOpenDownload();
+              setIsOpen(false);
+            }} 
+            title="Download"
+            className="w-[60px] h-[48px] p-0 overflow-hidden rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center"
+          >
+            <img src={downloadIcon} alt="Download" className="w-full h-full object-cover rounded-xl" />
           </button>
         </div>}
 
