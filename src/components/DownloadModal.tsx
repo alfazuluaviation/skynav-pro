@@ -181,6 +181,13 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     alert(`Download da carta ${chartType} será implementado em breve.`);
   };
 
+  const handleDownloadAll = () => {
+    // Download all charts at once
+    chartOptions.forEach((chart) => {
+      handleChartDownload(chart.id);
+    });
+  };
+
   const chartOptions = [
     { id: 'enrcHigh', label: 'ENRC HIGH', available: chartAvailability.enrcHigh },
     { id: 'enrcLow', label: 'ENRC LOW', available: chartAvailability.enrcLow },
@@ -250,69 +257,16 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
             </div>
           </div>
 
-          {/* Separator */}
-          <div className="border-t border-slate-700/50"></div>
-
-          {/* Flight Plan Format Selection */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Plano de Voo</h3>
-            <div className="grid grid-cols-3 gap-3">
-              <button
-                onClick={() => setDownloadFormat('txt')}
-                className={`p-4 rounded-xl border-2 transition-all ${
-                  downloadFormat === 'txt'
-                    ? 'border-sky-500 bg-sky-500/20 text-sky-400'
-                    : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
-                }`}
-              >
-                <div className="text-2xl mb-1">📄</div>
-                <div className="text-sm font-medium">TXT</div>
-                <div className="text-xs text-slate-500">Texto</div>
-              </button>
-              <button
-                onClick={() => setDownloadFormat('csv')}
-                className={`p-4 rounded-xl border-2 transition-all ${
-                  downloadFormat === 'csv'
-                    ? 'border-sky-500 bg-sky-500/20 text-sky-400'
-                    : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
-                }`}
-              >
-                <div className="text-2xl mb-1">📊</div>
-                <div className="text-sm font-medium">CSV</div>
-                <div className="text-xs text-slate-500">Planilha</div>
-              </button>
-              <button
-                onClick={() => setDownloadFormat('json')}
-                className={`p-4 rounded-xl border-2 transition-all ${
-                  downloadFormat === 'json'
-                    ? 'border-sky-500 bg-sky-500/20 text-sky-400'
-                    : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
-                }`}
-              >
-                <div className="text-2xl mb-1">🔧</div>
-                <div className="text-sm font-medium">JSON</div>
-                <div className="text-xs text-slate-500">API</div>
-              </button>
-            </div>
-          </div>
-
-          {/* Download Button */}
+          {/* Download All Button */}
           <button
-            onClick={handleDownload}
-            disabled={waypoints.length === 0}
-            className="w-full py-4 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center gap-2"
+            onClick={handleDownloadAll}
+            className="w-full py-4 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            {waypoints.length === 0 ? 'Nenhum plano para baixar' : 'Baixar Plano de Voo'}
+            Baixar todos
           </button>
-
-          {waypoints.length === 0 && (
-            <p className="text-center text-sm text-slate-500">
-              Adicione waypoints ao seu plano de voo para poder fazer o download.
-            </p>
-          )}
         </div>
       </div>
     </div>
