@@ -17,6 +17,7 @@ import { WMSTileLayer } from 'react-leaflet';
 import { NavigationLayer } from './components/NavigationLayer';
 import { TopLeftMenu } from './components/TopLeftMenu';
 import { ChartsModal } from './components/ChartsModal';
+import { AerodromeModal } from './components/AerodromeModal';
 
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -102,6 +103,7 @@ const App: React.FC = () => {
   const [syncingLayers, setSyncingLayers] = useState<Record<string, number>>({});
   const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
   const [showChartsModal, setShowChartsModal] = useState(false);
+  const [showAerodromeModal, setShowAerodromeModal] = useState(false);
 
   // Persistence Keys
   const KEY_CURRENT_PLAN = 'flight_plan_v1';
@@ -439,7 +441,7 @@ const App: React.FC = () => {
 
   const handleOpenAerodromes = () => {
     console.log("Opening aerodromes menu");
-    alert("Funcionalidade de Aeródromos em desenvolvimento");
+    setShowAerodromeModal(true);
   };
 
   if (loadingSession) { // Render a loading spinner or null while session is being checked
@@ -721,6 +723,12 @@ const App: React.FC = () => {
       <ChartsModal 
         isOpen={showChartsModal} 
         onClose={() => setShowChartsModal(false)} 
+      />
+
+      {/* Aerodrome Modal */}
+      <AerodromeModal 
+        isOpen={showAerodromeModal} 
+        onClose={() => setShowAerodromeModal(false)} 
       />
     </div>
   );
