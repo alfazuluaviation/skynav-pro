@@ -1,0 +1,7 @@
+project_id = "gongoqjjpwphhttumdjm"
+
+[functions.sync-aeronautical-data]
+verify_jwt = false
+
+[functions.search-aerodrome]
+verify_jwt = false

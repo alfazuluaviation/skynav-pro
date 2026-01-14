@@ -4,6 +4,21 @@ import { searchAerodrome } from './geminiService'; // Import searchAerodrome
 
 const BASE_WFS_URL = '/geoserver/wfs';
 
+// Sanitize user input for CQL queries to prevent injection attacks
+const sanitizeCQLInput = (input: string): string => {
+  // Remove special CQL characters that could be used for injection
+  return input.replace(/[%'"\\\[\]()]/g, '');
+};
+
+// Validate search query format
+const validateSearchQuery = (query: string): boolean => {
+  if (!query || query.length < 2 || query.length > 50) {
+    return false;
+  }
+  // Allow alphanumeric, spaces, hyphens, and common accented characters
+  return /^[a-zA-Z0-9\s\-áàâãéèêíìîóòôõúùûçÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ]+$/.test(query);
+};
+
 export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoint[]> => {
     // Construct BBOX string: minLng,minLat,maxLng,maxLat
     const bbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
@@ -75,39 +90,25 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
 };
 
 export const searchNavigationPoints = async (query: string): Promise<NavPoint[]> => {
-    if (!query || query.length < 2) return [];
+    // Validate input
+    if (!validateSearchQuery(query)) {
+        console.warn('[NavDataService] Invalid search query format');
+        return [];
+    }
 
     // Layers to search
-    // ICA:airport (Aerodromes)
-    // ICA:waypoint (Fixes - e.g., ARURU)
-    // ICA:vor (VORs)
-    // ICA:ndb (NDBs)
     const layers = ['ICA:airport', 'ICA:waypoint', 'ICA:vor', 'ICA:ndb'];
     const results: NavPoint[] = [];
 
-    // CQL Filter for ICA:airport
-    // Properties found: localidade_id (ICAO), nome (Name)
-    // Properties for Waypoint/VOR/NDB: ident (Code)
-
-    // We construct a filter that attempts to match ANY of these fields.
-    // However, WFS 1.0.0 might error if we query a property that doesn't exist on a specific layer (e.g. querying 'localidade_id' on 'ICA:waypoint').
-    // So we need specific filters per layer or a generic strategy.
-
-    // Best strategy: Specific filter per layer loop.
-
     const fetchLayer = async (layerName: string) => {
+        // Sanitize input before using in CQL query
+        const sanitizedQuery = sanitizeCQLInput(query.toLowerCase());
+        
         let cql = '';
-        const q = query.toLowerCase();
-
         if (layerName === 'ICA:airport') {
-            cql = `strToLowerCase(localidade_id) like '%${q}%' OR strToLowerCase(nome) like '%${q}%'`;
+            cql = `strToLowerCase(localidade_id) like '%${sanitizedQuery}%' OR strToLowerCase(nome) like '%${sanitizedQuery}%'`;
         } else {
-            // For Waypoint, VOR, NDB, the key is usually 'ident' or 'nome'
-            // Based on debug_waypoint.json: 'ident' exists.
-            cql = `strToLowerCase(ident) like '%${q}%'`;
-            // Note: 'nome' might not exist on waypoint layer, causing error if queried.
-            // If we want to be safe, we just search 'ident' for fix/navaid for now.
-            // If they have 'nome', we can add OR strToLowerCase(nome)... but 'ident' is most important for waypoints.
+            cql = `strToLowerCase(ident) like '%${sanitizedQuery}%'`;
         }
 
         try {
