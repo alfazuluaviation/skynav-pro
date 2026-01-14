@@ -19,6 +19,7 @@ import { TopLeftMenu } from './components/TopLeftMenu';
 import { ChartsModal } from './components/ChartsModal';
 import { AerodromeModal } from './components/AerodromeModal';
 import { DownloadModal } from './components/DownloadModal';
+import { FlightPlanDownloadModal } from './components/FlightPlanDownloadModal';
 
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -106,6 +107,7 @@ const App: React.FC = () => {
   const [showChartsModal, setShowChartsModal] = useState(false);
   const [showAerodromeModal, setShowAerodromeModal] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [showFlightPlanDownloadModal, setShowFlightPlanDownloadModal] = useState(false);
 
   // Persistence Keys
   const KEY_CURRENT_PLAN = 'flight_plan_v1';
@@ -512,7 +514,7 @@ const App: React.FC = () => {
             onLoadPlan={handleLoadPlan}
             onDeletePlan={handleDeletePlan}
             onInvertRoute={handleInvertRoute}
-            onOpenDownload={() => setShowDownloadModal(true)}
+            onOpenDownload={() => setShowFlightPlanDownloadModal(true)}
           />
         )}
 
@@ -744,6 +746,16 @@ const App: React.FC = () => {
       <DownloadModal 
         isOpen={showDownloadModal} 
         onClose={() => setShowDownloadModal(false)}
+        waypoints={waypoints}
+        flightSegments={flightSegments}
+        aircraftModel={aircraftModel}
+        plannedSpeed={plannedSpeed}
+      />
+
+      {/* Flight Plan Download Modal */}
+      <FlightPlanDownloadModal 
+        isOpen={showFlightPlanDownloadModal} 
+        onClose={() => setShowFlightPlanDownloadModal(false)}
         waypoints={waypoints}
         flightSegments={flightSegments}
         aircraftModel={aircraftModel}
