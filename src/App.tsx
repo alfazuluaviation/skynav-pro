@@ -18,6 +18,7 @@ import { NavigationLayer } from './components/NavigationLayer';
 import { TopLeftMenu } from './components/TopLeftMenu';
 import { ChartsModal } from './components/ChartsModal';
 import { AerodromeModal } from './components/AerodromeModal';
+import { DownloadModal } from './components/DownloadModal';
 
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -104,6 +105,7 @@ const App: React.FC = () => {
   const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
   const [showChartsModal, setShowChartsModal] = useState(false);
   const [showAerodromeModal, setShowAerodromeModal] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   // Persistence Keys
   const KEY_CURRENT_PLAN = 'flight_plan_v1';
@@ -444,6 +446,11 @@ const App: React.FC = () => {
     setShowAerodromeModal(true);
   };
 
+  const handleOpenDownload = () => {
+    console.log("Opening download menu");
+    setShowDownloadModal(true);
+  };
+
   if (loadingSession) { // Render a loading spinner or null while session is being checked
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0d1117]">
@@ -462,7 +469,7 @@ const App: React.FC = () => {
       <TopLeftMenu 
         onOpenCharts={handleOpenCharts}
         onOpenAerodromes={handleOpenAerodromes}
-        onOpenDownload={() => {/* TODO: implementar funcionalidade de download */}}
+        onOpenDownload={handleOpenDownload}
       />
 
       {/* SIDEBAR */}
@@ -730,6 +737,16 @@ const App: React.FC = () => {
       <AerodromeModal 
         isOpen={showAerodromeModal} 
         onClose={() => setShowAerodromeModal(false)} 
+      />
+
+      {/* Download Modal */}
+      <DownloadModal 
+        isOpen={showDownloadModal} 
+        onClose={() => setShowDownloadModal(false)}
+        waypoints={waypoints}
+        flightSegments={flightSegments}
+        aircraftModel={aircraftModel}
+        plannedSpeed={plannedSpeed}
       />
     </div>
   );
