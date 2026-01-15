@@ -9,12 +9,14 @@ interface NavigationLayerProps {
     onPointSelect?: (point: NavPoint) => void;
     waypoints?: Waypoint[];
     aircraftPosition?: [number, number];
+    hideLockButton?: boolean;
 }
 
 export const NavigationLayer: React.FC<NavigationLayerProps> = ({ 
     onPointSelect, 
     waypoints = [],
-    aircraftPosition
+    aircraftPosition,
+    hideLockButton = false
 }) => {
     const map = useMap();
     const [points, setPoints] = useState<NavPoint[]>([]);
@@ -139,13 +141,14 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                 ))}
             </LayerGroup>
 
-            {/* ARMOR CONTROL: MAP LOCK TOGGLE */}
+            {/* ARMOR CONTROL: MAP LOCK TOGGLE - Hidden on mobile when plan panel is open */}
             <div 
+                className={hideLockButton ? 'hidden md:flex' : 'flex'}
                 style={{
                     position: 'fixed', bottom: '40px', right: '40px', zIndex: 99999,
                     background: isLocked ? '#d946ef' : 'rgba(15, 23, 42, 0.9)',
                     color: 'white', width: '64px', height: '64px', borderRadius: '50%',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    alignItems: 'center', justifyContent: 'center',
                     cursor: 'pointer', border: '3px solid white', boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
                     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                 }} 

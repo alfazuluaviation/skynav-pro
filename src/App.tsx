@@ -729,6 +729,7 @@ const App: React.FC = () => {
               waypoints={waypoints}
               flightSegments={flightSegments}
               aircraftPosition={userPos}
+              hideLockButton={showPlanPanel}
             />
           </MapContainer>
         </div>
