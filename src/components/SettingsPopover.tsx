@@ -13,6 +13,7 @@ interface SettingsPopoverProps {
     onDownloadLayer: (layer: string) => void;
     syncingLayers: Record<string, number>;
     airac: AiracCycle | null;
+    isMobile?: boolean;
 }
 
 export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
@@ -26,11 +27,16 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
     onDownloadLayer,
     syncingLayers,
     airac,
+    isMobile = false,
 }) => {
+    const containerClass = isMobile 
+        ? "w-full p-5" 
+        : "absolute left-16 bottom-0 w-72 bg-slate-900 border border-slate-800 rounded-2xl shadow-3xl p-5 z-[2100] animate-in";
+
     return (
         <div
-            className="absolute left-16 bottom-0 w-72 bg-slate-900 border border-slate-800 rounded-2xl shadow-3xl p-5 z-[2100] animate-in"
-            style={{ animationName: 'slide-in' }}
+            className={containerClass}
+            style={!isMobile ? { animationName: 'slide-in' } : undefined}
         >
             <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 px-1">
                 Configurações
@@ -39,10 +45,10 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
             <div className="flex flex-col gap-6">
                 {/* USER PROFILE */}
                 <div className="flex items-center gap-4 px-1 pb-2">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-lg shadow-purple-500/20 shrink-0">
                         <IconUser />
                     </div>
-                    <div className="flex flex-col min-w-0">
+                    <div className="flex flex-col min-w-0 flex-1">
                         <span className="text-sm font-black text-slate-100 truncate">
                             {userName || 'Piloto'}
                         </span>
@@ -50,7 +56,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                             <span className="text-[10px] text-slate-500 font-medium truncate mb-1">
                                 {userEmail || 'usuario@skyfpl.com'}
                             </span>
-                            <button className="w-fit text-[10px] font-black text-purple-400 uppercase tracking-widest hover:text-purple-300 transition-colors">
+                            <button className="w-fit text-[10px] font-black text-purple-400 uppercase tracking-widest hover:text-purple-300 active:text-purple-200 transition-colors">
                                 Perfil
                             </button>
                         </div>
@@ -65,11 +71,11 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                         <span className="text-[11px] font-bold text-slate-300">MODO NOTURNO</span>
                         <button
                             onClick={onToggleNightMode}
-                            className={`w-12 h-6 rounded-full relative transition-colors ${isNightMode ? 'bg-purple-600' : 'bg-slate-700'
+                            className={`w-14 h-7 sm:w-12 sm:h-6 rounded-full relative transition-colors ${isNightMode ? 'bg-purple-600' : 'bg-slate-700'
                                 }`}
                         >
                             <div
-                                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${isNightMode ? 'right-1' : 'left-1'
+                                className={`absolute top-1 w-5 h-5 sm:w-4 sm:h-4 rounded-full bg-white transition-all ${isNightMode ? 'right-1' : 'left-1'
                                     }`}
                             />
                         </button>
@@ -88,7 +94,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                     </div>
 
                     {/* AIRAC VIGENTE */}
-                    <div className="bg-slate-800/40 rounded-xl p-3 border border-slate-800 flex justify-between items-center group hover:border-slate-700 transition-colors">
+                    <div className="bg-slate-800/40 rounded-xl p-3 border border-slate-800 flex justify-between items-center group hover:border-slate-700 active:border-slate-600 transition-colors">
                         <div className="flex flex-col gap-0.5">
                             <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">AIRAC VIGENTE</span>
                             <div className="flex items-baseline gap-2">
@@ -121,7 +127,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                         <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Download</span>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-4 sm:grid-cols-3 gap-2">
                         {['HIGH', 'LOW', 'REA', 'WAC'].map(type => {
                             const isDownloaded = downloadedLayers.includes(type);
                             const progress = syncingLayers[type];
@@ -132,7 +138,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                                     key={type}
                                     onClick={() => onDownloadLayer(type)}
                                     disabled={isSyncing && !isDownloaded}
-                                    className={`hover:bg-[#21262d] border py-3 rounded-xl flex flex-col items-center justify-center gap-1.5 group transition-all relative overflow-hidden ${isDownloaded
+                                    className={`hover:bg-[#21262d] active:bg-[#2d333b] border py-3 rounded-xl flex flex-col items-center justify-center gap-1.5 group transition-all relative overflow-hidden ${isDownloaded
                                         ? 'bg-[#161b22] border-slate-800'
                                         : 'bg-slate-800/30 border-slate-800 border-dashed opacity-70'
                                         }`}

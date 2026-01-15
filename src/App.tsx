@@ -518,6 +518,7 @@ const App: React.FC = () => {
             onDeletePlan={handleDeletePlan}
             onInvertRoute={handleInvertRoute}
             onOpenDownload={() => setShowFlightPlanDownloadModal(true)}
+            onClose={() => setShowPlanPanel(false)}
           />
         )}
 
