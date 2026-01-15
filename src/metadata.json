@@ -1,6 +1,6 @@
 {
-  "name": "SkyNav Pro - Flight Planner & Navigator",
-  "description": "A professional-grade aeronautical navigation and flight planning application featuring real-time GPS tracking, nautical calculations, and AI-powered flight briefings.",
+  "name": "SkyFPL - Planejador de Voo",
+  "description": "Aplicativo profissional de navegação aeronáutica e planejamento de voo com rastreamento GPS em tempo real, cálculos náuticos e briefings de voo.",
   "requestFramePermissions": [
     "geolocation"
   ]
