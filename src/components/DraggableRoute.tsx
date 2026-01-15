@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Polyline, CircleMarker, useMap, useMapEvents, Marker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import { Waypoint, NavPoint } from '../../types';
@@ -16,6 +16,20 @@ interface DragState {
   nearbyPoint: NavPoint | null;
 }
 
+// Debounce helper
+const useDebounce = (callback: (...args: any[]) => void, delay: number) => {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  return useCallback((...args: any[]) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
+      callback(...args);
+    }, delay);
+  }, [callback, delay]);
+};
+
 export const DraggableRoute: React.FC<DraggableRouteProps> = ({
   waypoints,
   onInsertWaypoint,
@@ -28,11 +42,17 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     nearbyPoint: null,
   });
   const [nearbyPoints, setNearbyPoints] = useState<NavPoint[]>([]);
+  const dragStateRef = useRef(dragState);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    dragStateRef.current = dragState;
+  }, [dragState]);
 
   // Fetch nearby navigation points when dragging
-  const fetchNearbyPoints = useCallback(async (lat: number, lng: number) => {
+  const fetchNearbyPointsImmediate = useCallback(async (lat: number, lng: number) => {
     try {
-      // Create a small bounds around the current position (approximately 50nm radius)
+      // Create a small bounds around the current position
       const radiusDeg = 0.5; // roughly 30nm
       const bounds = L.latLngBounds(
         [lat - radiusDeg, lng - radiusDeg],
@@ -43,7 +63,7 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
       
       // Find the closest point within snap distance (approximately 10nm)
       const snapDistanceNM = 10;
-      const snapDistanceDeg = snapDistanceNM / 60; // rough conversion
+      const snapDistanceDeg = snapDistanceNM / 60;
       
       let closestPoint: NavPoint | null = null;
       let closestDist = Infinity;
@@ -62,6 +82,8 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     }
   }, []);
 
+  const fetchNearbyPoints = useDebounce(fetchNearbyPointsImmediate, 200);
+
   // Calculate midpoint of a segment
   const getMidpoint = (start: Waypoint, end: Waypoint): [number, number] => {
     return [(start.lat + end.lat) / 2, (start.lng + end.lng) / 2];
@@ -69,6 +91,7 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
 
   // Handle drag start on midpoint marker
   const handleDragStart = useCallback((segmentIndex: number, position: [number, number]) => {
+    console.log('[DraggableRoute] Drag started on segment', segmentIndex);
     setDragState({
       isDragging: true,
       segmentIndex,
@@ -76,93 +99,108 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
       nearbyPoint: null,
     });
     map.dragging.disable();
-    fetchNearbyPoints(position[0], position[1]);
-  }, [map, fetchNearbyPoints]);
+    fetchNearbyPointsImmediate(position[0], position[1]);
+  }, [map, fetchNearbyPointsImmediate]);
 
-  // Handle drag move
-  const handleDragMove = useCallback((e: L.LeafletMouseEvent) => {
-    if (!dragState.isDragging) return;
-    
-    const { lat, lng } = e.latlng;
-    setDragState(prev => ({ ...prev, currentPosition: [lat, lng] }));
-    
-    // Debounce the nearby points fetch
-    fetchNearbyPoints(lat, lng);
-  }, [dragState.isDragging, fetchNearbyPoints]);
+  // Handle drag move - using direct map events
+  useEffect(() => {
+    if (!dragStateRef.current.isDragging) return;
 
-  // Handle drag end
-  const handleDragEnd = useCallback(() => {
-    if (!dragState.isDragging || !dragState.currentPosition) return;
-    
-    const [lat, lng] = dragState.currentPosition;
-    const segmentIndex = dragState.segmentIndex;
-    
-    // Create new waypoint
-    let newWaypoint: Waypoint;
-    
-    if (dragState.nearbyPoint) {
-      // Snap to navigation point
-      const point = dragState.nearbyPoint;
-      newWaypoint = {
-        id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: point.name,
-        icao: point.icao,
-        lat: point.lat,
-        lng: point.lng,
-        type: (point.type === 'vor' ? 'VOR' : (point.type === 'ndb' || point.type === 'fix') ? 'FIX' : 'AIRPORT') as 'AIRPORT' | 'FIX' | 'VOR' | 'USER',
-        description: point.type,
-        role: 'WAYPOINT',
-      };
-    } else {
-      // Create user waypoint at the dragged position
-      newWaypoint = {
-        id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: `WP${String(segmentIndex + 1).padStart(2, '0')}`,
-        lat,
-        lng,
-        type: 'USER',
-        description: `User waypoint at ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-        role: 'WAYPOINT',
-      };
-    }
-    
-    onInsertWaypoint(newWaypoint, segmentIndex);
-    
-    // Reset state
-    setDragState({
-      isDragging: false,
-      segmentIndex: -1,
-      currentPosition: null,
-      nearbyPoint: null,
-    });
-    setNearbyPoints([]);
-    map.dragging.enable();
-  }, [dragState, onInsertWaypoint, map]);
+    const onMouseMove = (e: L.LeafletMouseEvent) => {
+      if (!dragStateRef.current.isDragging) return;
+      const { lat, lng } = e.latlng;
+      setDragState(prev => ({ ...prev, currentPosition: [lat, lng] }));
+      fetchNearbyPoints(lat, lng);
+    };
 
-  // Map event handlers
-  useMapEvents({
-    mousemove: handleDragMove,
-    mouseup: handleDragEnd,
-  });
+    const onMouseUp = () => {
+      if (!dragStateRef.current.isDragging || !dragStateRef.current.currentPosition) {
+        map.dragging.enable();
+        return;
+      }
+      
+      const [lat, lng] = dragStateRef.current.currentPosition;
+      const segmentIndex = dragStateRef.current.segmentIndex;
+      const nearbyPoint = dragStateRef.current.nearbyPoint;
+      
+      console.log('[DraggableRoute] Drag ended at', lat, lng, 'nearby:', nearbyPoint?.name);
+      
+      // Create new waypoint
+      let newWaypoint: Waypoint;
+      
+      if (nearbyPoint) {
+        // Snap to navigation point
+        newWaypoint = {
+          id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: nearbyPoint.name,
+          icao: nearbyPoint.icao,
+          lat: nearbyPoint.lat,
+          lng: nearbyPoint.lng,
+          type: (nearbyPoint.type === 'vor' ? 'VOR' : (nearbyPoint.type === 'ndb' || nearbyPoint.type === 'fix') ? 'FIX' : 'AIRPORT') as 'AIRPORT' | 'FIX' | 'VOR' | 'USER',
+          description: nearbyPoint.type,
+          role: 'WAYPOINT',
+        };
+      } else {
+        // Create user waypoint at the dragged position
+        newWaypoint = {
+          id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: `WP${String(segmentIndex + 1).padStart(2, '0')}`,
+          lat,
+          lng,
+          type: 'USER',
+          description: `User waypoint at ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+          role: 'WAYPOINT',
+        };
+      }
+      
+      onInsertWaypoint(newWaypoint, segmentIndex);
+      
+      // Reset state
+      setDragState({
+        isDragging: false,
+        segmentIndex: -1,
+        currentPosition: null,
+        nearbyPoint: null,
+      });
+      setNearbyPoints([]);
+      map.dragging.enable();
+    };
 
-  // Create draggable midpoint icon
-  const createMidpointIcon = (isHovered: boolean) => L.divIcon({
+    map.on('mousemove', onMouseMove);
+    map.on('mouseup', onMouseUp);
+
+    return () => {
+      map.off('mousemove', onMouseMove);
+      map.off('mouseup', onMouseUp);
+    };
+  }, [dragState.isDragging, map, onInsertWaypoint, fetchNearbyPoints]);
+
+  // Create midpoint drag handle icon
+  const createMidpointIcon = () => L.divIcon({
     className: 'midpoint-drag-handle',
     html: `
       <div style="
-        width: 16px;
-        height: 16px;
-        background: ${isHovered ? '#d946ef' : 'rgba(217, 70, 239, 0.6)'};
+        width: 20px;
+        height: 20px;
+        background: linear-gradient(135deg, #d946ef 0%, #a855f7 100%);
         border: 2px solid white;
         border-radius: 50%;
         cursor: grab;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-        transition: all 0.15s ease;
-        transform: scale(${isHovered ? 1.2 : 1});
-      "></div>
+        box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <div style="
+          width: 8px;
+          height: 8px;
+          background: white;
+          border-radius: 50%;
+        "></div>
+      </div>
     `,
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
   });
 
   // Create drag indicator icon
@@ -170,9 +208,9 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     className: 'drag-indicator',
     html: `
       <div style="
-        width: 24px;
-        height: 24px;
-        background: ${hasSnap ? '#22c55e' : '#d946ef'};
+        width: 28px;
+        height: 28px;
+        background: ${hasSnap ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : 'linear-gradient(135deg, #d946ef 0%, #a855f7 100%)'};
         border: 3px solid white;
         border-radius: 50%;
         cursor: grabbing;
@@ -181,13 +219,13 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
       "></div>
       <style>
         @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.1); }
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.15); opacity: 0.9; }
         }
       </style>
     `,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
   });
 
   if (waypoints.length < 2) return null;
@@ -204,48 +242,30 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
         }}
       />
 
-      {/* Draggable midpoint markers for each segment */}
+      {/* Draggable midpoint markers for each segment - Using Marker for better drag support */}
       {!dragState.isDragging && waypoints.slice(0, -1).map((start, index) => {
         const end = waypoints[index + 1];
         const midpoint = getMidpoint(start, end);
         
         return (
-          <CircleMarker
+          <Marker
             key={`midpoint-${index}`}
-            center={midpoint}
-            radius={8}
-            pathOptions={{
-              color: 'white',
-              weight: 2,
-              fillColor: 'rgba(217, 70, 239, 0.6)',
-              fillOpacity: 1,
-            }}
+            position={midpoint}
+            icon={createMidpointIcon()}
             eventHandlers={{
               mousedown: (e) => {
-                e.originalEvent.preventDefault();
-                e.originalEvent.stopPropagation();
+                L.DomEvent.stopPropagation(e.originalEvent);
+                L.DomEvent.preventDefault(e.originalEvent);
                 handleDragStart(index, midpoint);
-              },
-              mouseover: (e) => {
-                e.target.setStyle({
-                  fillColor: '#d946ef',
-                  fillOpacity: 1,
-                });
-              },
-              mouseout: (e) => {
-                e.target.setStyle({
-                  fillColor: 'rgba(217, 70, 239, 0.6)',
-                  fillOpacity: 1,
-                });
               },
             }}
           >
-            <Tooltip direction="top" offset={[0, -10]} opacity={0.9}>
-              <div style={{ fontSize: '11px', fontWeight: 'bold' }}>
-                Arraste para inserir waypoint
+            <Tooltip direction="top" offset={[0, -12]} opacity={0.95}>
+              <div style={{ fontSize: '11px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                ✋ Arraste para inserir waypoint
               </div>
             </Tooltip>
-          </CircleMarker>
+          </Marker>
         );
       })}
 
@@ -256,45 +276,33 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
           <Polyline
             positions={[
               [waypoints[dragState.segmentIndex].lat, waypoints[dragState.segmentIndex].lng],
-              dragState.currentPosition,
+              dragState.nearbyPoint 
+                ? [dragState.nearbyPoint.lat, dragState.nearbyPoint.lng]
+                : dragState.currentPosition,
             ]}
             pathOptions={{
               color: dragState.nearbyPoint ? '#22c55e' : '#d946ef',
-              weight: 3,
-              opacity: 0.7,
-              dashArray: '8, 8',
+              weight: 4,
+              opacity: 0.8,
+              dashArray: '10, 10',
             }}
           />
           
           {/* Line from drag position to next waypoint */}
           <Polyline
             positions={[
-              dragState.currentPosition,
+              dragState.nearbyPoint 
+                ? [dragState.nearbyPoint.lat, dragState.nearbyPoint.lng]
+                : dragState.currentPosition,
               [waypoints[dragState.segmentIndex + 1].lat, waypoints[dragState.segmentIndex + 1].lng],
             ]}
             pathOptions={{
               color: dragState.nearbyPoint ? '#22c55e' : '#d946ef',
-              weight: 3,
-              opacity: 0.7,
-              dashArray: '8, 8',
+              weight: 4,
+              opacity: 0.8,
+              dashArray: '10, 10',
             }}
           />
-
-          {/* Snap indicator line to nearby point */}
-          {dragState.nearbyPoint && (
-            <Polyline
-              positions={[
-                dragState.currentPosition,
-                [dragState.nearbyPoint.lat, dragState.nearbyPoint.lng],
-              ]}
-              pathOptions={{
-                color: '#22c55e',
-                weight: 2,
-                opacity: 0.5,
-                dashArray: '4, 4',
-              }}
-            />
-          )}
 
           {/* Drag position indicator */}
           <Marker
@@ -304,11 +312,12 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
             }
             icon={createDragIndicatorIcon(!!dragState.nearbyPoint)}
             interactive={false}
+            zIndexOffset={5000}
           >
-            <Tooltip direction="top" offset={[0, -15]} opacity={0.95} permanent>
-              <div style={{ fontSize: '11px', fontWeight: 'bold', textAlign: 'center' }}>
+            <Tooltip direction="top" offset={[0, -18]} opacity={0.98} permanent>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', textAlign: 'center', padding: '2px 6px' }}>
                 {dragState.nearbyPoint ? (
-                  <span style={{ color: '#22c55e' }}>
+                  <span style={{ color: '#16a34a' }}>
                     📍 {dragState.nearbyPoint.icao || dragState.nearbyPoint.name}
                   </span>
                 ) : (
@@ -323,12 +332,12 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
             <CircleMarker
               key={`nearby-${idx}`}
               center={[point.lat, point.lng]}
-              radius={point === dragState.nearbyPoint ? 8 : 5}
+              radius={point === dragState.nearbyPoint ? 10 : 6}
               pathOptions={{
                 color: point === dragState.nearbyPoint ? '#22c55e' : '#3b82f6',
-                weight: point === dragState.nearbyPoint ? 3 : 1,
+                weight: point === dragState.nearbyPoint ? 3 : 1.5,
                 fillColor: point === dragState.nearbyPoint ? '#22c55e' : '#3b82f6',
-                fillOpacity: point === dragState.nearbyPoint ? 0.9 : 0.6,
+                fillOpacity: point === dragState.nearbyPoint ? 0.9 : 0.5,
               }}
             >
               <Tooltip direction="top" offset={[0, -8]} opacity={0.9}>
