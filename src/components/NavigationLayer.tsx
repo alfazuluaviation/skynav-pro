@@ -4,19 +4,22 @@ import { useMapEvents, CircleMarker, Tooltip, LayerGroup, Polyline, Marker, useM
 import L from 'leaflet';
 import { fetchNavigationData, NavPoint } from '../services/NavigationDataService';
 import { Waypoint } from '../types';
+import { DraggableRoute } from './DraggableRoute';
 
 interface NavigationLayerProps {
     onPointSelect?: (point: NavPoint) => void;
     waypoints?: Waypoint[];
     aircraftPosition?: [number, number];
     hideLockButton?: boolean;
+    onInsertWaypoint?: (waypoint: Waypoint, insertAfterIndex: number) => void;
 }
 
 export const NavigationLayer: React.FC<NavigationLayerProps> = ({ 
     onPointSelect, 
     waypoints = [],
     aircraftPosition,
-    hideLockButton = false
+    hideLockButton = false,
+    onInsertWaypoint
 }) => {
     const map = useMap();
     const [points, setPoints] = useState<NavPoint[]>([]);
@@ -87,8 +90,16 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     return (
         <>
             <LayerGroup>
-                {/* 1. ROUTE LINE */}
-                {waypoints.length > 1 && (
+                {/* 1. DRAGGABLE ROUTE LINE */}
+                {waypoints.length > 1 && onInsertWaypoint && (
+                    <DraggableRoute
+                        waypoints={waypoints}
+                        onInsertWaypoint={onInsertWaypoint}
+                    />
+                )}
+                
+                {/* Fallback: Static route line when no insert handler */}
+                {waypoints.length > 1 && !onInsertWaypoint && (
                     <Polyline 
                         positions={waypoints.map(w => [w.lat, w.lng])} 
                         pathOptions={{ color: '#d946ef', weight: 4, opacity: 0.9 }} 
