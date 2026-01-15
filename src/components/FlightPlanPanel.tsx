@@ -215,7 +215,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
               <IconDownload />
             </button>
             <div className="w-px h-4 bg-slate-700 mx-1 self-center"></div>
-            <button onClick={() => setIsExpanded(true)} title="Visualizar Plano de Voo" className="hidden sm:flex p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors items-center gap-1">
+            <button onClick={() => setIsExpanded(true)} title="Visualizar Plano de Voo" className="flex p-2 sm:p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors items-center gap-1 active:bg-slate-700">
               <IconMaximize />
             </button>
             <button onClick={onInvertRoute} title="Inverter Plano de Voo" className="p-2 sm:p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors active:bg-slate-700">
@@ -228,7 +228,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
         </div>
         
         {/* List - Compact View */}
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar touch-scroll bg-[#0b0e14] p-4 space-y-2 pb-24 md:pb-4">
+        <div className="flex-1 min-h-[200px] overflow-y-auto custom-scrollbar touch-scroll bg-[#0b0e14] p-4 space-y-2 pb-6">
           {waypoints.length === 0 ? (
             <div className="text-center py-8 opacity-30">
               <p className="text-[10px] uppercase font-bold">Nenhuma rota definida</p>
