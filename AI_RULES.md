@@ -1,6 +1,6 @@
-# AI Rules for SkyNav Pro
+# AI Rules for SkyFPL
 
-This document outlines the core technologies and guidelines for developing the SkyNav Pro application.
+This document outlines the core technologies and guidelines for developing the SkyFPL application.
 
 ## Tech Stack
 
@@ -8,22 +8,13 @@ This document outlines the core technologies and guidelines for developing the S
 *   **TypeScript**: Used for type safety and improved code quality across the entire codebase.
 *   **Tailwind CSS**: A utility-first CSS framework for styling all components and ensuring a consistent, responsive design.
 *   **Leaflet & React-Leaflet**: Libraries for interactive maps, handling map rendering and interactions.
-*   **Supabase**: Utilized for user authentication and potentially future database interactions.
-*   **Google Gemini API**: Integrated for AI-powered features, such as aeronautical data synchronization and aerodrome search.
-*   **Vite**: The build tool used for a fast development experience and optimized production builds.
-*   **DECEA WMS/WFS**: External web services providing real-time aeronautical charts and navigation data.
-*   **Custom SVG Icons**: Defined in `src/components/Icons.tsx` for a lightweight and consistent icon set.
+*   **Supabase**: Backend-as-a-service for authentication, database, and edge functions.
 
-## Library Usage Rules
+## Guidelines
 
-To maintain consistency and efficiency, please adhere to the following guidelines when developing:
-
-*   **User Interface (UI)**: All UI components must be built using **React**.
-*   **Styling**: Use **Tailwind CSS** classes exclusively for all styling. Avoid inline styles or custom CSS files unless absolutely necessary for specific Leaflet overrides.
-*   **Mapping**: For all map-related functionalities, use **Leaflet** integrated with **React-Leaflet**.
-*   **Icons**: Utilize the custom SVG icons provided in `src/components/Icons.tsx`. If a needed icon is not available, add it to this file.
-*   **Authentication**: All authentication flows must be handled through **Supabase**.
-*   **AI/Generative Features**: Any AI-driven functionality, such as data generation or intelligent search, should leverage the **Google Gemini API**.
-*   **Aeronautical Data Interaction**: Direct interaction with DECEA's WMS/WFS services should be encapsulated within the `src/services/NavigationDataService.ts` file.
-*   **Routing**: Currently, navigation between main sections is handled within `App.tsx` using state. If more complex, multi-page routing is required, **React Router** should be introduced, with routes defined in `src/App.tsx`.
-*   **Component Structure**: Create a new file for every new component or hook in `src/components/`. Keep components focused and small (ideally under 100 lines).
+1.  **Component Structure**: Keep components small and focused. Create new files for new components.
+2.  **Styling**: Use Tailwind CSS utility classes. Avoid custom CSS when possible.
+3.  **State Management**: Use React hooks (`useState`, `useEffect`, `useCallback`) for local state.
+4.  **Type Safety**: Always define TypeScript interfaces for props and data structures.
+5.  **Mobile First**: Design for mobile devices first, then enhance for desktop.
+6.  **Performance**: Optimize for performance, especially on map interactions.
