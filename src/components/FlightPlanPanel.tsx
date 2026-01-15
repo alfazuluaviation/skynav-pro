@@ -3,7 +3,7 @@ import { Waypoint, FlightSegment, SavedPlan } from '../types';
 import { NavPoint } from '../services/NavigationDataService';
 import { AutocompleteInput } from './AutocompleteInput';
 import { commonAircraft } from '../utils/aircraftData';
-import { IconPlane, IconTrash, IconSwap, IconArrowUp, IconArrowDown, IconLocation, IconMaximize, IconDisk, IconFolder } from './Icons';
+import { IconPlane, IconTrash, IconSwap, IconArrowUp, IconArrowDown, IconLocation, IconMaximize, IconDisk, IconFolder, IconDownload } from './Icons';
 
 interface FlightPlanPanelProps {
   waypoints: Waypoint[];
@@ -26,6 +26,7 @@ interface FlightPlanPanelProps {
   onLoadPlan: (plan: SavedPlan) => void;
   onDeletePlan: (name: string) => void;
   onInvertRoute?: () => void;
+  onOpenDownload?: () => void;
 }
 
 export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
@@ -43,7 +44,8 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   onSavePlan,
   onLoadPlan,
   onDeletePlan,
-  onInvertRoute
+  onInvertRoute,
+  onOpenDownload
 }) => {
   const origin = waypoints.find(w => w.role === 'ORIGIN') || null;
   const destination = waypoints.find(w => w.role === 'DESTINATION') || null;
@@ -193,6 +195,9 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
             <button onClick={() => setIsLoadModalOpen(true)} title="Carregar Plano" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-blue-400 transition-colors">
               <IconFolder />
             </button>
+            <button onClick={onOpenDownload} title="Download do Plano de Voo" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-cyan-400 transition-colors">
+              <IconDownload />
+            </button>
             <div className="w-px h-4 bg-slate-700 mx-1 self-center"></div>
             <button onClick={() => setIsExpanded(true)} title="Visualizar Plano de Voo" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors flex items-center gap-1">
               <IconMaximize />
@@ -290,9 +295,14 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                 </h2>
                 <p className="text-slate-500 text-sm mt-1">{aircraftModel.label} @ {plannedSpeed} KT</p>
               </div>
-              <button onClick={() => setIsExpanded(false)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white font-bold transition-colors">
-                FECHAR
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={onOpenDownload} title="Download do Plano de Voo" className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-white font-bold transition-colors flex items-center gap-2">
+                  <IconDownload /> DOWNLOAD
+                </button>
+                <button onClick={() => setIsExpanded(false)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white font-bold transition-colors">
+                  FECHAR
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-auto p-6">
               <table className="w-full text-left border-collapse">

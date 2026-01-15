@@ -6,9 +6,11 @@ import {
 } from './Icons';
 import { IconButton } from './IconButton';
 import { SettingsPopover } from './SettingsPopover';
-import { AiracCycle } from '../types';
+import { AiracCycle } from '../../types';
 
 interface SidebarProps {
+    userName?: string;
+    userEmail?: string;
     showPlanPanel: boolean;
     onTogglePlanPanel: () => void;
     isNightMode: boolean;
@@ -23,6 +25,8 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
+    userName,
+    userEmail,
     showPlanPanel,
     onTogglePlanPanel,
     isNightMode,
@@ -44,17 +48,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <nav className="flex flex-col gap-6 flex-1">
-                <IconButton icon={<IconMap />} />
                 <IconButton
                     icon={<IconRoute />}
                     onClick={onTogglePlanPanel}
                     isActive={showPlanPanel}
                     activeColor="teal"
                 />
-                <IconButton icon={<IconPlane />} />
-                <IconButton icon={<IconStar />} />
-                <IconButton icon={<IconFile />} />
-                <IconButton icon={<IconStore />} />
             </nav>
 
             <div className="flex flex-col gap-4 relative">
@@ -73,6 +72,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                 {showSettings && (
                     <SettingsPopover
+                        userName={userName}
+                        userEmail={userEmail}
                         isNightMode={isNightMode}
                         onToggleNightMode={onToggleNightMode}
                         activeLayers={activeLayers}

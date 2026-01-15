@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { NavPoint, searchNavigationPoints } from '../services/NavigationDataService';
+import { searchNavigationPoints } from '../services/NavigationDataService';
+import { NavPoint } from '../../types';
 import { IconSearch, IconPlane, IconLocation } from './Icons';
 
 interface AutocompleteInputProps {
@@ -24,16 +25,17 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({ placeholde
     // Debounce search
     useEffect(() => {
         const timeoutId = setTimeout(async () => {
-            // Only search if query changed and is long enough
-            // logic to skip if query matches value prop (avoid search on selection)
-            if (query.length >= 2 && query !== value && isOpen) {
+            // Only search if query is long enough and dropdown is open
+            // Removing the query !== value check to allow re-searching or searching same prefix
+            if (query.length >= 2 && isOpen) {
                 setIsLoading(true);
                 try {
+                    console.log(`[AutocompleteInput] Searching for: ${query}`);
                     const points = await searchNavigationPoints(query);
                     setResults(points);
                 } catch (error) {
                     console.error("Error searching navigation points in AutocompleteInput:", error);
-                    setResults([]); // Clear results on error
+                    setResults([]);
                 } finally {
                     setIsLoading(false);
                 }
@@ -42,7 +44,7 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({ placeholde
             }
         }, 300);
         return () => clearTimeout(timeoutId);
-    }, [query, isOpen, value]);
+    }, [query, isOpen]);
 
     // Handle outside click
     useEffect(() => {
@@ -56,7 +58,8 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({ placeholde
     }, []);
 
     const handleSelect = (point: NavPoint) => {
-        setQuery(point.icao || point.name); // Display robust name
+        console.log(`[AutocompleteInput] Selected point:`, point);
+        setQuery(point.icao || point.name);
         setIsOpen(false);
         onSelect(point);
     };
@@ -71,7 +74,14 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({ placeholde
                         setQuery(e.target.value);
                         setIsOpen(true);
                     }}
-                    onFocus={() => setIsOpen(true)}
+                    onFocus={() => {
+                        console.log(`[AutocompleteInput] Focus on input, query: "${query}"`);
+                        setIsOpen(true);
+                    }}
+                    onClick={() => {
+                        console.log(`[AutocompleteInput] Click on input, query: "${query}"`);
+                        setIsOpen(true);
+                    }}
                     placeholder={placeholder}
                     className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 outline-none transition-all uppercase font-bold tracking-wider"
                 />
@@ -86,7 +96,10 @@ export const AutocompleteInput: React.FC<AutocompleteInputProps> = ({ placeholde
             </div>
 
             {isOpen && results.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-[#1e293b] border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-[1002] max-h-[300px] overflow-y-auto">
+                <div
+                    className="absolute top-full left-0 right-0 mt-2 bg-[#1e293b] border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-[9999] max-h-[300px] overflow-y-auto pointer-events-auto"
+                    style={{ minWidth: '100%' }}
+                >
                     {results.map((point) => (
                         <button
                             key={`${point.type}-${point.id}`}
