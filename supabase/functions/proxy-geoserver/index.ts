@@ -11,6 +11,21 @@ const BASE_WFS_URL = "https://geoaisweb.decea.mil.br/geoserver/wfs";
 // Allowed layer names to prevent arbitrary endpoint access
 const ALLOWED_LAYERS = ["ICA:airport", "ICA:waypoint", "ICA:vor", "ICA:ndb"];
 
+// Extract error message from XML response
+const extractXMLError = (xml: string): string => {
+  // Try to extract ServiceException message
+  const exceptionMatch = xml.match(/<ServiceException[^>]*>([\s\S]*?)<\/ServiceException>/i);
+  if (exceptionMatch) {
+    return exceptionMatch[1].trim();
+  }
+  // Try to extract ows:ExceptionText
+  const owsMatch = xml.match(/<ows:ExceptionText>([\s\S]*?)<\/ows:ExceptionText>/i);
+  if (owsMatch) {
+    return owsMatch[1].trim();
+  }
+  return "Unknown GeoServer error";
+};
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -60,33 +75,85 @@ serve(async (req) => {
 
     const response = await fetch(wfsUrl, {
       headers: {
-        "Accept": "application/json",
+        "Accept": "application/json, application/geo+json, */*",
         "User-Agent": "Mozilla/5.0 (compatible; AeronavApp/1.0)",
       },
     });
 
-    if (!response.ok) {
-      console.error(`[proxy-geoserver] GeoServer error: ${response.status}`);
+    // Get response text first
+    const responseText = await response.text();
+    const contentType = response.headers.get("content-type") || "";
+
+    console.log(`[proxy-geoserver] Response status: ${response.status}, Content-Type: ${contentType}`);
+
+    // Check if response is XML (error from GeoServer)
+    if (responseText.startsWith("<?xml") || responseText.startsWith("<")) {
+      console.error(`[proxy-geoserver] GeoServer returned XML error: ${responseText.substring(0, 500)}`);
+      const errorMessage = extractXMLError(responseText);
+      
+      // Return empty features array instead of error for graceful degradation
       return new Response(
-        JSON.stringify({ error: `GeoServer returned ${response.status}` }),
+        JSON.stringify({ 
+          type: "FeatureCollection",
+          features: [],
+          _warning: `GeoServer error: ${errorMessage}`
+        }),
         { 
-          status: response.status, 
+          status: 200, 
           headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       );
     }
 
-    const data = await response.json();
+    // Try to parse as JSON
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error(`[proxy-geoserver] Failed to parse response as JSON: ${responseText.substring(0, 200)}`);
+      // Return empty features for graceful degradation
+      return new Response(
+        JSON.stringify({ 
+          type: "FeatureCollection",
+          features: [],
+          _warning: "Failed to parse GeoServer response"
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
+    }
+
+    if (!response.ok) {
+      console.error(`[proxy-geoserver] GeoServer error: ${response.status}`);
+      return new Response(
+        JSON.stringify({ 
+          type: "FeatureCollection",
+          features: [],
+          _error: `GeoServer returned ${response.status}`
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
+    }
 
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     console.error("[proxy-geoserver] Error:", error);
+    // Return empty features for graceful degradation
     return new Response(
-      JSON.stringify({ error: "Failed to fetch from GeoServer", details: String(error) }),
+      JSON.stringify({ 
+        type: "FeatureCollection",
+        features: [],
+        _error: String(error)
+      }),
       { 
-        status: 500, 
+        status: 200, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     );
