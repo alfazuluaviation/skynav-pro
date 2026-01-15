@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Polyline, CircleMarker, useMap, useMapEvents, Marker, Tooltip } from 'react-leaflet';
+import { Polyline, CircleMarker, useMap, Marker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import { Waypoint, NavPoint } from '../../types';
 import { fetchNavigationData } from '../services/NavigationDataService';
@@ -16,20 +16,6 @@ interface DragState {
   nearbyPoint: NavPoint | null;
 }
 
-// Debounce helper
-const useDebounce = (callback: (...args: any[]) => void, delay: number) => {
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  return useCallback((...args: any[]) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    timeoutRef.current = setTimeout(() => {
-      callback(...args);
-    }, delay);
-  }, [callback, delay]);
-};
-
 export const DraggableRoute: React.FC<DraggableRouteProps> = ({
   waypoints,
   onInsertWaypoint,
@@ -42,94 +28,110 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     nearbyPoint: null,
   });
   const [nearbyPoints, setNearbyPoints] = useState<NavPoint[]>([]);
+  const [hoveredSegment, setHoveredSegment] = useState<number | null>(null);
   const dragStateRef = useRef(dragState);
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Keep ref in sync with state
   useEffect(() => {
     dragStateRef.current = dragState;
   }, [dragState]);
 
-  // Fetch nearby navigation points when dragging
-  const fetchNearbyPointsImmediate = useCallback(async (lat: number, lng: number) => {
-    try {
-      // Create a small bounds around the current position
-      const radiusDeg = 0.5; // roughly 30nm
-      const bounds = L.latLngBounds(
-        [lat - radiusDeg, lng - radiusDeg],
-        [lat + radiusDeg, lng + radiusDeg]
-      );
-      const points = await fetchNavigationData(bounds);
-      setNearbyPoints(points);
-      
-      // Find the closest point within snap distance (approximately 10nm)
-      const snapDistanceNM = 10;
-      const snapDistanceDeg = snapDistanceNM / 60;
-      
-      let closestPoint: NavPoint | null = null;
-      let closestDist = Infinity;
-      
-      for (const point of points) {
-        const dist = Math.sqrt(Math.pow(point.lat - lat, 2) + Math.pow(point.lng - lng, 2));
-        if (dist < snapDistanceDeg && dist < closestDist) {
-          closestDist = dist;
-          closestPoint = point;
-        }
-      }
-      
-      setDragState(prev => ({ ...prev, nearbyPoint: closestPoint }));
-    } catch (error) {
-      console.error('Error fetching nearby points:', error);
+  // Fetch nearby navigation points with debounce
+  const fetchNearbyPoints = useCallback(async (lat: number, lng: number) => {
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current);
     }
+    
+    fetchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const radiusDeg = 0.5;
+        const bounds = L.latLngBounds(
+          [lat - radiusDeg, lng - radiusDeg],
+          [lat + radiusDeg, lng + radiusDeg]
+        );
+        const points = await fetchNavigationData(bounds);
+        setNearbyPoints(points);
+        
+        // Find closest point within snap distance
+        const snapDistanceDeg = 10 / 60; // ~10nm
+        let closestPoint: NavPoint | null = null;
+        let closestDist = Infinity;
+        
+        for (const point of points) {
+          const dist = Math.sqrt(Math.pow(point.lat - lat, 2) + Math.pow(point.lng - lng, 2));
+          if (dist < snapDistanceDeg && dist < closestDist) {
+            closestDist = dist;
+            closestPoint = point;
+          }
+        }
+        
+        setDragState(prev => ({ ...prev, nearbyPoint: closestPoint }));
+      } catch (error) {
+        console.error('Error fetching nearby points:', error);
+      }
+    }, 150);
   }, []);
 
-  const fetchNearbyPoints = useDebounce(fetchNearbyPointsImmediate, 200);
-
   // Calculate midpoint of a segment
-  const getMidpoint = (start: Waypoint, end: Waypoint): [number, number] => {
+  const getMidpoint = useCallback((start: Waypoint, end: Waypoint): [number, number] => {
     return [(start.lat + end.lat) / 2, (start.lng + end.lng) / 2];
-  };
+  }, []);
 
-  // Handle drag start on midpoint marker
-  const handleDragStart = useCallback((segmentIndex: number, position: [number, number]) => {
-    console.log('[DraggableRoute] Drag started on segment', segmentIndex);
+  // Handle click on route line to start drag
+  const handleRouteClick = useCallback((e: L.LeafletMouseEvent, segmentIndex: number) => {
+    L.DomEvent.stopPropagation(e.originalEvent);
+    L.DomEvent.preventDefault(e.originalEvent);
+    
+    const { lat, lng } = e.latlng;
+    console.log('[DraggableRoute] Click on segment', segmentIndex, 'at', lat.toFixed(4), lng.toFixed(4));
+    
     setDragState({
       isDragging: true,
       segmentIndex,
-      currentPosition: position,
+      currentPosition: [lat, lng],
       nearbyPoint: null,
     });
+    
     map.dragging.disable();
-    fetchNearbyPointsImmediate(position[0], position[1]);
-  }, [map, fetchNearbyPointsImmediate]);
+    fetchNearbyPoints(lat, lng);
+  }, [map, fetchNearbyPoints]);
 
-  // Handle drag move - using direct map events
+  // Map event handlers for drag
   useEffect(() => {
-    if (!dragStateRef.current.isDragging) return;
-
     const onMouseMove = (e: L.LeafletMouseEvent) => {
       if (!dragStateRef.current.isDragging) return;
+      
       const { lat, lng } = e.latlng;
       setDragState(prev => ({ ...prev, currentPosition: [lat, lng] }));
       fetchNearbyPoints(lat, lng);
     };
 
     const onMouseUp = () => {
-      if (!dragStateRef.current.isDragging || !dragStateRef.current.currentPosition) {
+      if (!dragStateRef.current.isDragging) return;
+      
+      const state = dragStateRef.current;
+      if (!state.currentPosition) {
         map.dragging.enable();
+        setDragState({
+          isDragging: false,
+          segmentIndex: -1,
+          currentPosition: null,
+          nearbyPoint: null,
+        });
         return;
       }
       
-      const [lat, lng] = dragStateRef.current.currentPosition;
-      const segmentIndex = dragStateRef.current.segmentIndex;
-      const nearbyPoint = dragStateRef.current.nearbyPoint;
+      const [lat, lng] = state.currentPosition;
+      const segmentIndex = state.segmentIndex;
+      const nearbyPoint = state.nearbyPoint;
       
-      console.log('[DraggableRoute] Drag ended at', lat, lng, 'nearby:', nearbyPoint?.name);
+      console.log('[DraggableRoute] Drop at', lat.toFixed(4), lng.toFixed(4), 'snap:', nearbyPoint?.name);
       
       // Create new waypoint
       let newWaypoint: Waypoint;
       
       if (nearbyPoint) {
-        // Snap to navigation point
         newWaypoint = {
           id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: nearbyPoint.name,
@@ -141,21 +143,20 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
           role: 'WAYPOINT',
         };
       } else {
-        // Create user waypoint at the dragged position
         newWaypoint = {
           id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: `WP${String(segmentIndex + 1).padStart(2, '0')}`,
+          name: `WP${String(segmentIndex + 2).padStart(2, '0')}`,
           lat,
           lng,
           type: 'USER',
-          description: `User waypoint at ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+          description: `Ponto em ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
           role: 'WAYPOINT',
         };
       }
       
       onInsertWaypoint(newWaypoint, segmentIndex);
       
-      // Reset state
+      // Reset
       setDragState({
         isDragging: false,
         segmentIndex: -1,
@@ -172,107 +173,88 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     return () => {
       map.off('mousemove', onMouseMove);
       map.off('mouseup', onMouseUp);
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
     };
-  }, [dragState.isDragging, map, onInsertWaypoint, fetchNearbyPoints]);
+  }, [map, onInsertWaypoint, fetchNearbyPoints]);
 
-  // Create midpoint drag handle icon
-  const createMidpointIcon = () => L.divIcon({
-    className: 'midpoint-drag-handle',
+  // Create drag indicator icon
+  const createDragIcon = (hasSnap: boolean) => L.divIcon({
+    className: 'drag-indicator',
     html: `
       <div style="
-        width: 20px;
-        height: 20px;
-        background: linear-gradient(135deg, #d946ef 0%, #a855f7 100%);
-        border: 2px solid white;
+        width: 32px;
+        height: 32px;
+        background: ${hasSnap ? '#22c55e' : '#d946ef'};
+        border: 3px solid white;
         border-radius: 50%;
-        cursor: grab;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.6);
         display: flex;
         align-items: center;
         justify-content: center;
       ">
         <div style="
-          width: 8px;
-          height: 8px;
+          width: 10px;
+          height: 10px;
           background: white;
           border-radius: 50%;
         "></div>
       </div>
     `,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-  });
-
-  // Create drag indicator icon
-  const createDragIndicatorIcon = (hasSnap: boolean) => L.divIcon({
-    className: 'drag-indicator',
-    html: `
-      <div style="
-        width: 28px;
-        height: 28px;
-        background: ${hasSnap ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : 'linear-gradient(135deg, #d946ef 0%, #a855f7 100%)'};
-        border: 3px solid white;
-        border-radius: 50%;
-        cursor: grabbing;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-        animation: pulse 0.8s infinite;
-      "></div>
-      <style>
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.15); opacity: 0.9; }
-        }
-      </style>
-    `,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
   });
 
   if (waypoints.length < 2) return null;
 
   return (
     <>
-      {/* Main route polyline */}
-      <Polyline
-        positions={waypoints.map(w => [w.lat, w.lng])}
-        pathOptions={{
-          color: '#d946ef',
-          weight: 4,
-          opacity: 0.9,
-        }}
-      />
-
-      {/* Draggable midpoint markers for each segment - Using Marker for better drag support */}
+      {/* Interactive route segments - each segment is a clickable polyline */}
       {!dragState.isDragging && waypoints.slice(0, -1).map((start, index) => {
         const end = waypoints[index + 1];
-        const midpoint = getMidpoint(start, end);
+        const isHovered = hoveredSegment === index;
         
         return (
-          <Marker
-            key={`midpoint-${index}`}
-            position={midpoint}
-            icon={createMidpointIcon()}
+          <Polyline
+            key={`segment-${index}`}
+            positions={[[start.lat, start.lng], [end.lat, end.lng]]}
+            pathOptions={{
+              color: isHovered ? '#f0abfc' : '#d946ef',
+              weight: isHovered ? 8 : 5,
+              opacity: 0.9,
+              lineCap: 'round',
+              lineJoin: 'round',
+            }}
             eventHandlers={{
-              mousedown: (e) => {
-                L.DomEvent.stopPropagation(e.originalEvent);
-                L.DomEvent.preventDefault(e.originalEvent);
-                handleDragStart(index, midpoint);
-              },
+              click: (e) => handleRouteClick(e, index),
+              mouseover: () => setHoveredSegment(index),
+              mouseout: () => setHoveredSegment(null),
             }}
           >
-            <Tooltip direction="top" offset={[0, -12]} opacity={0.95}>
-              <div style={{ fontSize: '11px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                ✋ Arraste para inserir waypoint
+            <Tooltip direction="top" offset={[0, -10]} opacity={0.95} sticky>
+              <div style={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 4px' }}>
+                ✋ Clique e arraste para inserir waypoint
               </div>
             </Tooltip>
-          </Marker>
+          </Polyline>
         );
       })}
 
-      {/* Drag preview line and indicator */}
+      {/* Drag preview when dragging */}
       {dragState.isDragging && dragState.currentPosition && (
         <>
-          {/* Line from previous waypoint to drag position */}
+          {/* Original route faded */}
+          <Polyline
+            positions={waypoints.map(w => [w.lat, w.lng])}
+            pathOptions={{
+              color: '#d946ef',
+              weight: 3,
+              opacity: 0.3,
+            }}
+          />
+          
+          {/* Line from start of segment to drag position */}
           <Polyline
             positions={[
               [waypoints[dragState.segmentIndex].lat, waypoints[dragState.segmentIndex].lng],
@@ -282,13 +264,13 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
             ]}
             pathOptions={{
               color: dragState.nearbyPoint ? '#22c55e' : '#d946ef',
-              weight: 4,
-              opacity: 0.8,
-              dashArray: '10, 10',
+              weight: 5,
+              opacity: 0.9,
+              dashArray: '12, 8',
             }}
           />
           
-          {/* Line from drag position to next waypoint */}
+          {/* Line from drag position to end of segment */}
           <Polyline
             positions={[
               dragState.nearbyPoint 
@@ -298,9 +280,9 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
             ]}
             pathOptions={{
               color: dragState.nearbyPoint ? '#22c55e' : '#d946ef',
-              weight: 4,
-              opacity: 0.8,
-              dashArray: '10, 10',
+              weight: 5,
+              opacity: 0.9,
+              dashArray: '12, 8',
             }}
           />
 
@@ -310,41 +292,48 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
               ? [dragState.nearbyPoint.lat, dragState.nearbyPoint.lng]
               : dragState.currentPosition
             }
-            icon={createDragIndicatorIcon(!!dragState.nearbyPoint)}
+            icon={createDragIcon(!!dragState.nearbyPoint)}
             interactive={false}
-            zIndexOffset={5000}
+            zIndexOffset={9999}
           >
-            <Tooltip direction="top" offset={[0, -18]} opacity={0.98} permanent>
-              <div style={{ fontSize: '12px', fontWeight: 'bold', textAlign: 'center', padding: '2px 6px' }}>
+            <Tooltip direction="top" offset={[0, -20]} opacity={0.98} permanent>
+              <div style={{ 
+                fontSize: '12px', 
+                fontWeight: 'bold', 
+                textAlign: 'center', 
+                padding: '4px 8px',
+                background: dragState.nearbyPoint ? '#dcfce7' : '#fae8ff',
+                borderRadius: '4px',
+              }}>
                 {dragState.nearbyPoint ? (
-                  <span style={{ color: '#16a34a' }}>
+                  <span style={{ color: '#15803d' }}>
                     📍 {dragState.nearbyPoint.icao || dragState.nearbyPoint.name}
+                    <br />
+                    <small style={{ opacity: 0.8 }}>{dragState.nearbyPoint.type.toUpperCase()}</small>
                   </span>
                 ) : (
-                  <span>Solte para criar ponto</span>
+                  <span style={{ color: '#a21caf' }}>Solte para criar ponto</span>
                 )}
               </div>
             </Tooltip>
           </Marker>
 
-          {/* Show nearby navigation points while dragging */}
+          {/* Nearby navigation points */}
           {nearbyPoints.map((point, idx) => (
             <CircleMarker
               key={`nearby-${idx}`}
               center={[point.lat, point.lng]}
-              radius={point === dragState.nearbyPoint ? 10 : 6}
+              radius={point === dragState.nearbyPoint ? 12 : 7}
               pathOptions={{
-                color: point === dragState.nearbyPoint ? '#22c55e' : '#3b82f6',
-                weight: point === dragState.nearbyPoint ? 3 : 1.5,
+                color: 'white',
+                weight: 2,
                 fillColor: point === dragState.nearbyPoint ? '#22c55e' : '#3b82f6',
-                fillOpacity: point === dragState.nearbyPoint ? 0.9 : 0.5,
+                fillOpacity: point === dragState.nearbyPoint ? 1 : 0.7,
               }}
             >
-              <Tooltip direction="top" offset={[0, -8]} opacity={0.9}>
-                <div style={{ fontSize: '10px' }}>
-                  <strong>{point.icao || point.name}</strong>
-                  <br />
-                  <span style={{ opacity: 0.7 }}>{point.type.toUpperCase()}</span>
+              <Tooltip direction="top" offset={[0, -10]} opacity={0.9}>
+                <div style={{ fontSize: '11px', fontWeight: 'bold' }}>
+                  {point.icao || point.name}
                 </div>
               </Tooltip>
             </CircleMarker>
