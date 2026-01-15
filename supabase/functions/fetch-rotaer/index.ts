@@ -1,39 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { DOMParser, Element } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Simple in-memory rate limiter
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute window
-const MAX_REQUESTS_PER_WINDOW = 30; // 30 requests per minute per IP
-
-const checkRateLimit = (clientIp: string): { allowed: boolean; retryAfter?: number } => {
-  const now = Date.now();
-  const record = rateLimitMap.get(clientIp);
-  
-  if (!record || now > record.resetTime) {
-    rateLimitMap.set(clientIp, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    return { allowed: true };
-  }
-  
-  if (record.count >= MAX_REQUESTS_PER_WINDOW) {
-    const retryAfter = Math.ceil((record.resetTime - now) / 1000);
-    return { allowed: false, retryAfter };
-  }
-  
-  record.count++;
-  return { allowed: true };
-};
-
-const getClientIp = (req: Request): string => {
-  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
-         req.headers.get('x-real-ip') || 
-         'unknown';
-};
+// AISWEB API Credentials (Static for public use discovered via site scripts)
+const AISWEB_API_KEY = "1587263166";
+const AISWEB_API_PASS = "3199249e-755b-1033-a49b-72567f175e3a";
 
 interface RotaerData {
   icao: string;
@@ -63,6 +37,8 @@ interface RotaerData {
   declaredDistances: DeclaredDistance[];
   complements: string[];
   aiswebUrl: string;
+  rawHeader?: string;
+  notams?: string[];
 }
 
 interface RunwayInfo {
@@ -93,414 +69,260 @@ interface DeclaredDistance {
   coordinates: string;
 }
 
-// Input validation
-const validateIcaoCode = (code: string): { valid: boolean; error?: string } => {
-  if (!code || typeof code !== 'string') {
-    return { valid: false, error: 'ICAO code is required' };
-  }
-  
-  const trimmed = code.trim().toUpperCase();
-  if (trimmed.length !== 4) {
-    return { valid: false, error: 'ICAO code must be exactly 4 characters' };
-  }
-  
-  if (!/^[A-Z]{4}$/.test(trimmed)) {
-    return { valid: false, error: 'ICAO code must contain only letters' };
-  }
-  
-  return { valid: true };
-};
-
-const cleanText = (text: string): string => {
-  return text
-    .replace(/\s+/g, ' ')
-    .replace(/\n/g, ' ')
-    .trim();
-};
-
-const parseRotaerTable = (doc: ReturnType<DOMParser['parseFromString']>): Partial<RotaerData> => {
-  const data: Partial<RotaerData> = {};
-  
-  // Get main ROTAER table
-  const rotaerDiv = doc?.querySelector('#rotaer') || doc?.querySelector('.rotaer');
-  if (!rotaerDiv) {
-    console.log("ROTAER div not found");
-    return data;
-  }
-
-  const table = rotaerDiv.querySelector('table.rotaer');
-  if (!table) {
-    console.log("ROTAER table not found");
-    return data;
-  }
-
-  // Parse name and location from title
-  const titleSpan = table.querySelector('strong.title');
-  if (titleSpan) {
-    const titleText = cleanText(titleSpan.textContent || '');
-    const match = titleText.match(/^(.+?)\s*\(\s*([A-Z]{4})\s*\)\s*\/\s*(.+?),\s*([A-Z]{2})$/);
-    if (match) {
-      data.name = match[1].trim();
-      data.icao = match[2];
-      data.city = match[3].trim();
-      data.state = match[4];
-    }
-  }
-
-  // Parse coordinates and elevation
-  const rows = table.querySelectorAll('tr');
-  for (const row of rows) {
-    const rowElement = row as Element;
-    const cells = rowElement.querySelectorAll('td');
-    if (cells.length >= 2) {
-      const cell0Text = cleanText((cells[0] as Element).textContent || '');
-      const cell1Text = cleanText((cells[1] as Element).textContent || '');
-      
-      // Coordinates (format: 23 26 08S/046 28 23W)
-      if (/^\d{2}\s+\d{2}\s+\d{2}[NS]\/\d{3}\s+\d{2}\s+\d{2}[EW]$/.test(cell1Text)) {
-        data.coordinates = cell1Text;
-      }
-      
-      // Elevation (format: 750 (2461))
-      if (/^\d+\s*\(\d+\)$/.test(cell1Text)) {
-        data.elevation = cell1Text;
-      }
-      
-      // FIR and Jurisdiction
-      if (cell1Text.includes('SBBS') || cell1Text.includes('SBCW') || cell1Text.includes('SBAZ') || cell1Text.includes('SBRE')) {
-        const firMatch = cell1Text.match(/([A-Z]{4})\s*\(([^)]+)\)/);
-        if (firMatch) {
-          data.fir = firMatch[1];
-          data.jurisdiction = firMatch[2];
-        }
-      }
-      
-      // Type, Operator, etc.
-      if (cell0Text.includes('AD ') || cell0Text.includes('INTL') || cell0Text.includes('PUB')) {
-        data.type = cell0Text;
-        // Extract specific parts
-        const parts = cell0Text.split(/\s+/);
-        const utcMatch = cell0Text.match(/UTC[+-]?\d+/);
-        if (utcMatch) data.utc = utcMatch[0];
-        
-        if (cell0Text.includes('VFR') || cell0Text.includes('IFR')) {
-          const opsMatch = cell0Text.match(/(VFR|IFR)(\s+(VFR|IFR))?/g);
-          if (opsMatch) data.operations = opsMatch.join(' ');
-        }
-      }
-    }
-  }
-
-  // Parse runways
-  data.runways = [];
-  const runwayParagraphs = table.querySelectorAll('p');
-  for (const p of runwayParagraphs) {
-    const text = cleanText((p as Element).textContent || '');
-    const runwayMatch = text.match(/^(\d{2}[LRC]?)\s*-(.+)-\s*(\d{2}[LRC]?)$/);
-    if (runwayMatch) {
-      const runwayContent = runwayMatch[2];
-      const dimMatch = runwayContent.match(/(\d+x\d+)/);
-      const surfMatch = runwayContent.match(/(ASPH|CONC|GRVL|GRASS)/i);
-      
-      data.runways.push({
-        designation: `${runwayMatch[1]}/${runwayMatch[3]}`,
-        dimensions: dimMatch ? dimMatch[1] : '',
-        surface: surfMatch ? surfMatch[1] : '',
-        strength: '',
-        lighting: []
-      });
-    }
-  }
-
-  // Parse communications
-  data.communications = [];
-  const comTable = table.querySelector('td strong:contains("COM")');
-  const comRows = table.querySelectorAll('tr');
-  for (const row of comRows) {
-    const rowElement = row as Element;
-    const tdText = cleanText(rowElement.textContent || '');
-    if (tdText.includes('COM -')) {
-      const comDiv = rowElement.querySelectorAll('div');
-      for (const div of comDiv) {
-        const divText = cleanText((div as Element).textContent || '');
-        const freqMatch = divText.match(/^([A-Z\s]+?)\s+([\d.]+(?:\s+[\d.]+)*)/);
-        if (freqMatch) {
-          const frequencies = freqMatch[2].split(/\s+/).filter(f => /^\d{3}\.\d{3}$/.test(f) || /^\d{2,3}\.\d+$/.test(f));
-          if (frequencies.length > 0) {
-            data.communications.push({
-              name: freqMatch[1].trim(),
-              frequencies
-            });
-          }
-        }
-      }
-      break;
-    }
-  }
-
-  // Parse radio navigation aids
-  data.radioNav = [];
-  for (const row of comRows) {
-    const rowElement = row as Element;
-    const tdText = cleanText(rowElement.textContent || '');
-    if (tdText.includes('RDONAV -')) {
-      const divs = rowElement.querySelectorAll('div');
-      for (const div of divs) {
-        const text = cleanText((div as Element).textContent || '');
-        if (text.includes('ILS') || text.includes('VOR') || text.includes('NDB') || text.includes('DME') || text.includes('IM') || text.includes('OM') || text.includes('MM')) {
-          data.radioNav.push(text);
-        }
-      }
-      break;
-    }
-  }
-
-  // Parse fuel and services
-  for (const row of comRows) {
-    const tdText = cleanText((row as Element).textContent || '');
-    if (tdText.includes('CMB-') || tdText.includes('CMB -')) {
-      const fuelMatch = tdText.match(/CMB[- ]+([^S]+)/);
-      if (fuelMatch) data.fuel = fuelMatch[1].trim();
-      
-      const svcMatch = tdText.match(/SER\s*-\s*([^\s]+)/);
-      if (svcMatch) data.services = svcMatch[1].trim();
-      
-      const rffsMatch = tdText.match(/RFFS\s*-\s*([^C]*CAT[^-]+[-\s]*\d+)/i);
-      if (rffsMatch) data.firefighting = rffsMatch[1].trim();
-      break;
-    }
-  }
-
-  // Parse MET info
-  data.meteorology = [];
-  for (const row of comRows) {
-    const tdText = cleanText((row as Element).textContent || '');
-    if (tdText.includes('MET -') || tdText.includes('MET CIVIL')) {
-      const metContent = tdText.replace(/MET\s*-?\s*/, '');
-      data.meteorology.push(metContent.trim());
-      break;
-    }
-  }
-
-  // Parse AIS info  
-  data.ais = [];
-  for (const row of comRows) {
-    const tdText = cleanText((row as Element).textContent || '');
-    if (tdText.includes('AIS -') || tdText.includes('AIS CIVIL')) {
-      const aisContent = tdText.replace(/AIS\s*-?\s*/, '');
-      data.ais.push(aisContent.trim());
-      break;
-    }
-  }
-
-  // Parse remarks sections
-  data.remarks = [];
-  const remarkHeaders = table.querySelectorAll('h5.mb-0');
-  for (const header of remarkHeaders) {
-    const title = cleanText((header as Element).textContent || '');
-    const nextOl = (header as Element).nextElementSibling;
-    if (nextOl && nextOl.tagName === 'OL') {
-      const items: string[] = [];
-      const lis = nextOl.querySelectorAll('li');
-      for (const li of lis) {
-        const text = cleanText((li as Element).textContent || '');
-        if (text && text !== ' ') {
-          items.push(text);
-        }
-      }
-      if (items.length > 0) {
-        data.remarks.push({ title, items });
-      }
-    }
-  }
-
-  // Parse declared distances
-  data.declaredDistances = [];
-  const distTable = table.querySelector('#dist_declarada');
-  if (distTable) {
-    const distRows = distTable.querySelectorAll('tbody tr');
-    for (const row of distRows) {
-      const rowElement = row as Element;
-      const cells = rowElement.querySelectorAll('td');
-      if (cells.length >= 7) {
-        data.declaredDistances.push({
-          runway: cleanText((cells[0] as Element).textContent || ''),
-          tora: cleanText((cells[1] as Element).textContent || ''),
-          toda: cleanText((cells[2] as Element).textContent || ''),
-          asda: cleanText((cells[3] as Element).textContent || ''),
-          lda: cleanText((cells[4] as Element).textContent || ''),
-          geoidal: cleanText((cells[5] as Element).textContent || ''),
-          coordinates: cleanText((cells[6] as Element).textContent || '').replace(/<br\s*\/?>/g, ' ')
-        });
-      }
-    }
-  }
-
-  // Parse complements
-  data.complements = [];
-  for (const row of comRows) {
-    const rowElement = row as Element;
-    const tdText = cleanText(rowElement.textContent || '');
-    if (tdText.includes('COMPL -')) {
-      const lis = rowElement.querySelectorAll('li');
-      for (const li of lis) {
-        const text = cleanText((li as Element).textContent || '');
-        if (text) {
-          data.complements.push(text);
-        }
-      }
-      break;
-    }
-  }
-
-  return data;
-};
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Rate limiting check
-  const clientIp = getClientIp(req);
-  const rateCheck = checkRateLimit(clientIp);
-  if (!rateCheck.allowed) {
-    console.warn(`Rate limit exceeded for IP: ${clientIp}`);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: 'Rate limit exceeded. Please try again later.' 
-    }), {
-      status: 429,
-      headers: { 
-        ...corsHeaders, 
-        'Content-Type': 'application/json',
-        'Retry-After': String(rateCheck.retryAfter)
-      },
-    });
-  }
-
   try {
     const { icaoCode } = await req.json();
-    
-    // Validate input
-    const validation = validateIcaoCode(icaoCode);
-    if (!validation.valid) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: validation.error 
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+
+    if (!icaoCode || typeof icaoCode !== 'string' || icaoCode.length < 3) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Código ICAO inválido.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    const normalizedCode = icaoCode.trim().toUpperCase();
-    const aiswebUrl = `https://aisweb.decea.mil.br/?i=aerodromos&codigo=${normalizedCode}`;
-    
-    console.log(`Fetching ROTAER data for ${normalizedCode} from ${aiswebUrl}`);
-    
-    // Fetch the AISWEB page
-    const response = await fetch(aiswebUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-      }
-    });
+    const sanitizedIcao = icaoCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const url = `https://aisweb.decea.mil.br/?i=aerodromos&codigo=${sanitizedIcao}`;
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch AISWEB page: ${response.status}`);
-    }
+    // Parallel fetching: Scraping for ROTAER + API for NOTAM
+    const [rotaerRes, notamRes] = await Promise.all([
+      fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }),
+      fetch(`https://aisweb.decea.mil.br/api/?apiKey=${AISWEB_API_KEY}&apiPass=${AISWEB_API_PASS}&area=notam&icaocode=${sanitizedIcao}&dist=N`, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+    ]);
 
-    const html = await response.text();
-    
-    // Check if aerodrome exists
-    if (html.includes('não encontrado') || html.includes('Aeródromo não encontrado') || html.includes('não há informações')) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: `Aeródromo ${normalizedCode} não encontrado` 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    if (!rotaerRes.ok) throw new Error(`AISWEB ROTAER returned status ${rotaerRes.status}`);
 
-    // Parse HTML
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    
-    if (!doc) {
-      throw new Error('Failed to parse HTML');
-    }
+    const html = await rotaerRes.text();
+    const notamXml = notamRes.ok ? await notamRes.text() : "";
 
-    // Extract CIAD from header
-    let ciad = '';
-    const ciadMatch = html.match(/CIAD:\s*<strong[^>]*>([^<]+)<\/strong>/);
-    if (ciadMatch) {
-      ciad = ciadMatch[1].trim();
-    }
-
-    // Extract name from h1
-    let fullName = '';
-    const h1 = doc.querySelector('h1');
-    if (h1) {
-      const h1Text = cleanText(h1.textContent || '');
-      const nameMatch = h1Text.match(/^([^(]+)\s*\([A-Z]{4}\)/);
-      if (nameMatch) {
-        fullName = nameMatch[1].trim();
-      }
-    }
-
-    // Parse ROTAER table
-    const rotaerData = parseRotaerTable(doc);
-    
-    // Merge extracted data
-    const result: RotaerData = {
-      icao: normalizedCode,
-      name: fullName || rotaerData.name || normalizedCode,
-      city: rotaerData.city || '',
-      state: rotaerData.state || '',
-      ciad: ciad,
-      coordinates: rotaerData.coordinates || '',
-      elevation: rotaerData.elevation || '',
-      type: rotaerData.type || '',
-      operator: '',
-      distanceFromCity: '',
-      utc: rotaerData.utc || 'UTC-3',
-      operations: rotaerData.operations || '',
-      lighting: rotaerData.lighting || [],
-      fir: rotaerData.fir || '',
-      jurisdiction: rotaerData.jurisdiction || '',
-      runways: rotaerData.runways || [],
-      communications: rotaerData.communications || [],
-      radioNav: rotaerData.radioNav || [],
-      fuel: rotaerData.fuel || '',
-      services: rotaerData.services || '',
-      firefighting: rotaerData.firefighting || '',
-      meteorology: rotaerData.meteorology || [],
-      ais: rotaerData.ais || [],
-      remarks: rotaerData.remarks || [],
-      declaredDistances: rotaerData.declaredDistances || [],
-      complements: rotaerData.complements || [],
-      aiswebUrl
+    const cleanHtmlForText = (raw: string) => {
+      if (!raw) return '';
+      return raw
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<\/tr>/gi, '\n')
+        .replace(/<\/li>/gi, '\n')
+        .replace(/<td[^>]*>/gi, ' ')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&ccedil;/gi, 'c')
+        .replace(/&atilde;/gi, 'a')
+        .replace(/&otilde;/gi, 'o')
+        .replace(/&Aacute;/gi, 'A')
+        .replace(/&Eacute;/gi, 'E')
+        .replace(/&Iacute;/gi, 'I')
+        .replace(/&Oacute;/gi, 'O')
+        .replace(/&Uacute;/gi, 'U')
+        .replace(/&aacute;/gi, 'a')
+        .replace(/&eacute;/gi, 'e')
+        .replace(/&iacute;/gi, 'i')
+        .replace(/&oacute;/gi, 'o')
+        .replace(/&uacute;/gi, 'u')
+        .replace(/\n\s*\n/g, '\n')
+        .replace(/\s+/g, ' ')
+        .trim();
     };
 
-    console.log(`Successfully parsed ROTAER for ${normalizedCode}`);
+    const rotaerBlockMatch = html.match(/<div[^>]*id="rotaer"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/i);
+    const rotaerHtml = rotaerBlockMatch ? rotaerBlockMatch[1].trim() : '';
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      data: result 
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // Advanced NOTAM Parsing from XML
+    let notams: string[] = [];
+    if (notamXml) {
+      // Manual extraction of items since we don't have a full XML parser in standard edge runtime without extra libs
+      // but we can use reliable regex on this specific XML structure
+      const itemMatches = notamXml.match(/<item>([\s\S]*?)<\/item>/gi);
+      if (itemMatches) {
+        notams = itemMatches.map(item => {
+          const nMatch = item.match(/<n>(.*?)<\/n>/i);
+          const bMatch = item.match(/<b>(.*?)<\/b>/i);
+          const cMatch = item.match(/<c>(.*?)<\/c>/i);
+          const dMatch = item.match(/<d>(.*?)<\/d>/i);
+          const eMatch = item.match(/<e>(.*?)<\/e>/i);
+          const codMatch = item.match(/<cod>(.*?)<\/cod>/i);
+          const firMatch = item.match(/<fir>(.*?)<\/fir>/i);
+          const trafficMatch = item.match(/<traffic>(.*?)<\/traffic>/i);
+          const scopeMatch = item.match(/<scope>(.*?)<\/scope>/i);
+          const lowerMatch = item.match(/<lower>(.*?)<\/lower>/i);
+          const upperMatch = item.match(/<upper>(.*?)<\/upper>/i);
+          const geoMatch = item.match(/<geo>(.*?)<\/geo>/i);
+
+          const n = nMatch ? nMatch[1] : '';
+          const b = bMatch ? bMatch[1] : '';
+          const c = cMatch ? cMatch[1] : '';
+          const d = dMatch ? dMatch[1] : '';
+          const e = eMatch ? eMatch[1] : '';
+          const fir = firMatch ? firMatch[1] : '';
+          const cod = codMatch ? codMatch[1] : '';
+          const traffic = trafficMatch ? trafficMatch[1] : 'IV';
+          const scope = scopeMatch ? scopeMatch[1] : 'A';
+          const lower = lowerMatch ? lowerMatch[1] : '000';
+          const upper = upperMatch ? upperMatch[1] : '999';
+          const geo = geoMatch ? geoMatch[1] : '';
+
+          // Format following the "Official Document" look
+          // Q) FIR/QCODE/TRAFFIC/PURPOSE/SCOPE/LOWER/UPPER/GEOCORDS
+          const qLine = `Q) ${fir}/${cod}/${traffic}/BO/${scope}/${lower}/${upper}/${geo}`;
+
+          let formatted = `${n}\n\n${qLine}\n${e}`;
+          if (d) formatted += `\nORIGEM: AISWEB\n\nHORÁRIO: ${d}`;
+
+          // Format validity: 2601200940 -> 20/01/26 09:40
+          const formatAisDate = (raw: string) => {
+            if (raw === 'PERM') return 'PERM';
+            if (raw.length !== 10) return raw;
+            return `${raw.substring(4, 6)}/${raw.substring(2, 4)}/${raw.substring(0, 2)} ${raw.substring(6, 8)}:${raw.substring(8, 10)}`;
+          };
+
+          formatted += `\nVIGÊNCIA: ${formatAisDate(b)} a ${formatAisDate(c)} UTC`;
+
+          return formatted;
+        });
+      }
+    }
+
+    const nameMatch = html.match(/<h2[^>]*>([^<]+)- ([^<]+)<\/h2>/i);
+    const name = nameMatch ? nameMatch[2].trim() : '';
+    const cityState = nameMatch ? nameMatch[1].trim().split('/') : ['', ''];
+    const city = cityState[0]?.trim() || '';
+    const state = cityState[1]?.trim() || '';
+
+    const coordsMatch = html.match(/Coordenadas:<\/strong>\s*([^<]+)/i);
+    const elevMatch = html.match(/Eleva&ccedil;&atilde;o:<\/strong>\s*([^<]+)/i);
+    const firMatch = html.match(/FIR:<\/strong>\s*([^<]+)/i);
+    const utcMatch = html.match(/Fuso Hor&aacute;rio:<\/strong>\s*([^<]+)/i);
+
+    const sections: Record<string, string> = {};
+    const sectionRegex = /<h4[^>]*>([^<]+)<\/h4>([\s\S]*?)(?=<h4|$|<!--)/gi;
+    let match;
+    while ((match = sectionRegex.exec(html)) !== null) {
+      sections[match[1].trim()] = match[2].trim();
+    }
+
+    const cleanHeaderHtml = (raw: string) => {
+      return raw
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&ccedil;/gi, 'c')
+        .replace(/&atilde;/gi, 'a')
+        .replace(/&otilde;/gi, 'o')
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l)
+        .join('\n');
+    };
+
+    const cleanedRotaerText = cleanHtmlForText(rotaerHtml);
+    const labels = ['COM', 'RDONAV', 'CMB', 'SER', 'RFFS', 'MET', 'AIS', 'RMK', 'COMPL'];
+    const granularBlocks: string[] = [];
+
+    let headerLinesText = cleanHeaderHtml(rotaerHtml);
+    const firstLabelIndexHeader = Math.min(...labels.map(l => {
+      const idx = headerLinesText.indexOf(`${l} -`);
+      return idx === -1 ? Infinity : idx;
+    }));
+
+    let rawHeader = '';
+    if (firstLabelIndexHeader !== Infinity) {
+      rawHeader = headerLinesText.substring(0, firstLabelIndexHeader).trim();
+    } else {
+      rawHeader = headerLinesText;
+    }
+
+    labels.forEach((label, index) => {
+      const currentMarker = `${label} -`;
+      const startIdx = cleanedRotaerText.indexOf(currentMarker);
+      if (startIdx === -1) return;
+
+      let endIdx = cleanedRotaerText.length;
+      labels.forEach(nextLabel => {
+        const nextMarker = `${nextLabel} -`;
+        const nIdx = cleanedRotaerText.indexOf(nextMarker, startIdx + currentMarker.length);
+        if (nIdx !== -1 && nIdx < endIdx) {
+          endIdx = nIdx;
+        }
+      });
+
+      const content = cleanedRotaerText.substring(startIdx + currentMarker.length, endIdx).trim();
+      if (content) {
+        granularBlocks.push(`${label} - ${content}`);
+      }
     });
+
+    const runways: RunwayInfo[] = [];
+    const pistasSource = sections['Pistas'];
+    if (pistasSource) {
+      const rwRegex = /<div class=\"row\">([\s\S]*?)<\/div>/gi;
+      let rwMatch;
+      while ((rwMatch = rwRegex.exec(pistasSource)) !== null) {
+        const content = rwMatch[1];
+        const desig = content.match(/<strong>Designa&ccedil;&atilde;o:<\/strong>\s*([^<]+)/i);
+        const dim = content.match(/Comprimento x largura:<\/strong>\s*([^<]+)/i);
+        const surf = content.match(/Pavimento:<\/strong>\s*([^<]+)/i);
+        const strength = content.match(/For&ccedil;a de suporte/i) ? content.match(/For&ccedil;a de suporte:[^<]*<strong>([^<]+)/i) : null;
+
+        if (desig) {
+          runways.push({
+            designation: desig[1].trim(),
+            dimensions: dim ? dim[1].trim() : '',
+            surface: surf ? surf[1].trim() : '',
+            strength: strength ? strength[1].trim() : '',
+            lighting: []
+          });
+        }
+      }
+    }
+
+    const rotaerData: RotaerData = {
+      icao: sanitizedIcao,
+      name,
+      city,
+      state,
+      ciad: '',
+      coordinates: coordsMatch ? cleanHtmlForText(coordsMatch[1]) : '',
+      elevation: elevMatch ? cleanHtmlForText(elevMatch[1]) : '',
+      type: '',
+      operator: '',
+      distanceFromCity: '',
+      utc: utcMatch ? cleanHtmlForText(utcMatch[1]) : '',
+      operations: '',
+      lighting: [],
+      fir: firMatch ? cleanHtmlForText(firMatch[1]) : '',
+      jurisdiction: '',
+      runways,
+      communications: [],
+      radioNav: [],
+      fuel: '',
+      services: '',
+      firefighting: '',
+      meteorology: [],
+      ais: [],
+      remarks: [],
+      declaredDistances: [],
+      complements: granularBlocks,
+      aiswebUrl: url,
+      rawHeader: rawHeader,
+      notams: notams
+    };
+
+    return new Response(
+      JSON.stringify({ success: true, data: rotaerData }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
 
   } catch (error) {
-    console.error('Error in fetch-rotaer:', error);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error('Error fetching ROTAER:', error);
+    return new Response(
+      JSON.stringify({ success: false, error: 'Erro ao buscar dados do ROTAER.' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 });

@@ -102,13 +102,13 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
 
     const fetchLayer = async (layerName: string) => {
         // Sanitize input before using in CQL query
-        const sanitizedQuery = sanitizeCQLInput(query.toLowerCase());
+        const sanitizedQuery = sanitizeCQLInput(query);
         
         let cql = '';
         if (layerName === 'ICA:airport') {
-            cql = `strToLowerCase(localidade_id) like '%${sanitizedQuery}%' OR strToLowerCase(nome) like '%${sanitizedQuery}%'`;
+            cql = `localidade_id ILIKE '%${sanitizedQuery}%' OR nome ILIKE '%${sanitizedQuery}%'`;
         } else {
-            cql = `strToLowerCase(ident) like '%${sanitizedQuery}%'`;
+            cql = `ident ILIKE '%${sanitizedQuery}%'`;
         }
 
         try {
@@ -118,24 +118,27 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
                 request: 'GetFeature',
                 typeName: layerName,
                 outputFormat: 'application/json',
-                maxFeatures: '10',
+                maxFeatures: '15',
                 cql_filter: cql
             });
 
-            const response = await fetch(`${BASE_WFS_URL}?${params.toString()}`);
-            if (!response.ok) return;
+            const url = `${BASE_WFS_URL}?${params.toString()}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                console.error(`[NavDataService] Search failed for ${layerName} with status ${response.status}`);
+                return;
+            }
 
             const data = await response.json();
 
             if (data.features) {
-                for (const f of data.features) { // Changed to for...of to allow await inside
+                for (const f of data.features) {
                     if (f.geometry && (f.geometry.type === 'Point' || f.geometry.type === 'MultiPoint')) {
-                        // Handle MultiPoint
                         const coords = f.geometry.type === 'MultiPoint' ? f.geometry.coordinates[0] : f.geometry.coordinates;
                         const [lng, lat] = coords;
 
-                        let type: NavPoint['type'] = 'fix'; // Default for non-airport layers here
-                        let name = f.properties?.name || f.id;
+                        let type: NavPoint['type'] = 'fix';
+                        let name = f.properties?.nome || f.properties?.name || f.id;
                         let icao = '';
 
                         if (layerName === 'ICA:airport') {
@@ -145,11 +148,12 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
                         } else if (layerName === 'ICA:waypoint' || layerName === 'ICA:vor' || layerName === 'ICA:ndb') {
                             type = layerName === 'ICA:waypoint' ? 'fix' : layerName === 'ICA:vor' ? 'vor' : 'ndb';
                             icao = f.properties?.ident || '';
-                            name = f.properties?.nome || icao; // Use nome if available, otherwise ident
+                            name = f.properties?.nome || icao;
                         }
 
-                        const key = icao || name;
-                        if (!results.find(r => (r.icao === key || r.name === key))) {
+                        // Use a more unique key for deduplication: type + icao/name
+                        const key = (icao || name).toUpperCase();
+                        if (!results.find(r => r.type === type && (r.icao?.toUpperCase() === key || r.name.toUpperCase() === key))) {
                             results.push({
                                 id: f.id,
                                 type,
@@ -163,7 +167,7 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
                 }
             }
         } catch (error) {
-            console.warn(`[NavDataService - searchNavigationPoints] Search failed for ${layerName}`, error);
+            console.error(`[NavDataService - searchNavigationPoints] Search failed for ${layerName}`, error);
         }
     };
 

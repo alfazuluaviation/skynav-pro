@@ -8,6 +8,9 @@ interface DownloadModalProps {
   flightSegments: FlightSegment[];
   aircraftModel: { id: string; label: string; speed: number };
   plannedSpeed: number;
+  downloadedLayers: string[];
+  syncingLayers: Record<string, number>;
+  onDownloadLayer: (layer: string) => Promise<void>;
 }
 
 export const DownloadModal: React.FC<DownloadModalProps> = ({
@@ -16,33 +19,30 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   waypoints,
   flightSegments,
   aircraftModel,
-  plannedSpeed
+  plannedSpeed,
+  downloadedLayers,
+  syncingLayers,
+  onDownloadLayer
 }) => {
   const [downloadFormat, setDownloadFormat] = useState<'txt' | 'csv' | 'json'>('txt');
-  const [chartAvailability, setChartAvailability] = useState<Record<string, boolean>>({
-    enrcHigh: false,
-    enrcLow: true,
-    rea: false,
-    wac: false
-  });
 
   if (!isOpen) return null;
 
   const generateFlightPlanText = () => {
     const date = new Date().toLocaleDateString('pt-BR');
     const time = new Date().toLocaleTimeString('pt-BR');
-    
+
     let content = `═══════════════════════════════════════════════════════════════\n`;
     content += `                    PLANO DE VOO - SKY NAVIGATION\n`;
     content += `═══════════════════════════════════════════════════════════════\n\n`;
     content += `Data: ${date}    Hora: ${time}\n`;
     content += `Aeronave: ${aircraftModel.label} (${aircraftModel.id})\n`;
     content += `Velocidade Planejada: ${plannedSpeed} kt\n\n`;
-    
+
     content += `───────────────────────────────────────────────────────────────\n`;
     content += `                         ROTA\n`;
     content += `───────────────────────────────────────────────────────────────\n\n`;
-    
+
     if (waypoints.length === 0) {
       content += `Nenhum waypoint definido.\n`;
     } else {
@@ -54,15 +54,15 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
         content += `   Tipo: ${wp.type}\n\n`;
       });
     }
-    
+
     if (flightSegments.length > 0) {
       content += `───────────────────────────────────────────────────────────────\n`;
       content += `                       SEGMENTOS\n`;
       content += `───────────────────────────────────────────────────────────────\n\n`;
-      
+
       let totalDistance = 0;
       let totalFuel = 0;
-      
+
       flightSegments.forEach((seg, index) => {
         totalDistance += seg.distance;
         totalFuel += seg.fuel;
@@ -72,24 +72,24 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
         content += `   ETE: ${seg.ete}\n`;
         content += `   Combustível Est.: ${seg.fuel} L\n\n`;
       });
-      
+
       content += `───────────────────────────────────────────────────────────────\n`;
       content += `                        TOTAIS\n`;
       content += `───────────────────────────────────────────────────────────────\n\n`;
       content += `   Distância Total: ${totalDistance.toFixed(1)} NM\n`;
       content += `   Combustível Total Est.: ${totalFuel} L\n`;
     }
-    
+
     content += `\n═══════════════════════════════════════════════════════════════\n`;
     content += `                 Gerado por Sky Navigation\n`;
     content += `═══════════════════════════════════════════════════════════════\n`;
-    
+
     return content;
   };
 
   const generateFlightPlanCSV = () => {
     let csv = 'Seq,ICAO,Nome,Latitude,Longitude,Tipo,Função,Distância(NM),Proa(°),ETE,Combustível(L)\n';
-    
+
     waypoints.forEach((wp, index) => {
       const segment = flightSegments[index];
       csv += `${index + 1},${wp.icao || ''},${wp.name},${wp.lat.toFixed(6)},${wp.lng.toFixed(6)},${wp.type},${wp.role || 'WAYPOINT'},`;
@@ -100,7 +100,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
       }
       csv += '\n';
     });
-    
+
     return csv;
   };
 
@@ -134,7 +134,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
         fuel: flightSegments.reduce((sum, s) => sum + s.fuel, 0)
       }
     };
-    
+
     return JSON.stringify(data, null, 2);
   };
 
@@ -142,11 +142,11 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     let content: string;
     let filename: string;
     let mimeType: string;
-    
+
     const origin = waypoints.find(w => w.role === 'ORIGIN')?.icao || 'XXX';
     const dest = waypoints.find(w => w.role === 'DESTINATION')?.icao || 'XXX';
     const dateStr = new Date().toISOString().split('T')[0];
-    
+
     switch (downloadFormat) {
       case 'csv':
         content = generateFlightPlanCSV();
@@ -163,7 +163,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
         filename = `PLN_${origin}_${dest}_${dateStr}.txt`;
         mimeType = 'text/plain';
     }
-    
+
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -175,24 +175,25 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleChartDownload = (chartType: string) => {
-    // TODO: Implementar download real das cartas
-    console.log(`Download da carta: ${chartType}`);
-    alert(`Download da carta ${chartType} será implementado em breve.`);
+  const handleChartDownload = async (chartId: string) => {
+    if (downloadedLayers.includes(chartId) || syncingLayers[chartId] !== undefined) return;
+    await onDownloadLayer(chartId);
   };
 
-  const handleDownloadAll = () => {
-    // Download all charts at once
-    chartOptions.forEach((chart) => {
-      handleChartDownload(chart.id);
-    });
+  const handleDownloadAll = async () => {
+    // Download all charts one by one
+    for (const chart of chartOptions) {
+      if (!downloadedLayers.includes(chart.id)) {
+        await onDownloadLayer(chart.id);
+      }
+    }
   };
 
   const chartOptions = [
-    { id: 'enrcHigh', label: 'ENRC HIGH', available: chartAvailability.enrcHigh },
-    { id: 'enrcLow', label: 'ENRC LOW', available: chartAvailability.enrcLow },
-    { id: 'rea', label: 'REA', available: chartAvailability.rea },
-    { id: 'wac', label: 'WAC', available: chartAvailability.wac },
+    { id: 'HIGH', label: 'ENRC HIGH' },
+    { id: 'LOW', label: 'ENRC LOW' },
+    { id: 'REA', label: 'REA' },
+    { id: 'WAC', label: 'WAC' },
   ];
 
   return (
@@ -221,51 +222,122 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           {/* Chart Download Options */}
           <div className="space-y-3">
             <div className="grid grid-cols-3 gap-3">
-              {chartOptions.slice(0, 3).map((chart) => (
-                <button
-                  key={chart.id}
-                  onClick={() => handleChartDownload(chart.id)}
-                  className="p-4 rounded-xl border-2 border-slate-700 bg-slate-800/50 hover:border-slate-600 transition-all flex flex-col items-center"
-                >
-                  <div className="text-sm font-bold text-white mb-1">{chart.label}</div>
-                  {chart.available ? (
-                    <div className="flex items-center gap-1 text-xs text-emerald-400">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                      DISPONÍVEL
-                    </div>
-                  ) : (
-                    <div className="text-xs text-slate-500">BAIXAR</div>
-                  )}
-                </button>
-              ))}
+              {chartOptions.slice(0, 3).map((chart) => {
+                const isDownloaded = downloadedLayers.includes(chart.id);
+                const progress = syncingLayers[chart.id];
+                const isSyncing = progress !== undefined;
+
+                return (
+                  <button
+                    key={chart.id}
+                    onClick={() => handleChartDownload(chart.id)}
+                    disabled={isSyncing}
+                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center relative overflow-hidden ${isDownloaded
+                        ? 'border-emerald-500/30 bg-emerald-500/5'
+                        : isSyncing
+                          ? 'border-sky-500/50 bg-sky-500/5'
+                          : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                      }`}
+                  >
+                    <div className="text-sm font-bold text-white mb-1 relative z-10">{chart.label}</div>
+
+                    {isSyncing ? (
+                      <div className="w-full mt-1 relative z-10">
+                        <div className="h-1 w-full bg-slate-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-sky-500 transition-all duration-300"
+                            style={{ width: `${progress}%` }}
+                          ></div>
+                        </div>
+                        <div className="text-[10px] text-sky-400 mt-1 font-bold">{progress}%</div>
+                      </div>
+                    ) : isDownloaded ? (
+                      <div className="flex items-center gap-1 text-xs text-emerald-400 relative z-10">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        DISPONÍVEL
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-500 relative z-10 font-bold">BAIXAR</div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
             <div className="flex justify-center">
-              <button
-                onClick={() => handleChartDownload('wac')}
-                className="p-4 rounded-xl border-2 border-slate-700 bg-slate-800/50 hover:border-slate-600 transition-all flex flex-col items-center w-1/3"
-              >
-                <div className="text-sm font-bold text-white mb-1">WAC</div>
-                {chartAvailability.wac ? (
-                  <div className="flex items-center gap-1 text-xs text-emerald-400">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                    DISPONÍVEL
-                  </div>
-                ) : (
-                  <div className="text-xs text-slate-500">BAIXAR</div>
-                )}
-              </button>
+              {chartOptions.slice(3, 4).map((chart) => {
+                const isDownloaded = downloadedLayers.includes(chart.id);
+                const progress = syncingLayers[chart.id];
+                const isSyncing = progress !== undefined;
+
+                return (
+                  <button
+                    key={chart.id}
+                    onClick={() => handleChartDownload(chart.id)}
+                    disabled={isSyncing}
+                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center w-1/3 relative overflow-hidden ${isDownloaded
+                        ? 'border-emerald-500/30 bg-emerald-500/5'
+                        : isSyncing
+                          ? 'border-sky-500/50 bg-sky-500/5'
+                          : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                      }`}
+                  >
+                    <div className="text-sm font-bold text-white mb-1 relative z-10">{chart.label}</div>
+
+                    {isSyncing ? (
+                      <div className="w-full mt-1 relative z-10">
+                        <div className="h-1 w-full bg-slate-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-sky-500 transition-all duration-300"
+                            style={{ width: `${progress}%` }}
+                          ></div>
+                        </div>
+                        <div className="text-[10px] text-sky-400 mt-1 font-bold">{progress}%</div>
+                      </div>
+                    ) : isDownloaded ? (
+                      <div className="flex items-center gap-1 text-xs text-emerald-400 relative z-10">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        DISPONÍVEL
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-500 relative z-10 font-bold">BAIXAR</div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Download All Button */}
           <button
             onClick={handleDownloadAll}
-            className="w-full py-4 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center gap-2"
+            disabled={Object.keys(syncingLayers).length > 0 || downloadedLayers.length === chartOptions.length}
+            className={`w-full py-4 font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 ${downloadedLayers.length === chartOptions.length
+                ? 'bg-emerald-600 text-white cursor-default'
+                : Object.keys(syncingLayers).length > 0
+                  ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white shadow-sky-500/25'
+              }`}
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Baixar todos
+            {downloadedLayers.length === chartOptions.length ? (
+              <>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Todos baixados
+              </>
+            ) : Object.keys(syncingLayers).length > 0 ? (
+              <>
+                <div className="w-5 h-5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                Baixando...
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Baixar todos
+              </>
+            )}
           </button>
         </div>
       </div>

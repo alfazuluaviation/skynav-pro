@@ -7,31 +7,31 @@ const corsHeaders = {
 
 // Simple in-memory rate limiter
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute window
-const MAX_REQUESTS_PER_WINDOW = 30; // 30 requests per minute per IP
+const RATE_LIMIT_WINDOW_MS = 60000;
+const MAX_REQUESTS_PER_WINDOW = 60;
 
 const checkRateLimit = (clientIp: string): { allowed: boolean; retryAfter?: number } => {
   const now = Date.now();
   const record = rateLimitMap.get(clientIp);
-  
+
   if (!record || now > record.resetTime) {
     rateLimitMap.set(clientIp, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
     return { allowed: true };
   }
-  
+
   if (record.count >= MAX_REQUESTS_PER_WINDOW) {
     const retryAfter = Math.ceil((record.resetTime - now) / 1000);
     return { allowed: false, retryAfter };
   }
-  
+
   record.count++;
   return { allowed: true };
 };
 
 const getClientIp = (req: Request): string => {
-  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
-         req.headers.get('x-real-ip') || 
-         'unknown';
+  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    req.headers.get('x-real-ip') ||
+    'unknown';
 };
 
 interface ChartInfo {
@@ -43,180 +43,171 @@ interface ChartInfo {
   dt: string;
 }
 
+const getChartDescription = (tipo: string): string => {
+  const descriptions: Record<string, string> = {
+    'ADC': 'Aerodrome Chart',
+    'AOC': 'Aerodrome Obstacle Chart',
+    'ARC': 'Area Chart',
+    'GMC': 'Ground Movement Chart',
+    'IAC': 'Instrument Approach Chart',
+    'LC': 'Landing Chart',
+    'PDC': 'Precision Approach Chart',
+    'SID': 'Standard Instrument Departure',
+    'STAR': 'Standard Terminal Arrival',
+    'VAC': 'Visual Approach Chart',
+    'PATC': 'Precision Approach Terrain Chart',
+    'OTR': 'Obstacle/Terrain Chart',
+    'ATCSMAC': 'ATC Surveillance Minimum Altitude Chart',
+  };
+  return descriptions[tipo.toUpperCase()] || 'Carta Aeronáutica';
+};
+
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Rate limiting check
   const clientIp = getClientIp(req);
   const rateCheck = checkRateLimit(clientIp);
   if (!rateCheck.allowed) {
-    console.warn(`Rate limit exceeded for IP: ${clientIp}`);
-    return new Response(JSON.stringify({ success: false, error: 'Rate limit exceeded. Please try again later.' }), {
+    return new Response(JSON.stringify({ success: false, error: 'Rate limit exceeded.' }), {
       status: 429,
-      headers: { 
-        ...corsHeaders, 
-        'Content-Type': 'application/json',
-        'Retry-After': String(rateCheck.retryAfter)
-      },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 
   try {
     const { icaoCode } = await req.json();
 
-    if (!icaoCode || typeof icaoCode !== 'string' || icaoCode.length !== 4) {
+    if (!icaoCode || typeof icaoCode !== 'string' || icaoCode.length < 3) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Código ICAO inválido. Deve ter 4 caracteres.' }),
+        JSON.stringify({ success: false, error: 'Código ICAO inválido.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const sanitizedIcao = icaoCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    
-    console.log(`Fetching charts for ICAO: ${sanitizedIcao}`);
+    const charts: ChartInfo[] = [];
 
-    // Fetch charts from AISWEB public page
-    const url = `https://aisweb.decea.mil.br/?i=cartas&codigo=${sanitizedIcao}`;
-    
+    // Attempt to fetch from Aerodromos page (better categorized)
+    const url = `https://aisweb.decea.mil.br/?i=aerodromos&codigo=${sanitizedIcao}`;
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       }
     });
 
-    if (!response.ok) {
-      throw new Error(`AISWEB returned status ${response.status}`);
-    }
+    if (response.ok) {
+      const html = await response.text();
 
-    const html = await response.text();
-    
-    // Parse chart links from the HTML
-    const charts: ChartInfo[] = [];
-    
-    // Match chart links in the format: href="/api/cartas/..."
-    const chartLinkRegex = /<a[^>]*href="([^"]*\/api\/[^"]*\.pdf)"[^>]*>([^<]+)<\/a>/gi;
-    let match;
-    
-    while ((match = chartLinkRegex.exec(html)) !== null) {
-      const link = match[1].startsWith('http') ? match[1] : `https://aisweb.decea.mil.br${match[1]}`;
-      const nome = match[2].trim();
-      
-      // Extract chart type from the link or name
-      let tipo = 'UNKNOWN';
-      let tipo_descr = 'Carta Aeronáutica';
-      
-      const tipoMatch = nome.match(/^(ADC|AOC|ARC|GMC|IAC|LC|PDC|SID|STAR|VAC|PATC|OTR|ATCSMAC)/i);
-      if (tipoMatch) {
-        tipo = tipoMatch[1].toUpperCase();
-        switch (tipo) {
-          case 'ADC': tipo_descr = 'Aerodrome Chart'; break;
-          case 'AOC': tipo_descr = 'Aircraft Operating Chart'; break;
-          case 'ARC': tipo_descr = 'Area Chart'; break;
-          case 'GMC': tipo_descr = 'Ground Movement Chart'; break;
-          case 'IAC': tipo_descr = 'Instrument Approach Chart'; break;
-          case 'LC': tipo_descr = 'Landing Chart'; break;
-          case 'PDC': tipo_descr = 'Precision Approach Chart'; break;
-          case 'SID': tipo_descr = 'Standard Instrument Departure'; break;
-          case 'STAR': tipo_descr = 'Standard Terminal Arrival'; break;
-          case 'VAC': tipo_descr = 'Visual Approach Chart'; break;
-          case 'PATC': tipo_descr = 'Precision Approach Terrain Chart'; break;
-          case 'OTR': tipo_descr = 'Obstacle/Terrain Chart'; break;
-          case 'ATCSMAC': tipo_descr = 'ATC Surveillance Minimum Altitude Chart'; break;
-        }
-      }
-      
-      charts.push({
-        id: `chart-${charts.length + 1}`,
-        tipo,
-        tipo_descr,
-        nome,
-        link,
-        dt: new Date().toISOString().split('T')[0],
-      });
-    }
+      // Extract the "Cartas" section more robustly
+      // Categories also use h4, so we capture until the next h2 or h3 or some other major block
+      const chartsSectionMatch = html.match(/<h4[^>]*>Cartas\s*[(]\d+[)]<\/h4>([\s\S]*?)(?:<h2|<h3|$)/i);
 
-    // Alternative parsing for table-based layout
-    if (charts.length === 0) {
-      // Try to find chart info in table rows
-      const tableRowRegex = /<tr[^>]*>[\s\S]*?<td[^>]*>([^<]+)<\/td>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>[\s\S]*?<\/tr>/gi;
-      
-      while ((match = tableRowRegex.exec(html)) !== null) {
-        const nome = match[1].trim();
-        let link = match[2];
-        
-        if (link.includes('.pdf')) {
-          link = link.startsWith('http') ? link : `https://aisweb.decea.mil.br${link}`;
-          
-          let tipo = 'UNKNOWN';
-          let tipo_descr = 'Carta Aeronáutica';
-          
-          const tipoMatch = nome.match(/^(ADC|AOC|ARC|GMC|IAC|LC|PDC|SID|STAR|VAC|PATC|OTR|ATCSMAC)/i);
-          if (tipoMatch) {
-            tipo = tipoMatch[1].toUpperCase();
-            switch (tipo) {
-              case 'ADC': tipo_descr = 'Aerodrome Chart'; break;
-              case 'SID': tipo_descr = 'Standard Instrument Departure'; break;
-              case 'STAR': tipo_descr = 'Standard Terminal Arrival'; break;
-              case 'IAC': tipo_descr = 'Instrument Approach Chart'; break;
-              case 'VAC': tipo_descr = 'Visual Approach Chart'; break;
-              default: tipo_descr = 'Carta Aeronáutica';
-            }
+      if (chartsSectionMatch) {
+        const sectionHtml = chartsSectionMatch[1];
+
+        // Split by <h4> labels which are the categories (ADC, SID, etc.)
+        const categoryBlocks = sectionHtml.split(/<h4[^>]*>/i);
+
+        categoryBlocks.forEach((block, index) => {
+          if (index === 0) return; // content before first <h4>
+
+          const categoryMatch = block.match(/^([^<]+)<\/h4>([\s\S]*)$/i);
+          if (!categoryMatch) return;
+
+          const tipo = categoryMatch[1].trim();
+          const blockContent = categoryMatch[2];
+          const tipo_descr = getChartDescription(tipo);
+
+          const linkRegex = /<a[^>]*href=\"([^\"]*download[^\"]*)\"[^>]*>([\s\S]*?)<\/a>/gi;
+          let linkMatch;
+
+          while ((linkMatch = linkRegex.exec(blockContent)) !== null) {
+            const link = linkMatch[1];
+            let label = linkMatch[2].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+
+            charts.push({
+              id: `chart-${charts.length + 1}`,
+              tipo,
+              tipo_descr,
+              nome: label,
+              link: link.startsWith('http') ? link : `https://aisweb.decea.mil.br${link.startsWith('/') ? '' : '/'}${link}`,
+              dt: new Date().toISOString().split('T')[0],
+            });
           }
-          
-          charts.push({
-            id: `chart-${charts.length + 1}`,
-            tipo,
-            tipo_descr,
-            nome,
-            link,
-            dt: new Date().toISOString().split('T')[0],
-          });
-        }
-      }
-    }
-
-    // Generate direct links based on known DECEA URL patterns
-    if (charts.length === 0) {
-      // Fallback: Generate common chart types URLs
-      const chartTypes = ['ADC', 'SID', 'STAR', 'IAC', 'VAC'];
-      
-      for (const tipo of chartTypes) {
-        charts.push({
-          id: `chart-${charts.length + 1}`,
-          tipo,
-          tipo_descr: tipo === 'ADC' ? 'Aerodrome Chart' : 
-                     tipo === 'SID' ? 'Standard Instrument Departure' :
-                     tipo === 'STAR' ? 'Standard Terminal Arrival' :
-                     tipo === 'IAC' ? 'Instrument Approach Chart' :
-                     'Visual Approach Chart',
-          nome: `${tipo} - ${sanitizedIcao}`,
-          link: `https://aisweb.decea.mil.br/?i=cartas&codigo=${sanitizedIcao}`,
-          dt: new Date().toISOString().split('T')[0],
         });
       }
     }
 
-    console.log(`Found ${charts.length} charts for ${sanitizedIcao}`);
+    // Smart filtering:
+    // 1. If a chart name contains an ICAO-like code (4 letters), it MUST be the requested one.
+    // 2. If it contains NO ICAO-like code, assume it's valid for this airport (common for IAC/STAR).
+    const filteredCharts = charts.filter(chart => {
+      const nameUpper = chart.nome.toUpperCase();
+      // Match 4-letter codes that start with S or other known Brazilian ICAO prefixes
+      const icaoMatches = nameUpper.match(/\b[S][A-ZW][A-Z0-9]{2}\b/g);
+
+      if (icaoMatches) {
+        return icaoMatches.includes(sanitizedIcao);
+      }
+      return true;
+    }).map(chart => {
+      let cleanNome = chart.nome;
+      const type = chart.tipo.toUpperCase();
+
+      // Fix label duplication like "ADC SBSV ADC" -> "SBSV ADC"
+      if (cleanNome.toUpperCase().includes(`${type} `) && cleanNome.toUpperCase().endsWith(` ${type}`)) {
+        cleanNome = cleanNome.substring(0, cleanNome.length - type.length).trim();
+      }
+
+      return { ...chart, nome: cleanNome };
+    });
+
+    // Fallback to table search ONLY if still no charts found
+    if (filteredCharts.length === 0) {
+      const searchUrl = `https://aisweb.decea.mil.br/?i=cartas&codigo=${sanitizedIcao}`;
+      const searchResp = await fetch(searchUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      if (searchResp.ok) {
+        const searchHtml = await searchResp.text();
+        const tableRowRegex = /<tr[^>]*>[\s\S]*?<td[^>]*>([^<]+)<\/td>[\s\S]*?<td[^>]*>([^<]+)<\/td>[\s\S]*?<td[^>]*>([^<]+)<\/td>[\s\S]*?<a[^>]*href="([^"]*download[^"]*)"/gi;
+        let m;
+        while ((m = tableRowRegex.exec(searchHtml)) !== null) {
+          const tipo = m[2].trim();
+          const nome = m[3].trim();
+
+          // Strict filtering even in fallback
+          if (nome.toUpperCase().includes(sanitizedIcao)) {
+            const link = m[4].startsWith('http') ? m[4] : `https://aisweb.decea.mil.br${m[4].startsWith('/') ? '' : '/'}${m[4]}`;
+            filteredCharts.push({
+              id: `chart-${filteredCharts.length + 1}`,
+              tipo,
+              tipo_descr: getChartDescription(tipo),
+              nome,
+              link,
+              dt: new Date().toISOString().split('T')[0],
+            });
+          }
+        }
+      }
+    }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         icao: sanitizedIcao,
-        charts,
-        aisweb_url: `https://aisweb.decea.mil.br/?i=cartas&codigo=${sanitizedIcao}`
+        charts: filteredCharts,
+        aisweb_url: `https://aisweb.decea.mil.br/?i=aerodromos&codigo=${sanitizedIcao}`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error fetching charts:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erro ao buscar cartas';
     return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
+      JSON.stringify({ success: false, error: 'Erro ao buscar cartas.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

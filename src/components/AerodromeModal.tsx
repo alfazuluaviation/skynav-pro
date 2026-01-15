@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Search, Plane, Loader2, MapPin, Radio, Compass, Fuel, AlertTriangle, ExternalLink, Navigation, Wind, Phone, Ruler } from 'lucide-react';
+import { X, Search, Plane, Loader2, MapPin, Radio, Compass, Fuel, AlertTriangle, ExternalLink, Navigation, Wind, Phone, Ruler, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface RotaerData {
@@ -63,13 +63,16 @@ interface DeclaredDistance {
 interface AerodromeModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenCharts?: (icao: string) => void;
 }
 
-export const AerodromeModal: React.FC<AerodromeModalProps> = ({ isOpen, onClose }) => {
+export const AerodromeModal: React.FC<AerodromeModalProps> = ({ isOpen, onClose, onOpenCharts }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [rotaerData, setRotaerData] = useState<RotaerData | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<'ROTAER' | 'NOTAM' | 'SUPLEMENTOS' | 'CARTAS' | 'METAR' | 'ROTAS'>('ROTAER');
 
   const handleSearch = async () => {
     if (!searchQuery || searchQuery.length < 4) {
@@ -111,16 +114,25 @@ export const AerodromeModal: React.FC<AerodromeModalProps> = ({ isOpen, onClose 
 
   if (!isOpen) return null;
 
+  const tabs = [
+    { id: 'ROTAER', label: 'ROTAER' },
+    { id: 'NOTAM', label: 'NOTAM' },
+    { id: 'SUPLEMENTOS', label: 'Suplementos AIP' },
+    { id: 'CARTAS', label: 'Cartas' },
+    { id: 'METAR', label: 'Metar/TAF' },
+    { id: 'ROTAS', label: 'Rotas Preferenciais' },
+  ] as const;
+
   return (
     <div className="fixed inset-0 z-[3000] flex items-center justify-center">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
-      <div className="relative w-full max-w-4xl max-h-[90vh] bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden mx-4">
+      <div className="relative w-full max-w-5xl max-h-[95vh] bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden mx-4 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700/50 bg-gradient-to-r from-slate-800/50 to-slate-900/50">
           <div className="flex items-center gap-3">
@@ -141,7 +153,7 @@ export const AerodromeModal: React.FC<AerodromeModalProps> = ({ isOpen, onClose 
         </div>
 
         {/* Search Section */}
-        <div className="p-4 border-b border-slate-700/50">
+        <div className="p-4 border-b border-slate-700/50 bg-slate-900/40">
           <div className="flex gap-2">
             <div className="flex-1 relative">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -150,7 +162,7 @@ export const AerodromeModal: React.FC<AerodromeModalProps> = ({ isOpen, onClose 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value.toUpperCase())}
                 onKeyPress={handleKeyPress}
-                placeholder="Digite o código ICAO (ex: SBGR)"
+                placeholder="DIGITE O CÓDIGO ICAO (EX: SBGR)"
                 maxLength={4}
                 className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/25 uppercase font-mono tracking-wider"
               />
@@ -158,7 +170,7 @@ export const AerodromeModal: React.FC<AerodromeModalProps> = ({ isOpen, onClose 
             <button
               onClick={handleSearch}
               disabled={isLoading || searchQuery.length < 4}
-              className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-all flex items-center gap-2"
+              className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-orange-950/20"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -168,268 +180,216 @@ export const AerodromeModal: React.FC<AerodromeModalProps> = ({ isOpen, onClose 
               Buscar
             </button>
           </div>
-          
+
           {error && (
-            <p className="mt-2 text-sm text-red-400">{error}</p>
+            <p className="mt-2 text-sm text-red-400 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" /> {error}
+            </p>
           )}
         </div>
 
+        {/* Dynamic Tab Menu - AISWEB Style */}
+        <div className="px-4 border-b border-slate-700/20 bg-slate-900/20">
+          <div className="flex items-center overflow-x-auto no-scrollbar py-1">
+            <div className="flex border border-sky-500/40 rounded-md overflow-hidden bg-slate-800/20 shadow-inner">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    if (tab.id === 'CARTAS' && rotaerData && onOpenCharts) {
+                      onOpenCharts(rotaerData.icao);
+                      onClose();
+                    }
+                  }}
+                  className={`px-4 py-3 text-sm font-semibold transition-all whitespace-nowrap border-r border-sky-500/40 last:border-r-0 ${activeTab === tab.id
+                    ? 'bg-sky-500/20 text-white'
+                    : 'text-sky-400 hover:bg-sky-500/5 hover:text-sky-300'
+                    }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Results Section */}
-        <div className="p-4 overflow-y-auto max-h-[60vh]">
+        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-900/30">
           {!rotaerData && !isLoading && !error && (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-800 flex items-center justify-center">
-                <Search className="w-8 h-8 text-slate-600" />
+            <div className="h-full flex flex-col items-center justify-center py-12 opacity-50">
+              <div className="w-20 h-20 mb-4 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700/50">
+                <Search className="w-10 h-10 text-slate-600" />
               </div>
-              <p className="text-slate-400">Digite um código ICAO para buscar informações do aeródromo</p>
-              <p className="text-xs text-slate-500 mt-2">Exemplo: SBGR, SBBR, SBSP, SBGL</p>
+              <p className="text-slate-400 font-medium">Digite um código ICAO para buscar informações</p>
+              <p className="text-xs text-slate-500 mt-2 font-mono">EXEMPLO: SBGR, SBBR, SBSP, SBGL</p>
             </div>
           )}
 
-          {rotaerData && (
-            <div className="space-y-4">
-              {/* Header Info */}
-              <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-xl p-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-2xl font-bold text-amber-400 font-mono">{rotaerData.icao}</span>
-                      {rotaerData.ciad && (
-                        <span className="text-xs bg-amber-500/20 text-amber-300 px-2 py-1 rounded">CIAD: {rotaerData.ciad}</span>
-                      )}
-                    </div>
-                    <h3 className="text-lg font-semibold text-white">{rotaerData.name}</h3>
-                    {(rotaerData.city || rotaerData.state) && (
-                      <p className="text-sm text-slate-400">{rotaerData.city}{rotaerData.state ? `, ${rotaerData.state}` : ''}</p>
-                    )}
-                  </div>
-                  {rotaerData.aiswebUrl && (
-                    <a
-                      href={rotaerData.aiswebUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1 transition-colors"
-                    >
-                      Ver no AISWEB <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
+          {rotaerData && activeTab === 'ROTAER' && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              {/* Official ROTAER Header Block (Exact Mirror of AISWEB) */}
+              <div className="bg-[#fcfdff] dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm p-8 text-slate-900 dark:text-slate-100 font-sans">
+                {/* AISWEB Styles: Top Header Rows */}
+                <div className="space-y-1 font-sans">
+                  {/* helper to bold runway thresholds like **17** - ... - **35** */}
+                  {(() => {
+                    const headerLines = rotaerData.rawHeader ? rotaerData.rawHeader.split('\n').filter(l => l.trim()) : [];
+
+                    const formatRunwayLine = (line: string) => {
+                      // Regex to find 2-digit numbers specifically at thresholds: 
+                      // 1. Start of line (^\d{2})
+                      // 2. Before hyphen and maybe spaces (\d{2}\s*-)
+                      // 3. After hyphen and maybe spaces (-\s*\d{2})
+                      // 4. End of line (\d{2}$)
+                      const parts = line.split(/(\d{2})(?=\s*-)|(?<=-\s*)(\d{2})|(^\d{2})|(\d{2}$)/g);
+                      return parts.map((part, i) => {
+                        if (!part) return null;
+                        const isThreshold = /^\d{2}$/.test(part);
+                        if (isThreshold) {
+                          return <strong key={i} className="font-black text-slate-950 dark:text-white">{part}</strong>;
+                        }
+                        return part;
+                      });
+                    };
+
+                    const rawElev = rotaerData.elevation || '0';
+                    const elevValue = parseInt(rawElev.replace(/[^0-9]/g, '')) || 0;
+                    const elevFt = (elevValue * 3.28084).toFixed(0);
+
+                    return (
+                      <>
+                        {/* Row 1: Name and Coords */}
+                        <div className="flex justify-between items-start gap-4 mb-0.5">
+                          <h2 className="text-[17px] font-bold uppercase shrink-1 tracking-tight leading-none pt-1">
+                            {rotaerData.name} ({rotaerData.icao}) / <span className="text-slate-500 font-medium">{rotaerData.city}, {rotaerData.state}</span>
+                          </h2>
+                          <span className="font-sans text-[15px] font-medium shrink-0 leading-none">{rotaerData.coordinates}</span>
+                        </div>
+
+                        {/* Rows 2+ */}
+                        <div className="relative space-y-1">
+                          {/* Row 2: Type/AD line + Elevation */}
+                          <div className="flex justify-between items-baseline gap-4 h-5">
+                            <p className="text-[13px] uppercase font-medium opacity-90 max-w-3xl truncate">
+                              {headerLines[0] || rotaerData.type || 'INFORMAÇÕES DE AERÓDROMO'}
+                            </p>
+                            <span className="font-sans text-[15px] font-medium shrink-0">
+                              {elevValue} <span className="font-black text-slate-950 dark:text-white">({elevFt})</span>
+                            </span>
+                          </div>
+
+                          {/* Row 3: UTC/Ops line + CINDACTA/FIR */}
+                          <div className="flex justify-between items-baseline gap-4 h-5">
+                            <p className="text-[13px] uppercase font-medium opacity-90">
+                              {headerLines[1] || 'VFR IFR'}
+                            </p>
+                            <span className="font-sans text-[15px] font-medium shrink-0 text-slate-600 uppercase">
+                              {rotaerData.fir}
+                            </span>
+                          </div>
+
+                          {/* Row 4+: Runway thresholds (Bolded) */}
+                          {headerLines.slice(2).map((line, idx) => (
+                            <div key={idx} className="flex justify-between items-baseline gap-4 mt-0.5">
+                              <p className="text-[13px] uppercase font-medium leading-relaxed">
+                                {formatRunwayLine(line)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-                  {rotaerData.coordinates && (
-                    <div className="bg-slate-800/50 rounded-lg p-2">
-                      <div className="flex items-center gap-1 text-xs text-slate-400 mb-1">
-                        <Navigation className="w-3 h-3" /> Coordenadas
+                {/* Granular Information Blocks (Mirroring AISWEB Screenshots) */}
+                <div className="space-y-4 mt-8 border-t border-slate-200 dark:border-slate-800/50 pt-6">
+                  {rotaerData.complements && rotaerData.complements.map((block, idx) => {
+                    const separatorIndex = block.indexOf(' - ');
+                    const label = separatorIndex !== -1 ? block.substring(0, separatorIndex) : block;
+                    const content = separatorIndex !== -1 ? block.substring(separatorIndex + 3) : '';
+
+                    if (!content) return null;
+
+                    // AISWEB Layout: Label is bold and starts the line
+                    return (
+                      <div key={idx} className="text-[13px] md:text-sm font-sans leading-relaxed tracking-tight uppercase">
+                        <span className="font-black text-slate-900 dark:text-white mr-2">{label} -</span>
+                        <span className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                          {content}
+                        </span>
                       </div>
-                      <p className="text-sm text-white font-mono">{rotaerData.coordinates}</p>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Runways (Briefly as cards for extra UI polish) */}
+              {rotaerData.runways && rotaerData.runways.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {rotaerData.runways.map((rw, idx) => (
+                    <div key={idx} className="bg-white dark:bg-slate-800/20 border border-slate-200 dark:border-slate-700/50 rounded-xl p-4 flex justify-between items-center shadow-sm">
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Pista</span>
+                        <span className="text-lg font-black dark:text-white font-mono">{rw.designation}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">{rw.dimensions}</span>
+                        <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{rw.surface} • {rw.strength || 'N/A'}</span>
+                      </div>
                     </div>
-                  )}
-                  {rotaerData.elevation && (
-                    <div className="bg-slate-800/50 rounded-lg p-2">
-                      <div className="flex items-center gap-1 text-xs text-slate-400 mb-1">
-                        <Ruler className="w-3 h-3" /> Elevação
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {rotaerData && activeTab === 'NOTAM' && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="bg-[#fcfdff] dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm p-8">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 uppercase flex items-center gap-2">
+                  <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+                  NOTAM de Aeródromo ({rotaerData.icao})
+                </h3>
+
+                <div className="space-y-6">
+                  {rotaerData.notams && rotaerData.notams.length > 0 ? (
+                    rotaerData.notams.map((notam, idx) => (
+                      <div key={idx} className="p-4 bg-white dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/50 rounded-lg">
+                        <p className="text-sm font-mono text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap uppercase">
+                          {notam}
+                        </p>
                       </div>
-                      <p className="text-sm text-white font-mono">{rotaerData.elevation}</p>
-                    </div>
-                  )}
-                  {rotaerData.fir && (
-                    <div className="bg-slate-800/50 rounded-lg p-2">
-                      <div className="flex items-center gap-1 text-xs text-slate-400 mb-1">
-                        <Compass className="w-3 h-3" /> FIR
-                      </div>
-                      <p className="text-sm text-white font-mono">{rotaerData.fir}</p>
-                    </div>
-                  )}
-                  {rotaerData.utc && (
-                    <div className="bg-slate-800/50 rounded-lg p-2">
-                      <div className="flex items-center gap-1 text-xs text-slate-400 mb-1">
-                        <Wind className="w-3 h-3" /> UTC
-                      </div>
-                      <p className="text-sm text-white font-mono">{rotaerData.utc}</p>
+                    ))
+                  ) : (
+                    <div className="text-center py-12">
+                      <p className="text-slate-500 uppercase font-bold text-sm">Nenhum NOTAM ativo no momento para este aeródromo.</p>
                     </div>
                   )}
                 </div>
               </div>
+            </div>
+          )}
 
-              {/* Type Info */}
-              {rotaerData.type && (
-                <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-                  <h4 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
-                    <Plane className="w-4 h-4 text-amber-400" /> Tipo e Operações
-                  </h4>
-                  <p className="text-sm text-slate-400 whitespace-pre-wrap">{rotaerData.type}</p>
-                </div>
-              )}
-
-              {/* Communications */}
-              {rotaerData.communications && rotaerData.communications.length > 0 && (
-                <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-                  <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-                    <Radio className="w-4 h-4 text-green-400" /> Comunicações
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {rotaerData.communications.map((com, idx) => (
-                      <div key={idx} className="bg-slate-900/50 rounded-lg p-2">
-                        <span className="text-xs text-slate-400">{com.name}</span>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {com.frequencies.map((freq, fIdx) => (
-                            <span key={fIdx} className="text-sm font-mono text-green-400 bg-green-500/10 px-2 py-0.5 rounded">
-                              {freq}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Radio Navigation */}
-              {rotaerData.radioNav && rotaerData.radioNav.length > 0 && (
-                <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-                  <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-                    <Compass className="w-4 h-4 text-blue-400" /> Radionavegação
-                  </h4>
-                  <div className="space-y-1">
-                    {rotaerData.radioNav.map((nav, idx) => (
-                      <p key={idx} className="text-sm text-slate-400 font-mono">{nav}</p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Services */}
-              {(rotaerData.fuel || rotaerData.services || rotaerData.firefighting) && (
-                <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-                  <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-                    <Fuel className="w-4 h-4 text-cyan-400" /> Serviços
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {rotaerData.fuel && (
-                      <div className="bg-slate-900/50 rounded-lg p-2">
-                        <span className="text-xs text-slate-400">Combustível</span>
-                        <p className="text-sm text-white">{rotaerData.fuel}</p>
-                      </div>
-                    )}
-                    {rotaerData.services && (
-                      <div className="bg-slate-900/50 rounded-lg p-2">
-                        <span className="text-xs text-slate-400">Serviços</span>
-                        <p className="text-sm text-white">{rotaerData.services}</p>
-                      </div>
-                    )}
-                    {rotaerData.firefighting && (
-                      <div className="bg-slate-900/50 rounded-lg p-2">
-                        <span className="text-xs text-slate-400">RFFS</span>
-                        <p className="text-sm text-white">{rotaerData.firefighting}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* MET & AIS */}
-              {(rotaerData.meteorology?.length > 0 || rotaerData.ais?.length > 0) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {rotaerData.meteorology?.length > 0 && (
-                    <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-                      <h4 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
-                        <Wind className="w-4 h-4 text-purple-400" /> Meteorologia
-                      </h4>
-                      {rotaerData.meteorology.map((met, idx) => (
-                        <p key={idx} className="text-sm text-slate-400">{met}</p>
-                      ))}
-                    </div>
-                  )}
-                  {rotaerData.ais?.length > 0 && (
-                    <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-                      <h4 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
-                        <Phone className="w-4 h-4 text-indigo-400" /> AIS
-                      </h4>
-                      {rotaerData.ais.map((ais, idx) => (
-                        <p key={idx} className="text-sm text-slate-400">{ais}</p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Declared Distances */}
-              {rotaerData.declaredDistances && rotaerData.declaredDistances.length > 0 && (
-                <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-                  <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-                    <Ruler className="w-4 h-4 text-rose-400" /> Distâncias Declaradas
-                  </h4>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-slate-400 text-xs">
-                          <th className="text-left p-2">RWY</th>
-                          <th className="text-left p-2">TORA</th>
-                          <th className="text-left p-2">TODA</th>
-                          <th className="text-left p-2">ASDA</th>
-                          <th className="text-left p-2">LDA</th>
-                          <th className="text-left p-2">Coords</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rotaerData.declaredDistances.map((dd, idx) => (
-                          <tr key={idx} className="border-t border-slate-700/50">
-                            <td className="p-2 font-mono font-bold text-amber-400">{dd.runway}</td>
-                            <td className="p-2 text-slate-300">{dd.tora}m</td>
-                            <td className="p-2 text-slate-300">{dd.toda}m</td>
-                            <td className="p-2 text-slate-300">{dd.asda}m</td>
-                            <td className="p-2 text-slate-300">{dd.lda}m</td>
-                            <td className="p-2 text-slate-400 font-mono text-xs">{dd.coordinates}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Remarks */}
-              {rotaerData.remarks && rotaerData.remarks.length > 0 && (
-                <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-                  <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-yellow-400" /> Observações
-                  </h4>
-                  <div className="space-y-4">
-                    {rotaerData.remarks.map((remark, idx) => (
-                      <div key={idx}>
-                        <h5 className="text-xs font-semibold text-amber-400 mb-2">{remark.title}</h5>
-                        <ul className="space-y-1">
-                          {remark.items.map((item, itemIdx) => (
-                            <li key={itemIdx} className="text-sm text-slate-400 pl-3 border-l-2 border-slate-700">
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Complements */}
-              {rotaerData.complements && rotaerData.complements.length > 0 && (
-                <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-                  <h4 className="text-sm font-semibold text-slate-300 mb-3">Complementos</h4>
-                  <div className="space-y-1">
-                    {rotaerData.complements.map((comp, idx) => (
-                      <p key={idx} className="text-sm text-slate-400">{comp}</p>
-                    ))}
-                  </div>
-                </div>
-              )}
+          {rotaerData && activeTab !== 'ROTAER' && (
+            <div className="h-full flex flex-col items-center justify-center py-20 text-center opacity-40 animate-in fade-in zoom-in-95 duration-500">
+              <div className="w-24 h-24 mb-6 rounded-full bg-slate-800/50 flex items-center justify-center border border-slate-700/30">
+                <FileText className="w-12 h-12 text-slate-600" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">Seção {activeTab}</h3>
+              <p className="text-slate-400 max-w-sm px-6">
+                As informações desta categoria estarão disponíveis na próxima atualização do sistema de dados integrados.
+              </p>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="p-3 border-t border-slate-700/50 bg-slate-800/30">
-          <p className="text-xs text-slate-500 text-center">
-            Dados do ROTAER fornecidos oficialmente pelo DECEA através do AISWEB. Verifique sempre a atualização antes do voo.
+        <div className="p-4 border-t border-slate-700/50 bg-slate-900 flex items-center justify-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+            Dados Oficiais DECEA / AISWEB <span className="mx-2 text-slate-700">|</span> Atualizado: {new Date().toLocaleDateString()}
           </p>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Waypoint, FlightStats, ChartConfig, AiracCycle, FlightSegment, SavedPlan, NavPoint } from './types';
+import { Waypoint, FlightStats, ChartConfig, AiracCycle, FlightSegment, SavedPlan, NavPoint } from '../types';
 import { calculateDistance, calculateBearing, formatTime, applyMagneticVariation, getMagneticDeclination } from './utils/geoUtils';
 import { syncAeronauticalData, searchAerodrome } from './services/geminiService';
 // Components
@@ -12,7 +12,7 @@ import { Auth } from './components/Auth';
 import { supabase } from './services/supabaseClient';
 import { Session } from '@supabase/supabase-js';
 import { getAiracCycleInfo } from './services/airacService';
-import { ENRC_SEGMENTS } from './config/chartConfig';
+import { ENRC_SEGMENTS } from '../config/chartConfig';
 import { WMSTileLayer } from 'react-leaflet';
 import { NavigationLayer } from './components/NavigationLayer';
 import { TopLeftMenu } from './components/TopLeftMenu';
@@ -108,6 +108,7 @@ const App: React.FC = () => {
   const [showAerodromeModal, setShowAerodromeModal] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [showFlightPlanDownloadModal, setShowFlightPlanDownloadModal] = useState(false);
+  const [chartsModalIcao, setChartsModalIcao] = useState<string | null>(null);
 
   // Persistence Keys
   const KEY_CURRENT_PLAN = 'flight_plan_v1';
@@ -274,7 +275,7 @@ const App: React.FC = () => {
       icao: point.icao,
       lat: point.lat,
       lng: point.lng,
-      type: point.type === 'vor' ? 'VOR' : point.type === 'ndb' ? 'FIX' : 'AIRPORT',
+      type: (point.type === 'vor' ? 'VOR' : (point.type === 'ndb' || point.type === 'fix') ? 'FIX' : 'AIRPORT') as 'AIRPORT' | 'FIX' | 'VOR' | 'USER',
       description: point.type,
       role: insertionType,
     };
@@ -365,7 +366,7 @@ const App: React.FC = () => {
     const trueBrng = calculateBearing(from.lat, from.lng, to.lat, to.lng);
 
     // Calculate magnetic variation dynamically using WMM
-    const magneticVariation = getMagneticDeclination(from.lat, from.lng, 0, new Date()); // Assuming altitude 0 for now
+    const magneticVariation = getMagneticDeclination(from.lat, from.lng);
 
     console.log(`[App.tsx] Segment ${i}: From ${from.icao || from.name} (Lat: ${(from.lat || 0).toFixed(6)}, Lng: ${(from.lng || 0).toFixed(6)})`);
     console.log(`[App.tsx] True Bearing (calculated): ${trueBrng.toFixed(2)}°`);
@@ -438,8 +439,8 @@ const App: React.FC = () => {
   };
 
   // Handlers for the new menu
-  const handleOpenCharts = () => {
-    console.log("Opening charts menu");
+  const handleOpenCharts = (icao: string | null = null) => {
+    setChartsModalIcao(icao);
     setShowChartsModal(true);
   };
 
@@ -468,7 +469,7 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-screen bg-[#0d1117] text-slate-100 overflow-hidden font-sans select-none">
       {/* TOP LEFT MENU */}
-      <TopLeftMenu 
+      <TopLeftMenu
         onOpenCharts={handleOpenCharts}
         onOpenAerodromes={handleOpenAerodromes}
         onOpenDownload={handleOpenDownload}
@@ -476,6 +477,8 @@ const App: React.FC = () => {
 
       {/* SIDEBAR */}
       <Sidebar
+        userName={session.user.user_metadata?.full_name}
+        userEmail={session.user.email}
         showPlanPanel={showPlanPanel}
         onTogglePlanPanel={() => setShowPlanPanel(!showPlanPanel)}
         isNightMode={isNightMode}
@@ -731,30 +734,38 @@ const App: React.FC = () => {
       </div>
 
       {/* Charts Modal */}
-      <ChartsModal 
-        isOpen={showChartsModal} 
-        onClose={() => setShowChartsModal(false)} 
+      <ChartsModal
+        isOpen={showChartsModal}
+        onClose={() => {
+          setShowChartsModal(false);
+          setChartsModalIcao(null);
+        }}
+        initialIcao={chartsModalIcao}
       />
 
       {/* Aerodrome Modal */}
-      <AerodromeModal 
-        isOpen={showAerodromeModal} 
-        onClose={() => setShowAerodromeModal(false)} 
+      <AerodromeModal
+        isOpen={showAerodromeModal}
+        onClose={() => setShowAerodromeModal(false)}
+        onOpenCharts={handleOpenCharts}
       />
 
       {/* Download Modal */}
-      <DownloadModal 
-        isOpen={showDownloadModal} 
+      <DownloadModal
+        isOpen={showDownloadModal}
         onClose={() => setShowDownloadModal(false)}
         waypoints={waypoints}
         flightSegments={flightSegments}
         aircraftModel={aircraftModel}
         plannedSpeed={plannedSpeed}
+        downloadedLayers={downloadedLayers}
+        syncingLayers={syncingLayers}
+        onDownloadLayer={handleChartDownload}
       />
 
       {/* Flight Plan Download Modal */}
-      <FlightPlanDownloadModal 
-        isOpen={showFlightPlanDownloadModal} 
+      <FlightPlanDownloadModal
+        isOpen={showFlightPlanDownloadModal}
         onClose={() => setShowFlightPlanDownloadModal(false)}
         waypoints={waypoints}
         flightSegments={flightSegments}
