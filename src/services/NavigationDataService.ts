@@ -9,9 +9,20 @@ const getProxyUrl = () => {
   return `https://${projectId}.supabase.co/functions/v1/proxy-geoserver`;
 };
 // Sanitize user input for CQL queries to prevent injection attacks
+// Uses whitelist approach - only allow safe characters
 const sanitizeCQLInput = (input: string): string => {
-  // Remove special CQL characters that could be used for injection
-  return input.replace(/[%'"\\\[\]()]/g, '');
+  // Only allow alphanumeric, spaces, hyphens, and common accented characters
+  // This is safer than blacklisting specific characters
+  const sanitized = input.replace(/[^a-zA-Z0-9\s\-áàâãéèêíìîóòôõúùûçÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ]/g, '');
+  
+  // Additional protection: limit length and trim
+  return sanitized.trim().substring(0, 50);
+};
+
+// Escape single quotes for CQL ILIKE queries
+const escapeCQLValue = (input: string): string => {
+  // Escape single quotes by doubling them (CQL standard)
+  return input.replace(/'/g, "''");
 };
 
 // Validate search query format
@@ -102,14 +113,15 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
     const results: NavPoint[] = [];
 
     const fetchLayer = async (layerName: string) => {
-        // Sanitize input before using in CQL query
+        // Sanitize and escape input before using in CQL query
         const sanitizedQuery = sanitizeCQLInput(query);
+        const escapedQuery = escapeCQLValue(sanitizedQuery);
         
         let cql = '';
         if (layerName === 'ICA:airport') {
-            cql = `localidade_id ILIKE '%${sanitizedQuery}%' OR nome ILIKE '%${sanitizedQuery}%'`;
+            cql = `localidade_id ILIKE '%${escapedQuery}%' OR nome ILIKE '%${escapedQuery}%'`;
         } else {
-            cql = `ident ILIKE '%${sanitizedQuery}%'`;
+            cql = `ident ILIKE '%${escapedQuery}%'`;
         }
 
         try {
