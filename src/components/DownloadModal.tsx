@@ -33,7 +33,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     const time = new Date().toLocaleTimeString('pt-BR');
 
     let content = `═══════════════════════════════════════════════════════════════\n`;
-    content += `                    PLANO DE VOO - SKY NAVIGATION\n`;
+    content += `                    PLANO DE VOO - SKYFPL\n`;
     content += `═══════════════════════════════════════════════════════════════\n\n`;
     content += `Data: ${date}    Hora: ${time}\n`;
     content += `Aeronave: ${aircraftModel.label} (${aircraftModel.id})\n`;
@@ -81,7 +81,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     }
 
     content += `\n═══════════════════════════════════════════════════════════════\n`;
-    content += `                 Gerado por Sky Navigation\n`;
+    content += `                 Gerado por SkyFPL\n`;
     content += `═══════════════════════════════════════════════════════════════\n`;
 
     return content;
