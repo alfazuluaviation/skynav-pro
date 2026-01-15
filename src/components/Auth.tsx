@@ -10,12 +10,21 @@ export const Auth: React.FC = () => {
     const [isSignUp, setIsSignUp] = useState(false);
     const [message, setMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
 
+    // Use production URL for OAuth redirect to avoid localhost errors
+    const getRedirectUrl = () => {
+        // Always use production URL for OAuth
+        if (window.location.hostname === 'localhost') {
+            return 'https://skyfpl.lovable.app';
+        }
+        return window.location.origin;
+    };
+
     const handleGoogleAuth = async () => {
         setLoading(true);
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: window.location.origin
+                redirectTo: getRedirectUrl()
             }
         });
         if (error) setMessage({ type: 'error', text: error.message });
@@ -28,7 +37,13 @@ export const Auth: React.FC = () => {
         setMessage(null);
 
         const { error } = isSignUp
-            ? await supabase.auth.signUp({ email, password })
+            ? await supabase.auth.signUp({ 
+                email, 
+                password,
+                options: {
+                    emailRedirectTo: getRedirectUrl()
+                }
+              })
             : await supabase.auth.signInWithPassword({ email, password });
 
         if (error) {
@@ -53,8 +68,8 @@ export const Auth: React.FC = () => {
                     <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-teal-500 rounded-3xl flex items-center justify-center shadow-2xl mb-6 shadow-purple-500/20">
                         <IconPlane />
                     </div>
-                    <h1 className="text-3xl font-black text-white tracking-tight mb-2">SkyNav</h1>
-                    <p className="text-slate-400 text-sm font-medium uppercase tracking-[0.2em]">Navegação Aeronáutica</p>
+                    <h1 className="text-3xl font-black text-white tracking-tight mb-2">SkyFPL</h1>
+                    <p className="text-slate-400 text-sm font-medium uppercase tracking-[0.2em]">Planejador de Voo</p>
                 </div>
 
                 <button
