@@ -1,9 +1,13 @@
 import { LatLngBounds } from 'leaflet';
 import { NavPoint } from '../types';
 import { searchAerodrome } from './geminiService'; // Import searchAerodrome
+import { supabase } from '@/integrations/supabase/client';
 
-const BASE_WFS_URL = 'https://geoaisweb.decea.mil.br/geoserver/wfs';
-
+// Use Edge Function proxy to avoid CORS issues
+const getProxyUrl = () => {
+  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'gongoqjjpwphhttumdjm';
+  return `https://${projectId}.supabase.co/functions/v1/proxy-geoserver`;
+};
 // Sanitize user input for CQL queries to prevent injection attacks
 const sanitizeCQLInput = (input: string): string => {
   // Remove special CQL characters that could be used for injection
@@ -31,15 +35,12 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
     const fetchLayer = async (layerName: string) => {
         try {
             const params = new URLSearchParams({
-                service: 'WFS',
-                version: '1.0.0',
-                request: 'GetFeature',
                 typeName: layerName,
-                outputFormat: 'application/json',
-                bbox: bbox
+                bbox: bbox,
+                maxFeatures: '100'
             });
 
-            const response = await fetch(`${BASE_WFS_URL}?${params.toString()}`);
+            const response = await fetch(`${getProxyUrl()}?${params.toString()}`);
             if (!response.ok) return;
 
             const data = await response.json();
@@ -113,16 +114,12 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
 
         try {
             const params = new URLSearchParams({
-                service: 'WFS',
-                version: '1.0.0',
-                request: 'GetFeature',
                 typeName: layerName,
-                outputFormat: 'application/json',
                 maxFeatures: '15',
                 cql_filter: cql
             });
 
-            const url = `${BASE_WFS_URL}?${params.toString()}`;
+            const url = `${getProxyUrl()}?${params.toString()}`;
             const response = await fetch(url);
             if (!response.ok) {
                 console.error(`[NavDataService] Search failed for ${layerName} with status ${response.status}`);
