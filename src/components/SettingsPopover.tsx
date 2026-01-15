@@ -48,7 +48,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                         </span>
                         <div className="flex flex-col">
                             <span className="text-[10px] text-slate-500 font-medium truncate mb-1">
-                                {userEmail || 'usuario@skynav.com'}
+                                {userEmail || 'usuario@skyfpl.com'}
                             </span>
                             <button className="w-fit text-[10px] font-black text-purple-400 uppercase tracking-widest hover:text-purple-300 transition-colors">
                                 Perfil
