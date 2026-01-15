@@ -124,7 +124,7 @@ export const AerodromeModal: React.FC<AerodromeModalProps> = ({ isOpen, onClose,
   ] as const;
 
   return (
-    <div className="fixed inset-0 z-[3000] flex items-center justify-center">
+    <div className="fixed inset-0 z-[3000] flex items-end md:items-center justify-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
@@ -132,7 +132,7 @@ export const AerodromeModal: React.FC<AerodromeModalProps> = ({ isOpen, onClose,
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-5xl max-h-[95vh] bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden mx-4 flex flex-col">
+      <div className="relative w-full md:max-w-5xl max-h-[90vh] md:max-h-[95vh] bg-slate-900/95 backdrop-blur-xl border-t md:border border-slate-700/50 rounded-t-3xl md:rounded-2xl shadow-2xl overflow-hidden md:mx-4 flex flex-col animate-slide-up md:animate-in">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700/50 bg-gradient-to-r from-slate-800/50 to-slate-900/50">
           <div className="flex items-center gap-3">

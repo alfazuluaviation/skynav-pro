@@ -197,8 +197,8 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-slate-900/95 border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+    <div className="fixed inset-0 z-[3000] flex items-end md:items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="bg-slate-900/95 border-t md:border border-slate-700/50 rounded-t-3xl md:rounded-2xl shadow-2xl w-full md:max-w-lg md:mx-4 overflow-hidden animate-slide-up md:animate-in">
         {/* Header */}
         <div className="bg-gradient-to-r from-sky-600 to-blue-700 px-6 py-4 flex items-center justify-between">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">

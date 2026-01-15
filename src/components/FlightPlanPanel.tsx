@@ -27,6 +27,7 @@ interface FlightPlanPanelProps {
   onDeletePlan: (name: string) => void;
   onInvertRoute?: () => void;
   onOpenDownload?: () => void;
+  onClose?: () => void;
 }
 
 export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
@@ -45,7 +46,8 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   onLoadPlan,
   onDeletePlan,
   onInvertRoute,
-  onOpenDownload
+  onOpenDownload,
+  onClose
 }) => {
   const origin = waypoints.find(w => w.role === 'ORIGIN') || null;
   const destination = waypoints.find(w => w.role === 'DESTINATION') || null;
@@ -85,13 +87,27 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
 
   return (
     <>
-      <section className="w-[420px] bg-slate-900/95 backdrop-blur-xl border-r border-slate-700/50 flex flex-col z-[1001] shadow-2xl shrink-0 animate-in slide-in-from-left duration-300 relative">
+      {/* Mobile: Full screen overlay / Desktop: Fixed width panel */}
+      <section className="fixed inset-0 md:relative md:inset-auto w-full md:w-[420px] bg-slate-900/95 md:bg-slate-900/95 backdrop-blur-xl md:border-r border-slate-700/50 flex flex-col z-[1001] shadow-2xl md:shrink-0 animate-in md:slide-in-from-left duration-300">
+        {/* Mobile Header with close button */}
+        <div className="md:hidden flex items-center justify-between p-4 border-b border-slate-800 safe-top">
+          <h2 className="text-lg font-black text-white">Plano de Voo</h2>
+          <button 
+            onClick={onClose}
+            className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
         {/* Header / Info & Search Inputs */}
         <div className="p-4 bg-slate-900/50 border-b border-slate-800/50">
           {/* Aircraft Info & Speed Inputs */}
-          <div className="flex items-start justify-between mb-4 gap-2">
+          <div className="flex flex-col sm:flex-row items-start justify-between mb-4 gap-3 sm:gap-2">
             {/* Aircraft Input */}
-            <div className="flex-1 relative">
+            <div className="w-full sm:flex-1 relative">
               <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest block mb-1">Aeronave</label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-purple-400">
@@ -99,7 +115,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                 </div>
                 <input
                   type="text"
-                  className="w-full bg-slate-800/50 border border-slate-700 text-slate-200 text-xs font-bold rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-all uppercase placeholder-slate-600"
+                  className="w-full bg-slate-800/50 border border-slate-700 text-slate-200 text-sm sm:text-xs font-bold rounded-lg pl-9 pr-3 py-3 sm:py-2 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-all uppercase placeholder-slate-600"
                   placeholder="Selecionar Aeronave..."
                   value={aircraftQuery}
                   onChange={(e) => {
@@ -114,7 +130,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                     {filteredAircraft.map(ac => (
                       <button
                         key={ac.id}
-                        className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-purple-500/20 hover:text-white transition-colors flex justify-between group"
+                        className="w-full text-left px-3 py-3 sm:py-2 text-sm sm:text-xs font-bold text-slate-300 hover:bg-purple-500/20 hover:text-white transition-colors flex justify-between group active:bg-purple-500/30"
                         onClick={() => {
                           onAircraftModelChange(ac);
                           onPlannedSpeedChange(ac.speed);
@@ -132,12 +148,12 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
             </div>
             
             {/* Speed Input */}
-            <div className="w-24">
-              <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest block mb-1 text-right">Velocidade</label>
+            <div className="w-full sm:w-24">
+              <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest block mb-1 sm:text-right">Velocidade</label>
               <div className="relative">
                 <input
                   type="number"
-                  className="w-full bg-slate-800/50 border border-slate-700 text-slate-200 text-xs font-bold rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-all text-right"
+                  className="w-full bg-slate-800/50 border border-slate-700 text-slate-200 text-sm sm:text-xs font-bold rounded-lg pl-3 pr-8 py-3 sm:py-2 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-all text-right"
                   value={plannedSpeed}
                   onChange={(e) => onPlannedSpeedChange(Number(e.target.value))}
                 />
@@ -189,30 +205,30 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
             Rota
           </span>
           <div className="flex gap-1">
-            <button onClick={() => setIsSaveModalOpen(true)} title="Salvar Plano" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-green-400 transition-colors">
+            <button onClick={() => setIsSaveModalOpen(true)} title="Salvar Plano" className="p-2 sm:p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-green-400 transition-colors active:bg-slate-700">
               <IconDisk />
             </button>
-            <button onClick={() => setIsLoadModalOpen(true)} title="Carregar Plano" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-blue-400 transition-colors">
+            <button onClick={() => setIsLoadModalOpen(true)} title="Carregar Plano" className="p-2 sm:p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-blue-400 transition-colors active:bg-slate-700">
               <IconFolder />
             </button>
-            <button onClick={onOpenDownload} title="Download do Plano de Voo" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-cyan-400 transition-colors">
+            <button onClick={onOpenDownload} title="Download do Plano de Voo" className="p-2 sm:p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-cyan-400 transition-colors active:bg-slate-700">
               <IconDownload />
             </button>
             <div className="w-px h-4 bg-slate-700 mx-1 self-center"></div>
-            <button onClick={() => setIsExpanded(true)} title="Visualizar Plano de Voo" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors flex items-center gap-1">
+            <button onClick={() => setIsExpanded(true)} title="Visualizar Plano de Voo" className="hidden sm:flex p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors items-center gap-1">
               <IconMaximize />
             </button>
-            <button onClick={onInvertRoute} title="Inverter Plano de Voo" className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors">
+            <button onClick={onInvertRoute} title="Inverter Plano de Voo" className="p-2 sm:p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-white transition-colors active:bg-slate-700">
               <IconSwap />
             </button>
-            <button onClick={handleClearAll} title="Limpar Plano de Voo" className="p-1.5 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors">
+            <button onClick={handleClearAll} title="Limpar Plano de Voo" className="p-2 sm:p-1.5 rounded hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors active:bg-red-500/20">
               <IconTrash />
             </button>
           </div>
         </div>
         
         {/* List - Compact View */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0b0e14] p-4 space-y-2">
+        <div className="flex-1 overflow-y-auto custom-scrollbar touch-scroll bg-[#0b0e14] p-4 space-y-2 pb-20 md:pb-4">
           {waypoints.length === 0 ? (
             <div className="text-center py-8 opacity-30">
               <p className="text-[10px] uppercase font-bold">Nenhuma rota definida</p>
@@ -243,14 +259,14 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                       </span>
                       <span className="font-bold text-slate-200">{wp.icao || wp.name}</span>
                     </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       {!isOrigin && !isDest && (
                         <>
-                          <button onClick={() => onMoveWaypoint(wp.id, 'UP')} className="p-1 hover:text-purple-400"><IconArrowUp /></button>
-                          <button onClick={() => onMoveWaypoint(wp.id, 'DOWN')} className="p-1 hover:text-purple-400"><IconArrowDown /></button>
+                          <button onClick={() => onMoveWaypoint(wp.id, 'UP')} className="p-2 sm:p-1 hover:text-purple-400 active:text-purple-300"><IconArrowUp /></button>
+                          <button onClick={() => onMoveWaypoint(wp.id, 'DOWN')} className="p-2 sm:p-1 hover:text-purple-400 active:text-purple-300"><IconArrowDown /></button>
                         </>
                       )}
-                      <button onClick={() => onRemoveWaypoint(wp.id)} className="p-1 hover:text-red-400"><IconTrash /></button>
+                      <button onClick={() => onRemoveWaypoint(wp.id)} className="p-2 sm:p-1 hover:text-red-400 active:text-red-300"><IconTrash /></button>
                     </div>
                   </div>
                   {segment && (
@@ -267,7 +283,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
         
         {/* Footer Totals */}
         {waypoints.length > 1 && (
-          <div className="p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+          <div className="p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.5)] mb-16 md:mb-0">
             <div className="flex flex-col">
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Distância Total</span>
               <span className="text-xl font-black text-purple-400">
@@ -286,87 +302,90 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
       
       {/* EXPANDED MODAL */}
       {isExpanded && (
-        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-10 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-5xl h-[80vh] flex flex-col overflow-hidden">
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-10 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-5xl h-[95vh] sm:h-[80vh] flex flex-col overflow-hidden">
+            <div className="p-4 sm:p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
               <div>
-                <h2 className="text-2xl font-black text-white flex items-center gap-3">
-                  <IconMaximize /> PLANO DE VOO DETALHADO
+                <h2 className="text-lg sm:text-2xl font-black text-white flex items-center gap-3">
+                  <IconMaximize /> PLANO DE VOO
                 </h2>
-                <p className="text-slate-500 text-sm mt-1">{aircraftModel.label} @ {plannedSpeed} KT</p>
+                <p className="text-slate-500 text-xs sm:text-sm mt-1">{aircraftModel.label} @ {plannedSpeed} KT</p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={onOpenDownload} title="Download do Plano de Voo" className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-white font-bold transition-colors flex items-center gap-2">
-                  <IconDownload /> DOWNLOAD
+                <button onClick={onOpenDownload} title="Download do Plano de Voo" className="px-3 sm:px-4 py-2 bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 rounded-lg text-white font-bold transition-colors flex items-center gap-2 text-sm">
+                  <IconDownload /> <span className="hidden sm:inline">DOWNLOAD</span>
                 </button>
-                <button onClick={() => setIsExpanded(false)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white font-bold transition-colors">
+                <button onClick={() => setIsExpanded(false)} className="px-3 sm:px-4 py-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 rounded-lg text-white font-bold transition-colors text-sm">
                   FECHAR
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-auto p-6">
-              <table className="w-full text-left border-collapse">
-                <thead className="text-[10px] uppercase font-black text-slate-500 tracking-widest bg-slate-950/50 sticky top-0 z-10">
-                  <tr>
-                    <th className="p-4 rounded-tl-lg">Ponto</th>
-                    <th className="p-4">Tipo</th>
-                    <th className="p-4">Coordenadas</th>
-                    <th className="p-4 text-right">Rumo Mag.</th>
-                    <th className="p-4 text-right">Distância (NM)</th>
-                    <th className="p-4 text-right">ETE</th>
-                    <th className="p-4 text-right rounded-tr-lg">Dist. Acumulada</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm font-bold text-slate-300 divide-y divide-slate-800">
-                  {waypoints.map((wp, i) => {
-                    const segment = flightSegments[i];
-                    const inboundSegment = i > 0 ? flightSegments[i - 1] : null;
-                    const accumulatedDist = flightSegments.slice(0, i).reduce((acc, s) => acc + s.distance, 0);
-                    
-                    return (
-                      <tr key={wp.id} className="hover:bg-slate-800/30 transition-colors">
-                        <td className="p-4 font-mono text-white text-base">{wp.icao || wp.name}</td>
-                        <td className="p-4">
-                          <span className={`text-[9px] font-bold px-2 py-1 rounded text-black ${
-                            wp.role === 'ORIGIN' ? 'bg-teal-400' : 
-                            wp.role === 'DESTINATION' ? 'bg-purple-400' : 
-                            'bg-yellow-400'
-                          }`}>
-                            {wp.role === 'ORIGIN' ? 'ORIGEM' : wp.role === 'DESTINATION' ? 'DESTINO' : wp.type}
-                          </span>
-                        </td>
-                        <td className="p-4 font-mono text-slate-500 text-xs text-[10px]">
-                          {wp.lat.toFixed(4)}, {wp.lng.toFixed(4)}
-                        </td>
-                        <td className="p-4 text-right font-mono text-purple-400">
-                          {inboundSegment ? `${inboundSegment.track}°` : '-'}
-                        </td>
-                        <td className="p-4 text-right font-mono">
-                          {inboundSegment ? inboundSegment.distance.toFixed(1) : '-'}
-                        </td>
-                        <td className="p-4 text-right font-mono text-teal-400">
-                          {inboundSegment ? inboundSegment.ete : '-'}
-                        </td>
-                        <td className="p-4 text-right font-mono text-slate-400">
-                          {accumulatedDist > 0 ? accumulatedDist.toFixed(1) : '-'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot className="bg-slate-900/80 border-t-2 border-slate-700">
-                  <tr>
-                    <td colSpan={4} className="p-4 text-right font-black uppercase text-slate-500">Totais</td>
-                    <td className="p-4 text-right font-black text-white text-lg">
-                      {flightSegments.reduce((acc, s) => acc + s.distance, 0).toFixed(0)} NM
-                    </td>
-                    <td className="p-4 text-right font-black text-white text-lg">
-                      {((flightSegments.reduce((acc, s) => acc + s.distance, 0) / plannedSpeed)).toFixed(2).replace('.', ':')} H
-                    </td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
+            <div className="flex-1 overflow-auto p-4 sm:p-6 touch-scroll">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[600px]">
+                  <thead className="text-[10px] uppercase font-black text-slate-500 tracking-widest bg-slate-950/50 sticky top-0 z-10">
+                    <tr>
+                      <th className="p-3 sm:p-4 rounded-tl-lg">Ponto</th>
+                      <th className="p-3 sm:p-4">Tipo</th>
+                      <th className="p-3 sm:p-4 hidden sm:table-cell">Coordenadas</th>
+                      <th className="p-3 sm:p-4 text-right">Rumo</th>
+                      <th className="p-3 sm:p-4 text-right">Dist.</th>
+                      <th className="p-3 sm:p-4 text-right">ETE</th>
+                      <th className="p-3 sm:p-4 text-right rounded-tr-lg hidden sm:table-cell">Acum.</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm font-bold text-slate-300 divide-y divide-slate-800">
+                    {waypoints.map((wp, i) => {
+                      const segment = flightSegments[i];
+                      const inboundSegment = i > 0 ? flightSegments[i - 1] : null;
+                      const accumulatedDist = flightSegments.slice(0, i).reduce((acc, s) => acc + s.distance, 0);
+                      
+                      return (
+                        <tr key={wp.id} className="hover:bg-slate-800/30 transition-colors">
+                          <td className="p-3 sm:p-4 font-mono text-white text-sm sm:text-base">{wp.icao || wp.name}</td>
+                          <td className="p-3 sm:p-4">
+                            <span className={`text-[9px] font-bold px-2 py-1 rounded text-black ${
+                              wp.role === 'ORIGIN' ? 'bg-teal-400' : 
+                              wp.role === 'DESTINATION' ? 'bg-purple-400' : 
+                              'bg-yellow-400'
+                            }`}>
+                              {wp.role === 'ORIGIN' ? 'DEP' : wp.role === 'DESTINATION' ? 'ARR' : wp.type?.substring(0, 3) || 'WPT'}
+                            </span>
+                          </td>
+                          <td className="p-3 sm:p-4 font-mono text-slate-500 text-xs hidden sm:table-cell">
+                            {wp.lat.toFixed(4)}, {wp.lng.toFixed(4)}
+                          </td>
+                          <td className="p-3 sm:p-4 text-right font-mono text-purple-400">
+                            {inboundSegment ? `${inboundSegment.track}°` : '-'}
+                          </td>
+                          <td className="p-3 sm:p-4 text-right font-mono">
+                            {inboundSegment ? inboundSegment.distance.toFixed(1) : '-'}
+                          </td>
+                          <td className="p-3 sm:p-4 text-right font-mono text-teal-400">
+                            {inboundSegment ? inboundSegment.ete : '-'}
+                          </td>
+                          <td className="p-3 sm:p-4 text-right font-mono text-slate-400 hidden sm:table-cell">
+                            {accumulatedDist > 0 ? accumulatedDist.toFixed(1) : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-slate-900/80 border-t-2 border-slate-700">
+                    <tr>
+                      <td colSpan={3} className="p-3 sm:p-4 text-right font-black uppercase text-slate-500 hidden sm:table-cell">Totais</td>
+                      <td colSpan={2} className="p-3 sm:p-4 text-right font-black uppercase text-slate-500 sm:hidden">Totais</td>
+                      <td className="p-3 sm:p-4 text-right font-black text-white text-base sm:text-lg">
+                        {flightSegments.reduce((acc, s) => acc + s.distance, 0).toFixed(0)} NM
+                      </td>
+                      <td className="p-3 sm:p-4 text-right font-black text-white text-base sm:text-lg">
+                        {((flightSegments.reduce((acc, s) => acc + s.distance, 0) / plannedSpeed)).toFixed(2).replace('.', ':')} H
+                      </td>
+                      <td className="hidden sm:table-cell"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -374,8 +393,9 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
       
       {/* SAVE PLAN MODAL */}
       {isSaveModalOpen && (
-        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-6 animate-slide-up sm:animate-in">
+            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
             <h3 className="text-xl font-black text-white mb-4">Salvar Plano de Voo</h3>
             <form onSubmit={handleSaveSubmit}>
               <div className="mb-4">
@@ -383,15 +403,15 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                 <input
                   type="text"
                   autoFocus
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:border-green-500/50 focus:outline-none"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 sm:py-2 text-white focus:border-green-500/50 focus:outline-none text-base sm:text-sm"
                   placeholder="Ex: Voo SBGR-SBRJ"
                   value={planName}
                   onChange={e => setPlanName(e.target.value)}
                 />
               </div>
               <div className="flex gap-2 justify-end">
-                <button type="button" onClick={() => setIsSaveModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white font-bold">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white font-bold">Salvar</button>
+                <button type="button" onClick={() => setIsSaveModalOpen(false)} className="px-4 py-3 sm:py-2 rounded-lg text-slate-400 hover:text-white font-bold active:bg-slate-800">Cancelar</button>
+                <button type="submit" className="px-4 py-3 sm:py-2 bg-green-600 hover:bg-green-500 active:bg-green-700 rounded-lg text-white font-bold">Salvar</button>
               </div>
             </form>
           </div>
@@ -400,29 +420,30 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
       
       {/* LOAD PLAN MODAL */}
       {isLoadModalOpen && (
-        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh]">
+        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg flex flex-col max-h-[85vh] sm:max-h-[80vh] animate-slide-up sm:animate-in">
+            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mt-3 sm:hidden" />
             <div className="p-6 border-b border-slate-800">
               <h3 className="text-xl font-black text-white mb-1">Carregar Plano</h3>
               <p className="text-slate-500 text-xs">Selecione um plano salvo para carregar.</p>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 touch-scroll">
               {savedPlans && savedPlans.length === 0 ? (
                 <div className="text-center py-8 text-slate-600 font-bold text-xs uppercase">Nenhum plano salvo.</div>
               ) : (
                 savedPlans && savedPlans.map((plan, i) => (
                   <div 
                     key={i} 
-                    className="flex items-center justify-between p-3 bg-slate-800/30 border border-slate-800 hover:bg-slate-800 hover:border-blue-500/30 rounded-lg group transition-colors cursor-pointer"
+                    className="flex items-center justify-between p-4 sm:p-3 bg-slate-800/30 border border-slate-800 hover:bg-slate-800 active:bg-slate-700 hover:border-blue-500/30 rounded-lg group transition-colors cursor-pointer"
                     onClick={() => {
                       onLoadPlan(plan);
                       setIsLoadModalOpen(false);
                     }}
                   >
-                    <div>
-                      <div className="font-bold text-white text-sm">{plan.name}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-white text-sm truncate">{plan.name}</div>
                       <div className="text-[10px] text-slate-500 font-mono mt-1">
-                        {plan.date ? new Date(plan.date).toLocaleDateString() : 'Data não disponível'} • {plan.waypoints ? plan.waypoints.length : 0} pontos • {plan.aircraft ? plan.aircraft.label : 'Aeronave não definida'}
+                        {plan.date ? new Date(plan.date).toLocaleDateString() : 'Data não disponível'} • {plan.waypoints ? plan.waypoints.length : 0} pontos
                       </div>
                     </div>
                     <button 
@@ -430,7 +451,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                         e.stopPropagation();
                         if (confirm('Deletar este plano?')) onDeletePlan(plan.name);
                       }} 
-                      className="p-2 text-slate-600 hover:text-red-400 transition-colors"
+                      className="p-2 text-slate-600 hover:text-red-400 active:text-red-300 transition-colors"
                     >
                       <IconTrash />
                     </button>
@@ -438,8 +459,8 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                 ))
               )}
             </div>
-            <div className="p-4 border-t border-slate-800 flex justify-end">
-              <button onClick={() => setIsLoadModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white font-bold">Fechar</button>
+            <div className="p-4 border-t border-slate-800 flex justify-end safe-bottom">
+              <button onClick={() => setIsLoadModalOpen(false)} className="px-4 py-3 sm:py-2 rounded-lg text-slate-400 hover:text-white font-bold active:bg-slate-800">Fechar</button>
             </div>
           </div>
         </div>
