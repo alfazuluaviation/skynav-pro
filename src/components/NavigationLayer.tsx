@@ -30,7 +30,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
         const nextState = !isLocked;
         lockRef.current = nextState;
         setIsLocked(nextState);
-        console.log(`[SkyNav] Map Lock Status: ${nextState ? 'ENGAGED' : 'DISENGAGED'}`);
+        console.log(`[SkyFPL] Map Lock Status: ${nextState ? 'ENGAGED' : 'DISENGAGED'}`);
     };
 
     // MISSION CRITICAL: Aircraft tracking logic
