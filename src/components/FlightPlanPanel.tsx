@@ -88,7 +88,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   return (
     <>
       {/* Mobile: Full screen overlay / Desktop: Fixed width panel */}
-      <section className="fixed inset-0 md:relative md:inset-auto w-full md:w-[420px] bg-slate-900/95 md:bg-slate-900/95 backdrop-blur-xl md:border-r border-slate-700/50 flex flex-col z-[1001] shadow-2xl md:shrink-0 animate-in md:slide-in-from-left duration-300">
+      <section className="fixed inset-0 md:relative md:inset-auto w-full md:w-[420px] h-full md:h-auto max-h-screen bg-slate-900/95 md:bg-slate-900/95 backdrop-blur-xl md:border-r border-slate-700/50 flex flex-col z-[1001] shadow-2xl md:shrink-0 animate-in md:slide-in-from-left duration-300 overflow-hidden">
         {/* Mobile Header with close button */}
         <div className="md:hidden flex items-center justify-between p-4 border-b border-slate-800 safe-top">
           <h2 className="text-lg font-black text-white">Plano de Voo</h2>
@@ -228,7 +228,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
         </div>
         
         {/* List - Compact View */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar touch-scroll bg-[#0b0e14] p-4 space-y-2 pb-20 md:pb-4">
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar touch-scroll bg-[#0b0e14] p-4 space-y-2 pb-24 md:pb-4">
           {waypoints.length === 0 ? (
             <div className="text-center py-8 opacity-30">
               <p className="text-[10px] uppercase font-bold">Nenhuma rota definida</p>
