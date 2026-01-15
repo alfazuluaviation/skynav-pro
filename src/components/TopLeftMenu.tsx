@@ -14,7 +14,7 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = ({
   onOpenDownload
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  return <div className="absolute top-4 left-4 z-[2100] safe-top safe-left">
+  return <div className="absolute top-4 left-4 md:left-2 z-[2100] safe-top safe-left">
       {/* Hamburger Icon Button */}
       <button onClick={() => setIsOpen(!isOpen)} aria-label="Toggle menu" className="p-3 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl flex items-center justify-center hover:bg-slate-800 active:bg-slate-700 transition-all z-[2001] relative gap-0">
         <IconMenu />
