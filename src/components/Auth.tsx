@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { IconPlane, IconGoogle } from './Icons';
+import { IconGoogle } from './Icons';
+import logoSkyFPL from '@/assets/logo-skyfpl.png';
 
 export const Auth: React.FC = () => {
     const [loading, setLoading] = useState(false);
@@ -64,12 +65,13 @@ export const Auth: React.FC = () => {
             </div>
 
             <div className="w-full max-w-md bg-slate-900/50 backdrop-blur-2xl border border-slate-800 p-8 rounded-[2.5rem] shadow-3xl relative z-10 transition-all">
-                <div className="flex flex-col items-center mb-10">
-                    <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-teal-500 rounded-3xl flex items-center justify-center shadow-2xl mb-6 shadow-purple-500/20">
-                        <IconPlane />
-                    </div>
-                    <h1 className="text-3xl font-black text-white tracking-tight mb-2">SkyFPL</h1>
-                    <p className="text-slate-400 text-sm font-medium uppercase tracking-[0.2em]">Planejador de Voo</p>
+                <div className="flex flex-col items-center mb-8">
+                    <img 
+                        src={logoSkyFPL} 
+                        alt="SkyFPL Logo" 
+                        className="w-32 h-32 md:w-40 md:h-40 object-contain drop-shadow-2xl"
+                    />
+                    <p className="text-slate-400 text-sm font-medium uppercase tracking-[0.2em] mt-2">Planejador de Voo</p>
                 </div>
 
                 <button
