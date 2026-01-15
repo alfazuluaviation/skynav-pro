@@ -337,6 +337,15 @@ const App: React.FC = () => {
     });
   };
 
+  const handleInsertWaypoint = (waypoint: Waypoint, insertAfterIndex: number) => {
+    setWaypoints(prev => {
+      const newWaypoints = [...prev];
+      // Insert after the specified index (so before the next waypoint in the segment)
+      newWaypoints.splice(insertAfterIndex + 1, 0, waypoint);
+      return newWaypoints;
+    });
+  };
+
   const handleMoveWaypoint = (id: string, direction: 'UP' | 'DOWN') => {
     setWaypoints(prev => {
       const index = prev.findIndex(w => w.id === id);
@@ -730,6 +739,7 @@ const App: React.FC = () => {
               flightSegments={flightSegments}
               aircraftPosition={userPos}
               hideLockButton={showPlanPanel}
+              onInsertWaypoint={handleInsertWaypoint}
             />
           </MapContainer>
         </div>
