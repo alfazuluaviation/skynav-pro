@@ -2,10 +2,11 @@
 import React, { useState } from 'react';
 import {
     IconMenu, IconPlane, IconMap, IconRoute,
-    IconStar, IconFile, IconStore, IconSettings, IconMinus
+    IconStar, IconFile, IconStore, IconSettings, IconMinus, IconLayers
 } from './Icons';
 import { IconButton } from './IconButton';
 import { SettingsPopover } from './SettingsPopover';
+import { LayersMenu } from './LayersMenu';
 import { AiracCycle } from '../../types';
 
 interface SidebarProps {
@@ -40,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     airac,
 }) => {
     const [showSettings, setShowSettings] = useState(false);
+    const [showLayersMenu, setShowLayersMenu] = useState(false);
 
     return (
         <>
@@ -55,6 +57,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onClick={onTogglePlanPanel}
                         isActive={showPlanPanel}
                         activeColor="teal"
+                    />
+                    <IconButton
+                        icon={<IconLayers />}
+                        onClick={() => setShowLayersMenu(!showLayersMenu)}
+                        isActive={showLayersMenu}
+                        activeColor="purple"
+                        title="Cartas e Mapas"
                     />
                 </nav>
 
@@ -89,6 +98,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
             </aside>
 
+            {/* Desktop Layers Menu - Positioned to the left of sidebar */}
+            {showLayersMenu && (
+                <div className="hidden md:block absolute left-20 top-1/2 -translate-y-1/2 w-[340px] z-[2000] bg-slate-900 border border-slate-800 rounded-3xl shadow-3xl overflow-hidden animate-in shadow-black/80">
+                    <LayersMenu
+                        onClose={() => setShowLayersMenu(false)}
+                        activeLayers={activeLayers}
+                        onToggleLayer={onToggleLayer}
+                        downloadedLayers={downloadedLayers}
+                        position="left"
+                    />
+                </div>
+            )}
+
             {/* Mobile Bottom Navigation Bar */}
             <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[2000] bg-slate-900/95 backdrop-blur-xl border-t border-slate-800 safe-bottom">
                 <div className="flex items-center justify-around py-2 px-4">
@@ -97,6 +119,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onClick={onTogglePlanPanel}
                         isActive={showPlanPanel}
                         activeColor="teal"
+                    />
+
+                    <IconButton
+                        icon={<IconLayers />}
+                        onClick={() => setShowLayersMenu(!showLayersMenu)}
+                        isActive={showLayersMenu}
+                        activeColor="purple"
+                        title="Cartas e Mapas"
                     />
 
                     <IconButton
@@ -113,6 +143,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     />
                 </div>
             </nav>
+
+            {/* Mobile Layers Menu - Full Screen */}
+            {showLayersMenu && (
+                <div className="md:hidden fixed inset-0 z-[2100] bg-black/80 backdrop-blur-sm" onClick={() => setShowLayersMenu(false)}>
+                    <div 
+                        className="absolute bottom-16 left-0 right-0 max-h-[70vh] overflow-y-auto bg-slate-900 border-t border-slate-800 rounded-t-3xl animate-slide-up touch-scroll safe-bottom"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-2" />
+                        <LayersMenu
+                            onClose={() => setShowLayersMenu(false)}
+                            activeLayers={activeLayers}
+                            onToggleLayer={onToggleLayer}
+                            downloadedLayers={downloadedLayers}
+                            position="left"
+                            isMobile={true}
+                        />
+                    </div>
+                </div>
+            )}
 
             {/* Mobile Settings Popover - Full Screen */}
             {showSettings && (
