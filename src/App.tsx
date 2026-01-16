@@ -582,6 +582,15 @@ const App: React.FC = () => {
                 return `${Math.floor(latDeg)}°${latMin.toFixed(2)}'${latDir} ${Math.floor(lngDeg)}°${lngMin.toFixed(2)}'${lngDir}`;
               };
               
+              // Check if waypoint name is a coordinate pattern
+              const isCoordinateName = (name: string): boolean => {
+                return /^\d+°\d+\.\d+'.+\d+°\d+\.\d+'/.test(name);
+              };
+              
+              // Check if USER waypoint has a custom name (not coordinates)
+              const hasCustomName = wp.type === 'USER' && wp.name && !isCoordinateName(wp.name);
+              const coordString = formatCoord(wp.lat, wp.lng);
+              
               return (
                 <Marker key={wp.id} position={[wp.lat, wp.lng]} icon={defaultIcon}>
                   {/* Tooltip for USER waypoints showing coordinates and optional name */}
@@ -601,11 +610,11 @@ const App: React.FC = () => {
                         borderRadius: '4px',
                         color: '#a21caf'
                       }}>
-                        {wp.name && !wp.name.startsWith('WP') && (
+                        {hasCustomName && (
                           <div style={{ marginBottom: '2px', color: '#7e22ce' }}>📍 {wp.name}</div>
                         )}
                         <div style={{ fontSize: '10px', opacity: 0.9 }}>
-                          {formatCoord(wp.lat, wp.lng)}
+                          Ponto em {coordString}
                         </div>
                       </div>
                     </Tooltip>
