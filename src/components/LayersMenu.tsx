@@ -1,6 +1,8 @@
 
 import React from 'react';
-import { IconMap, IconPlane } from './Icons';
+import { IconMap, IconPlane, IconMountain } from './Icons';
+
+export type BaseMapType = 'light' | 'dark' | 'terrain' | 'satellite' | 'satellite-clean';
 
 interface LayersMenuProps {
     onClose: () => void;
@@ -9,6 +11,8 @@ interface LayersMenuProps {
     downloadedLayers: string[];
     position?: 'left' | 'right';
     isMobile?: boolean;
+    activeBaseMap?: BaseMapType;
+    onBaseMapChange?: (baseMap: BaseMapType) => void;
 }
 
 export const LayersMenu: React.FC<LayersMenuProps> = ({
@@ -18,6 +22,8 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
     downloadedLayers,
     position = 'right',
     isMobile = false,
+    activeBaseMap = 'dark',
+    onBaseMapChange,
 }) => {
     const chartTypes = [
         { id: 'REA', name: 'REA' },
@@ -28,7 +34,14 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
         { id: 'HIGH', name: 'ENRC HIGH' },
         { id: 'LOW', name: 'ENRC LOW' }
     ];
-    const mapTypes = ['Rodoviário claro', 'Rodoviário escuro', 'Terreno', 'Satélite', 'Satélite limpo'];
+    
+    const mapTypes: { id: BaseMapType; name: string; icon: 'plane' | 'mountain' }[] = [
+        { id: 'light', name: 'Rodoviário claro', icon: 'plane' },
+        { id: 'dark', name: 'Rodoviário escuro', icon: 'plane' },
+        { id: 'terrain', name: 'Terreno', icon: 'mountain' },
+        { id: 'satellite', name: 'Satélite', icon: 'plane' },
+        { id: 'satellite-clean', name: 'Satélite limpo', icon: 'plane' }
+    ];
 
     // Mobile content - without wrapper
     if (isMobile) {
@@ -86,16 +99,33 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                     <div className="h-px bg-slate-800 w-full opacity-30"></div>
 
                     <div className="grid grid-cols-3 gap-2">
-                        {mapTypes.slice(0, 3).map((name) => (
-                            <button key={name} className="flex flex-col items-center gap-1">
-                                <div className="w-full aspect-square rounded-xl border-2 border-slate-800 active:border-teal-500 transition-all bg-slate-800/40 flex items-center justify-center">
-                                    <IconPlane className="text-slate-500" />
-                                </div>
-                                <span className="text-[8px] font-black uppercase text-slate-500 text-center leading-tight">
-                                    {name}
-                                </span>
-                            </button>
-                        ))}
+                        {mapTypes.slice(0, 3).map((mapType) => {
+                            const isActive = activeBaseMap === mapType.id;
+                            return (
+                                <button 
+                                    key={mapType.id} 
+                                    onClick={() => onBaseMapChange?.(mapType.id)}
+                                    className="flex flex-col items-center gap-1"
+                                >
+                                    <div className={`w-full aspect-square rounded-xl border-2 transition-all flex items-center justify-center ${
+                                        isActive 
+                                            ? 'border-teal-400 bg-teal-500/20' 
+                                            : 'border-slate-800 active:border-teal-500 bg-slate-800/40'
+                                    }`}>
+                                        {mapType.icon === 'mountain' ? (
+                                            <IconMountain className={isActive ? "text-teal-400 w-5 h-5" : "text-slate-500 w-5 h-5"} />
+                                        ) : (
+                                            <IconPlane className={isActive ? "text-teal-400" : "text-slate-500"} />
+                                        )}
+                                    </div>
+                                    <span className={`text-[8px] font-black uppercase text-center leading-tight ${
+                                        isActive ? 'text-teal-400' : 'text-slate-500'
+                                    }`}>
+                                        {mapType.name}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
             </>
@@ -155,16 +185,33 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                 <div className="h-px bg-slate-800 w-full opacity-30"></div>
 
                 <div className="grid grid-cols-3 gap-3">
-                    {mapTypes.map((name) => (
-                        <button key={name} className="flex flex-col items-center gap-1.5 group">
-                            <div className="w-full aspect-square rounded-2xl border-2 border-slate-800 group-hover:border-teal-500 transition-all bg-slate-800/40 flex items-center justify-center">
-                                <IconPlane className="text-slate-500 group-hover:text-teal-400" />
-                            </div>
-                            <span className="text-[9px] font-black uppercase text-slate-500 group-hover:text-slate-300 text-center leading-tight">
-                                {name}
-                            </span>
-                        </button>
-                    ))}
+                    {mapTypes.map((mapType) => {
+                        const isActive = activeBaseMap === mapType.id;
+                        return (
+                            <button 
+                                key={mapType.id} 
+                                onClick={() => onBaseMapChange?.(mapType.id)}
+                                className="flex flex-col items-center gap-1.5 group"
+                            >
+                                <div className={`w-full aspect-square rounded-2xl border-2 transition-all flex items-center justify-center ${
+                                    isActive 
+                                        ? 'border-teal-400 bg-teal-500/20' 
+                                        : 'border-slate-800 group-hover:border-teal-500 bg-slate-800/40'
+                                }`}>
+                                    {mapType.icon === 'mountain' ? (
+                                        <IconMountain className={isActive ? "text-teal-400 w-5 h-5" : "text-slate-500 group-hover:text-teal-400 w-5 h-5"} />
+                                    ) : (
+                                        <IconPlane className={isActive ? "text-teal-400" : "text-slate-500 group-hover:text-teal-400"} />
+                                    )}
+                                </div>
+                                <span className={`text-[9px] font-black uppercase text-center leading-tight ${
+                                    isActive ? 'text-teal-400' : 'text-slate-500 group-hover:text-slate-300'
+                                }`}>
+                                    {mapType.name}
+                                </span>
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
         </>
