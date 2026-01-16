@@ -2,7 +2,8 @@
 import React from 'react';
 import { IconMap, IconPlane, IconMountain } from './Icons';
 
-export type BaseMapType = 'light' | 'dark' | 'terrain' | 'satellite' | 'satellite-clean';
+// Simplified to just 'roadmap' and 'terrain' - roadmap respects isNightMode for light/dark
+export type BaseMapType = 'roadmap' | 'terrain';
 
 interface LayersMenuProps {
     onClose: () => void;
@@ -22,7 +23,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
     downloadedLayers,
     position = 'right',
     isMobile = false,
-    activeBaseMap = 'dark',
+    activeBaseMap = 'roadmap',
     onBaseMapChange,
 }) => {
     const chartTypes = [
@@ -35,12 +36,10 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
         { id: 'LOW', name: 'ENRC LOW' }
     ];
     
+    // Simplified to just 2 options - roadmap respects night mode toggle in settings
     const mapTypes: { id: BaseMapType; name: string; icon: 'plane' | 'mountain' }[] = [
-        { id: 'light', name: 'Rodoviário claro', icon: 'plane' },
-        { id: 'dark', name: 'Rodoviário escuro', icon: 'plane' },
-        { id: 'terrain', name: 'Terreno', icon: 'mountain' },
-        { id: 'satellite', name: 'Satélite', icon: 'plane' },
-        { id: 'satellite-clean', name: 'Satélite limpo', icon: 'plane' }
+        { id: 'roadmap', name: 'Rodoviário', icon: 'plane' },
+        { id: 'terrain', name: 'Terreno', icon: 'mountain' }
     ];
 
     // Mobile content - without wrapper
@@ -98,8 +97,8 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
 
                     <div className="h-px bg-slate-800 w-full opacity-30"></div>
 
-                    <div className="grid grid-cols-3 gap-2">
-                        {mapTypes.slice(0, 3).map((mapType) => {
+                    <div className="grid grid-cols-2 gap-3">
+                        {mapTypes.map((mapType) => {
                             const isActive = activeBaseMap === mapType.id;
                             return (
                                 <button 
@@ -113,12 +112,12 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                             : 'border-slate-800 active:border-teal-500 bg-slate-800/40'
                                     }`}>
                                         {mapType.icon === 'mountain' ? (
-                                            <IconMountain className={isActive ? "text-teal-400 w-5 h-5" : "text-slate-500 w-5 h-5"} />
+                                            <IconMountain className={isActive ? "text-teal-400 w-6 h-6" : "text-slate-500 w-6 h-6"} />
                                         ) : (
-                                            <IconPlane className={isActive ? "text-teal-400" : "text-slate-500"} />
+                                            <IconPlane className={isActive ? "text-teal-400 w-6 h-6" : "text-slate-500 w-6 h-6"} />
                                         )}
                                     </div>
-                                    <span className={`text-[8px] font-black uppercase text-center leading-tight ${
+                                    <span className={`text-[9px] font-black uppercase text-center leading-tight ${
                                         isActive ? 'text-teal-400' : 'text-slate-500'
                                     }`}>
                                         {mapType.name}
@@ -184,14 +183,14 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
 
                 <div className="h-px bg-slate-800 w-full opacity-30"></div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                     {mapTypes.map((mapType) => {
                         const isActive = activeBaseMap === mapType.id;
                         return (
                             <button 
                                 key={mapType.id} 
                                 onClick={() => onBaseMapChange?.(mapType.id)}
-                                className="flex flex-col items-center gap-1.5 group"
+                                className="flex flex-col items-center gap-2 group"
                             >
                                 <div className={`w-full aspect-square rounded-2xl border-2 transition-all flex items-center justify-center ${
                                     isActive 
@@ -199,12 +198,12 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                         : 'border-slate-800 group-hover:border-teal-500 bg-slate-800/40'
                                 }`}>
                                     {mapType.icon === 'mountain' ? (
-                                        <IconMountain className={isActive ? "text-teal-400 w-5 h-5" : "text-slate-500 group-hover:text-teal-400 w-5 h-5"} />
+                                        <IconMountain className={isActive ? "text-teal-400 w-7 h-7" : "text-slate-500 group-hover:text-teal-400 w-7 h-7"} />
                                     ) : (
-                                        <IconPlane className={isActive ? "text-teal-400" : "text-slate-500 group-hover:text-teal-400"} />
+                                        <IconPlane className={isActive ? "text-teal-400 w-7 h-7" : "text-slate-500 group-hover:text-teal-400 w-7 h-7"} />
                                     )}
                                 </div>
-                                <span className={`text-[9px] font-black uppercase text-center leading-tight ${
+                                <span className={`text-[10px] font-black uppercase text-center leading-tight ${
                                     isActive ? 'text-teal-400' : 'text-slate-500 group-hover:text-slate-300'
                                 }`}>
                                     {mapType.name}
