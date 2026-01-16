@@ -92,7 +92,7 @@ const App: React.FC = () => {
     ete: null,
   });
 
-  const [isFollowing, setIsFollowing] = useState(true);
+  const [isFollowing, setIsFollowing] = useState(false);
   const [isNightMode, setIsNightMode] = useState(true);
   const [activeBaseMap, setActiveBaseMap] = useState<BaseMapType>('roadmap');
   const [airac, setAirac] = useState<AiracCycle | null>(null);
