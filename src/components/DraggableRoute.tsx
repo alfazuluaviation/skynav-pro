@@ -78,13 +78,20 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     return [(start.lat + end.lat) / 2, (start.lng + end.lng) / 2];
   }, []);
 
-  // Handle click on route line to start drag
-  const handleRouteClick = useCallback((e: L.LeafletMouseEvent, segmentIndex: number) => {
+  // Handle mousedown on route line to start drag - MUST use mousedown, not click
+  // This is critical because Leaflet starts map panning on mousedown
+  const handleRouteMouseDown = useCallback((e: L.LeafletMouseEvent, segmentIndex: number) => {
+    // Stop propagation to prevent map from starting to pan
     L.DomEvent.stopPropagation(e.originalEvent);
     L.DomEvent.preventDefault(e.originalEvent);
     
     const { lat, lng } = e.latlng;
-    console.log('[DraggableRoute] Click on segment', segmentIndex, 'at', lat.toFixed(4), lng.toFixed(4));
+    console.log('[DraggableRoute] MouseDown on segment', segmentIndex, 'at', lat.toFixed(4), lng.toFixed(4));
+    
+    // Disable map dragging IMMEDIATELY
+    map.dragging.disable();
+    map.doubleClickZoom.disable();
+    map.scrollWheelZoom.disable();
     
     setDragState({
       isDragging: true,
@@ -93,7 +100,6 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
       nearbyPoint: null,
     });
     
-    map.dragging.disable();
     map.getContainer().style.cursor = 'grabbing';
     fetchNearbyPoints(lat, lng);
   }, [map, fetchNearbyPoints]);
@@ -101,6 +107,7 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
   // Handle touch start on route
   const handleTouchStart = useCallback((e: React.TouchEvent, segmentIndex: number) => {
     e.stopPropagation();
+    e.preventDefault();
     
     const touch = e.touches[0];
     const container = map.getContainer();
@@ -109,6 +116,11 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     
     console.log('[DraggableRoute] Touch on segment', segmentIndex, 'at', point.lat.toFixed(4), point.lng.toFixed(4));
     
+    // Disable map dragging IMMEDIATELY
+    map.dragging.disable();
+    map.doubleClickZoom.disable();
+    map.scrollWheelZoom.disable();
+    
     setDragState({
       isDragging: true,
       segmentIndex,
@@ -116,7 +128,7 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
       nearbyPoint: null,
     });
     
-    map.dragging.disable();
+    map.getContainer().style.cursor = 'grabbing';
     fetchNearbyPoints(point.lat, point.lng);
   }, [map, fetchNearbyPoints]);
 
@@ -125,9 +137,14 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     if (!dragStateRef.current.isDragging) return;
     
     const state = dragStateRef.current;
+    
+    // Re-enable map interactions FIRST
+    map.dragging.enable();
+    map.doubleClickZoom.enable();
+    map.scrollWheelZoom.enable();
+    map.getContainer().style.cursor = '';
+    
     if (!state.currentPosition) {
-      map.dragging.enable();
-      map.getContainer().style.cursor = '';
       setDragState({
         isDragging: false,
         segmentIndex: -1,
@@ -171,7 +188,7 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     
     onInsertWaypoint(newWaypoint, segmentIndex);
     
-    // Reset
+    // Reset state
     setDragState({
       isDragging: false,
       segmentIndex: -1,
@@ -179,8 +196,6 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
       nearbyPoint: null,
     });
     setNearbyPoints([]);
-    map.dragging.enable();
-    map.getContainer().style.cursor = '';
   }, [map, onInsertWaypoint]);
 
   // Map event handlers for drag (mouse + touch support)
@@ -272,14 +287,16 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
               lineJoin: 'round',
             }}
             eventHandlers={{
-              click: (e) => handleRouteClick(e, index),
+              mousedown: (e) => handleRouteMouseDown(e, index),
               mouseover: () => {
                 setHoveredSegment(index);
                 map.getContainer().style.cursor = 'grab';
               },
               mouseout: () => {
-                setHoveredSegment(null);
-                map.getContainer().style.cursor = '';
+                if (!dragState.isDragging) {
+                  setHoveredSegment(null);
+                  map.getContainer().style.cursor = '';
+                }
               },
             }}
           >
