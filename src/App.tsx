@@ -20,6 +20,7 @@ import { ChartsModal } from './components/ChartsModal';
 import { AerodromeModal } from './components/AerodromeModal';
 import { DownloadModal } from './components/DownloadModal';
 import { FlightPlanDownloadModal } from './components/FlightPlanDownloadModal';
+import { BaseMapType } from './components/LayersMenu';
 
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -93,6 +94,7 @@ const App: React.FC = () => {
 
   const [isFollowing, setIsFollowing] = useState(true);
   const [isNightMode, setIsNightMode] = useState(true);
+  const [activeBaseMap, setActiveBaseMap] = useState<BaseMapType>('dark');
   const [airac, setAirac] = useState<AiracCycle | null>(null);
   const [charts, setCharts] = useState<ChartConfig[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -499,6 +501,8 @@ const App: React.FC = () => {
         onDownloadLayer={handleChartDownload}
         syncingLayers={syncingLayers}
         airac={airac}
+        activeBaseMap={activeBaseMap}
+        onBaseMapChange={setActiveBaseMap}
       />
 
       {/* MAIN CONTENT AREA */}
@@ -553,12 +557,31 @@ const App: React.FC = () => {
               showPlanPanel={showPlanPanel}
             />
 
-            <TileLayer
-              url={isNightMode
-                ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              }
-            />
+            {/* Base Map Layer */}
+            {activeBaseMap === 'terrain' ? (
+              <TileLayer
+                url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+                maxZoom={17}
+              />
+            ) : activeBaseMap === 'satellite' ? (
+              <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                maxZoom={19}
+              />
+            ) : activeBaseMap === 'satellite-clean' ? (
+              <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                maxZoom={19}
+              />
+            ) : activeBaseMap === 'light' ? (
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+            ) : (
+              <TileLayer
+                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              />
+            )}
 
             {userPos && userPos[0] !== 0 && <Marker position={userPos} icon={planeIcon} zIndexOffset={1000} />}
 
