@@ -6,7 +6,7 @@ import {
 } from './Icons';
 import { IconButton } from './IconButton';
 import { SettingsPopover } from './SettingsPopover';
-import { LayersMenu } from './LayersMenu';
+import { LayersMenu, BaseMapType } from './LayersMenu';
 import { AiracCycle } from '../../types';
 
 interface SidebarProps {
@@ -23,6 +23,8 @@ interface SidebarProps {
     onDownloadLayer: (layer: string) => void;
     syncingLayers: Record<string, number>;
     airac: AiracCycle | null;
+    activeBaseMap: BaseMapType;
+    onBaseMapChange: (baseMap: BaseMapType) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -39,6 +41,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onDownloadLayer,
     syncingLayers,
     airac,
+    activeBaseMap,
+    onBaseMapChange,
 }) => {
     const [showSettings, setShowSettings] = useState(false);
     const [showLayersMenu, setShowLayersMenu] = useState(false);
@@ -107,6 +111,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onToggleLayer={onToggleLayer}
                         downloadedLayers={downloadedLayers}
                         position="left"
+                        activeBaseMap={activeBaseMap}
+                        onBaseMapChange={onBaseMapChange}
                     />
                 </div>
             )}
@@ -159,6 +165,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             downloadedLayers={downloadedLayers}
                             position="left"
                             isMobile={true}
+                            activeBaseMap={activeBaseMap}
+                            onBaseMapChange={onBaseMapChange}
                         />
                     </div>
                 </div>
