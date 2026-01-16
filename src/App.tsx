@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Waypoint, FlightStats, ChartConfig, AiracCycle, FlightSegment, SavedPlan, NavPoint } from '../types';
 import { calculateDistance, calculateBearing, formatTime, applyMagneticVariation, getMagneticDeclination } from './utils/geoUtils';
@@ -569,11 +569,50 @@ const App: React.FC = () => {
 
             {userPos && <Marker position={userPos} icon={planeIcon} zIndexOffset={1000} />}
 
-            {waypoints.map((wp) => (
-              <Marker key={wp.id} position={[wp.lat, wp.lng]} icon={defaultIcon}>
-                <Popup><div className="p-2 font-black text-[10px] uppercase text-purple-400">{wp.name}</div></Popup>
-              </Marker>
-            ))}
+            {waypoints.map((wp) => {
+              // Format coordinates for USER waypoints
+              const formatCoord = (lat: number, lng: number): string => {
+                const latDir = lat >= 0 ? 'N' : 'S';
+                const lngDir = lng >= 0 ? 'E' : 'W';
+                const latDeg = Math.abs(lat);
+                const lngDeg = Math.abs(lng);
+                const latMin = (latDeg % 1) * 60;
+                const lngMin = (lngDeg % 1) * 60;
+                return `${Math.floor(latDeg)}°${latMin.toFixed(2)}'${latDir} ${Math.floor(lngDeg)}°${lngMin.toFixed(2)}'${lngDir}`;
+              };
+              
+              return (
+                <Marker key={wp.id} position={[wp.lat, wp.lng]} icon={defaultIcon}>
+                  {/* Tooltip for USER waypoints showing coordinates and optional name */}
+                  {wp.type === 'USER' && (
+                    <Tooltip 
+                      direction="top" 
+                      offset={[0, -40]} 
+                      opacity={0.95}
+                      className="user-waypoint-tooltip"
+                    >
+                      <div style={{ 
+                        fontSize: '11px', 
+                        fontWeight: 'bold', 
+                        textAlign: 'center',
+                        padding: '4px 8px',
+                        background: '#fae8ff',
+                        borderRadius: '4px',
+                        color: '#a21caf'
+                      }}>
+                        {wp.name && !wp.name.startsWith('WP') && (
+                          <div style={{ marginBottom: '2px', color: '#7e22ce' }}>📍 {wp.name}</div>
+                        )}
+                        <div style={{ fontSize: '10px', opacity: 0.9 }}>
+                          {formatCoord(wp.lat, wp.lng)}
+                        </div>
+                      </div>
+                    </Tooltip>
+                  )}
+                  <Popup><div className="p-2 font-black text-[10px] uppercase text-purple-400">{wp.name}</div></Popup>
+                </Marker>
+              );
+            })}
 
             {/* Route rendered in NavigationLayer */}
 
