@@ -60,29 +60,8 @@ const App: React.FC = () => {
   const [loadingSession, setLoadingSession] = useState(true);
   const [showPlanPanel, setShowPlanPanel] = useState(false);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
-  const [userPos, setUserPos] = useState<[number, number]>([-12.9714, -38.5014]);
-
-  useEffect(() => {
-    const fetchAircraftPosition = async () => {
-      // Busca a posição mais recente do callsign SKYN01
-      const { data, error } = await supabase
-        .from('aircraft_positions')
-        .select('latitude, longitude')
-        .eq('callsign', 'SKYN01')
-        .single();
-
-      if (data && !error) {
-        // Atualiza a posição do ícone no mapa com os dados do banco
-        setUserPos([data.latitude, data.longitude]);
-      }
-    };
-
-    // Chama a função imediatamente e repete a cada 5 segundos (Transponder)
-    fetchAircraftPosition();
-    const interval = setInterval(fetchAircraftPosition, 5000);
-
-    return () => clearInterval(interval); // Limpa o timer se fechar o app
-  }, []);
+  // User position from GPS - null until GPS provides first position
+  const [userPos, setUserPos] = useState<[number, number] | null>(null);
 
   const [stats, setStats] = useState<FlightStats>({
     groundSpeed: 0,
@@ -580,7 +559,7 @@ const App: React.FC = () => {
               />
             )}
 
-            {userPos && userPos[0] !== 0 && <Marker position={userPos} icon={planeIcon} zIndexOffset={1000} />}
+            {userPos && <Marker position={userPos} icon={planeIcon} zIndexOffset={1000} />}
 
             {waypoints.map((wp) => (
               <Marker key={wp.id} position={[wp.lat, wp.lng]} icon={defaultIcon}>
@@ -754,7 +733,7 @@ const App: React.FC = () => {
               onPointSelect={(point) => handleAddWaypoint(point, 'WAYPOINT')}
               waypoints={waypoints}
               flightSegments={flightSegments}
-              aircraftPosition={userPos}
+              aircraftPosition={userPos ?? undefined}
               hideLockButton={showPlanPanel}
               onInsertWaypoint={handleInsertWaypoint}
             />
