@@ -94,11 +94,99 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     });
     
     map.dragging.disable();
+    map.getContainer().style.cursor = 'grabbing';
     fetchNearbyPoints(lat, lng);
   }, [map, fetchNearbyPoints]);
 
-  // Map event handlers for drag
+  // Handle touch start on route
+  const handleTouchStart = useCallback((e: React.TouchEvent, segmentIndex: number) => {
+    e.stopPropagation();
+    
+    const touch = e.touches[0];
+    const container = map.getContainer();
+    const rect = container.getBoundingClientRect();
+    const point = map.containerPointToLatLng([touch.clientX - rect.left, touch.clientY - rect.top]);
+    
+    console.log('[DraggableRoute] Touch on segment', segmentIndex, 'at', point.lat.toFixed(4), point.lng.toFixed(4));
+    
+    setDragState({
+      isDragging: true,
+      segmentIndex,
+      currentPosition: [point.lat, point.lng],
+      nearbyPoint: null,
+    });
+    
+    map.dragging.disable();
+    fetchNearbyPoints(point.lat, point.lng);
+  }, [map, fetchNearbyPoints]);
+
+  // Handle drop/insert
+  const handleDrop = useCallback(() => {
+    if (!dragStateRef.current.isDragging) return;
+    
+    const state = dragStateRef.current;
+    if (!state.currentPosition) {
+      map.dragging.enable();
+      map.getContainer().style.cursor = '';
+      setDragState({
+        isDragging: false,
+        segmentIndex: -1,
+        currentPosition: null,
+        nearbyPoint: null,
+      });
+      return;
+    }
+    
+    const [lat, lng] = state.currentPosition;
+    const segmentIndex = state.segmentIndex;
+    const nearbyPoint = state.nearbyPoint;
+    
+    console.log('[DraggableRoute] Drop at', lat.toFixed(4), lng.toFixed(4), 'snap:', nearbyPoint?.name);
+    
+    // Create new waypoint
+    let newWaypoint: Waypoint;
+    
+    if (nearbyPoint) {
+      newWaypoint = {
+        id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: nearbyPoint.name,
+        icao: nearbyPoint.icao,
+        lat: nearbyPoint.lat,
+        lng: nearbyPoint.lng,
+        type: (nearbyPoint.type === 'vor' ? 'VOR' : (nearbyPoint.type === 'ndb' || nearbyPoint.type === 'fix') ? 'FIX' : 'AIRPORT') as 'AIRPORT' | 'FIX' | 'VOR' | 'USER',
+        description: nearbyPoint.type,
+        role: 'WAYPOINT',
+      };
+    } else {
+      newWaypoint = {
+        id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: `WP${String(segmentIndex + 2).padStart(2, '0')}`,
+        lat,
+        lng,
+        type: 'USER',
+        description: `Ponto em ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+        role: 'WAYPOINT',
+      };
+    }
+    
+    onInsertWaypoint(newWaypoint, segmentIndex);
+    
+    // Reset
+    setDragState({
+      isDragging: false,
+      segmentIndex: -1,
+      currentPosition: null,
+      nearbyPoint: null,
+    });
+    setNearbyPoints([]);
+    map.dragging.enable();
+    map.getContainer().style.cursor = '';
+  }, [map, onInsertWaypoint]);
+
+  // Map event handlers for drag (mouse + touch support)
   useEffect(() => {
+    const container = map.getContainer();
+    
     const onMouseMove = (e: L.LeafletMouseEvent) => {
       if (!dragStateRef.current.isDragging) return;
       
@@ -107,77 +195,34 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
       fetchNearbyPoints(lat, lng);
     };
 
-    const onMouseUp = () => {
+    const onTouchMove = (e: TouchEvent) => {
       if (!dragStateRef.current.isDragging) return;
+      e.preventDefault();
       
-      const state = dragStateRef.current;
-      if (!state.currentPosition) {
-        map.dragging.enable();
-        setDragState({
-          isDragging: false,
-          segmentIndex: -1,
-          currentPosition: null,
-          nearbyPoint: null,
-        });
-        return;
-      }
-      
-      const [lat, lng] = state.currentPosition;
-      const segmentIndex = state.segmentIndex;
-      const nearbyPoint = state.nearbyPoint;
-      
-      console.log('[DraggableRoute] Drop at', lat.toFixed(4), lng.toFixed(4), 'snap:', nearbyPoint?.name);
-      
-      // Create new waypoint
-      let newWaypoint: Waypoint;
-      
-      if (nearbyPoint) {
-        newWaypoint = {
-          id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: nearbyPoint.name,
-          icao: nearbyPoint.icao,
-          lat: nearbyPoint.lat,
-          lng: nearbyPoint.lng,
-          type: (nearbyPoint.type === 'vor' ? 'VOR' : (nearbyPoint.type === 'ndb' || nearbyPoint.type === 'fix') ? 'FIX' : 'AIRPORT') as 'AIRPORT' | 'FIX' | 'VOR' | 'USER',
-          description: nearbyPoint.type,
-          role: 'WAYPOINT',
-        };
-      } else {
-        newWaypoint = {
-          id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: `WP${String(segmentIndex + 2).padStart(2, '0')}`,
-          lat,
-          lng,
-          type: 'USER',
-          description: `Ponto em ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-          role: 'WAYPOINT',
-        };
-      }
-      
-      onInsertWaypoint(newWaypoint, segmentIndex);
-      
-      // Reset
-      setDragState({
-        isDragging: false,
-        segmentIndex: -1,
-        currentPosition: null,
-        nearbyPoint: null,
-      });
-      setNearbyPoints([]);
-      map.dragging.enable();
+      const touch = e.touches[0];
+      const point = map.containerPointToLatLng([touch.clientX - container.getBoundingClientRect().left, touch.clientY - container.getBoundingClientRect().top]);
+      setDragState(prev => ({ ...prev, currentPosition: [point.lat, point.lng] }));
+      fetchNearbyPoints(point.lat, point.lng);
     };
+
+    const onMouseUp = () => handleDrop();
+    const onTouchEnd = () => handleDrop();
 
     map.on('mousemove', onMouseMove);
     map.on('mouseup', onMouseUp);
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd);
 
     return () => {
       map.off('mousemove', onMouseMove);
       map.off('mouseup', onMouseUp);
+      container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
       if (fetchTimeoutRef.current) {
         clearTimeout(fetchTimeoutRef.current);
       }
     };
-  }, [map, onInsertWaypoint, fetchNearbyPoints]);
+  }, [map, handleDrop, fetchNearbyPoints]);
 
   // Create drag indicator icon
   const createDragIcon = (hasSnap: boolean) => L.divIcon({
@@ -220,21 +265,34 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
             key={`segment-${index}`}
             positions={[[start.lat, start.lng], [end.lat, end.lng]]}
             pathOptions={{
-              color: isHovered ? '#f0abfc' : '#d946ef',
-              weight: isHovered ? 8 : 5,
-              opacity: 0.9,
+              color: isHovered ? '#22c55e' : '#d946ef',
+              weight: isHovered ? 10 : 6,
+              opacity: 0.95,
               lineCap: 'round',
               lineJoin: 'round',
             }}
             eventHandlers={{
               click: (e) => handleRouteClick(e, index),
-              mouseover: () => setHoveredSegment(index),
-              mouseout: () => setHoveredSegment(null),
+              mouseover: () => {
+                setHoveredSegment(index);
+                map.getContainer().style.cursor = 'grab';
+              },
+              mouseout: () => {
+                setHoveredSegment(null);
+                map.getContainer().style.cursor = '';
+              },
             }}
           >
-            <Tooltip direction="top" offset={[0, -10]} opacity={0.95} sticky>
-              <div style={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 4px' }}>
-                ✋ Clique e arraste para inserir waypoint
+            <Tooltip direction="top" offset={[0, -15]} opacity={0.98} sticky>
+              <div style={{ 
+                fontSize: '12px', 
+                fontWeight: 'bold', 
+                padding: '6px 10px',
+                background: '#15803d',
+                color: 'white',
+                borderRadius: '6px',
+              }}>
+                ✋ Arraste para inserir ponto
               </div>
             </Tooltip>
           </Polyline>
