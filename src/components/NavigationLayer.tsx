@@ -25,9 +25,9 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     const [points, setPoints] = useState<NavPoint[]>([]);
     const [zoom, setZoom] = useState(map.getZoom());
     
-    // THE ARMOR: Persistence reference to block external move commands
-    const [isLocked, setIsLocked] = useState(true);
-    const lockRef = useRef(true);
+    // Map starts UNLOCKED (free to drag) - user can lock to follow aircraft position
+    const [isLocked, setIsLocked] = useState(false);
+    const lockRef = useRef(false);
 
     const toggleLock = (e: React.MouseEvent) => {
         e.preventDefault();
