@@ -539,9 +539,6 @@ const App: React.FC = () => {
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
             onCenterOnUser={handleCenterOnUser}
-            activeLayers={activeLayers}
-            onToggleLayer={handleToggleLayer}
-            downloadedLayers={downloadedLayers}
           />
 
           <MapContainer
