@@ -37,9 +37,10 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
     ];
     
     // Simplified to just 2 options - roadmap respects night mode toggle in settings
-    const mapTypes: { id: BaseMapType; name: string; icon: 'plane' | 'mountain' }[] = [
-        { id: 'roadmap', name: 'Rodoviário', icon: 'plane' },
-        { id: 'terrain', name: 'Terreno', icon: 'mountain' }
+    // Terrain has max zoom limitation (levels 15-17 depending on region)
+    const mapTypes: { id: BaseMapType; name: string; icon: 'plane' | 'mountain'; description: string }[] = [
+        { id: 'roadmap', name: 'Rodoviário', icon: 'plane', description: 'Navegação urbana' },
+        { id: 'terrain', name: 'Terreno', icon: 'mountain', description: 'Relevo e elevação' }
     ];
 
     // Mobile content - without wrapper
@@ -106,19 +107,25 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                     onClick={() => onBaseMapChange?.(mapType.id)}
                                     className="flex flex-col items-center gap-1"
                                 >
-                                    <div className={`w-full aspect-square rounded-xl border-2 transition-all flex items-center justify-center ${
+                                    <div className={`w-full aspect-square rounded-xl border-2 transition-all flex items-center justify-center relative ${
                                         isActive 
-                                            ? 'border-teal-400 bg-teal-500/20' 
-                                            : 'border-slate-800 active:border-teal-500 bg-slate-800/40'
-                                    }`}>
+                                            ? 'border-purple-400 shadow-lg' 
+                                            : 'border-slate-800 active:border-purple-500 bg-slate-800/40'
+                                    }`}
+                                    style={{
+                                        backgroundColor: isActive ? '#7e22ce' : 'rgba(30, 41, 59, 0.6)'
+                                    }}>
                                         {mapType.icon === 'mountain' ? (
-                                            <IconMountain className={isActive ? "text-teal-400 w-6 h-6" : "text-slate-500 w-6 h-6"} />
+                                            <IconMountain className={isActive ? "text-white w-6 h-6" : "text-slate-400 w-6 h-6"} />
                                         ) : (
-                                            <IconPlane className={isActive ? "text-teal-400 w-6 h-6" : "text-slate-500 w-6 h-6"} />
+                                            <IconPlane className={isActive ? "text-white w-6 h-6" : "text-slate-400 w-6 h-6"} />
+                                        )}
+                                        {isActive && (
+                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-purple-500 rounded-full border-2 border-slate-900"></div>
                                         )}
                                     </div>
                                     <span className={`text-[9px] font-black uppercase text-center leading-tight ${
-                                        isActive ? 'text-teal-400' : 'text-slate-500'
+                                        isActive ? 'text-white' : 'text-slate-400'
                                     }`}>
                                         {mapType.name}
                                     </span>
@@ -192,19 +199,25 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                 onClick={() => onBaseMapChange?.(mapType.id)}
                                 className="flex flex-col items-center gap-2 group"
                             >
-                                <div className={`w-full aspect-square rounded-2xl border-2 transition-all flex items-center justify-center ${
+                                <div className={`w-full aspect-square rounded-2xl border-2 transition-all flex items-center justify-center relative ${
                                     isActive 
-                                        ? 'border-teal-400 bg-teal-500/20' 
-                                        : 'border-slate-800 group-hover:border-teal-500 bg-slate-800/40'
-                                }`}>
+                                        ? 'border-purple-400 shadow-lg' 
+                                        : 'border-slate-800 group-hover:border-purple-500 bg-slate-800/40'
+                                }`}
+                                style={{
+                                    backgroundColor: isActive ? '#7e22ce' : 'rgba(30, 41, 59, 0.6)'
+                                }}>
                                     {mapType.icon === 'mountain' ? (
-                                        <IconMountain className={isActive ? "text-teal-400 w-7 h-7" : "text-slate-500 group-hover:text-teal-400 w-7 h-7"} />
+                                        <IconMountain className={isActive ? "text-white w-7 h-7" : "text-slate-400 group-hover:text-white w-7 h-7"} />
                                     ) : (
-                                        <IconPlane className={isActive ? "text-teal-400 w-7 h-7" : "text-slate-500 group-hover:text-teal-400 w-7 h-7"} />
+                                        <IconPlane className={isActive ? "text-white w-7 h-7" : "text-slate-400 group-hover:text-white w-7 h-7"} />
+                                    )}
+                                    {isActive && (
+                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full border-2 border-[#0d1117]"></div>
                                     )}
                                 </div>
                                 <span className={`text-[10px] font-black uppercase text-center leading-tight ${
-                                    isActive ? 'text-teal-400' : 'text-slate-500 group-hover:text-slate-300'
+                                    isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'
                                 }`}>
                                     {mapType.name}
                                 </span>

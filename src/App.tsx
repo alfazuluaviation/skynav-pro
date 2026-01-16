@@ -557,12 +557,14 @@ const App: React.FC = () => {
               showPlanPanel={showPlanPanel}
             />
 
-            {/* Base Map Layer - terrain uses OpenTopoMap with elevation/relief, roadmap respects isNightMode */}
+            {/* Base Map Layer - terrain uses OpenTopoMap with elevation/relief/hillshading, roadmap respects isNightMode */}
+            {/* TERRAIN: Shows contour lines, hillshading, vegetation, hydrography. Max zoom ~17 (detail fades at higher zooms) */}
+            {/* ROADMAP: Full street detail, respects night mode for dark/light theme */}
             {activeBaseMap === 'terrain' ? (
               <TileLayer
                 url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
                 maxZoom={17}
-                attribution='Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap'
+                attribution='Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)'
               />
             ) : isNightMode ? (
               // Roadmap Dark (Night Mode ON)
