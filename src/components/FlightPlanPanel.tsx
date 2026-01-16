@@ -342,13 +342,20 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                       ) : (
                         <div className="flex flex-col flex-1 min-w-0">
                           {/* Custom name or coordinate */}
-                          <span className={`font-bold truncate ${hasCustomName ? 'text-amber-300' : 'text-slate-200'}`}>
-                            {displayName}
-                          </span>
-                          {/* Show coordinates below if there's a custom name */}
-                          {hasCustomName && coordinateStr && (
-                            <span className="text-[9px] text-slate-500 font-mono truncate">
-                              {coordinateStr}
+                          {hasCustomName ? (
+                            <>
+                              <span className="font-bold truncate text-amber-300">
+                                {displayName}
+                              </span>
+                              {coordinateStr && (
+                                <span className="text-[9px] text-slate-500 font-mono truncate">
+                                  Ponto em {coordinateStr}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="font-bold truncate text-slate-200">
+                              Ponto em {coordinateStr || displayName}
                             </span>
                           )}
                         </div>
@@ -453,11 +460,17 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                         <tr key={wp.id} className="hover:bg-slate-800/30 transition-colors">
                           <td className="p-3 sm:p-4 font-mono text-sm sm:text-base">
                             <div className="flex flex-col">
-                              <span className={hasCustomName ? 'text-amber-300' : 'text-white'}>
-                                {displayName}
-                              </span>
-                              {hasCustomName && wp.description && (
-                                <span className="text-[10px] text-slate-500">{wp.description}</span>
+                              {hasCustomName ? (
+                                <>
+                                  <span className="text-amber-300">{displayName}</span>
+                                  {wp.description && (
+                                    <span className="text-[10px] text-slate-500">Ponto em {wp.description}</span>
+                                  )}
+                                </>
+                              ) : isUserWaypoint ? (
+                                <span className="text-white">Ponto em {wp.description || displayName}</span>
+                              ) : (
+                                <span className="text-white">{displayName}</span>
                               )}
                             </div>
                           </td>
