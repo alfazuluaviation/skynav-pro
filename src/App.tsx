@@ -72,7 +72,11 @@ const App: React.FC = () => {
   });
 
   const [isFollowing, setIsFollowing] = useState(false);
-  const [isNightMode, setIsNightMode] = useState(true);
+  // Night mode: false by default on first visit, then persists user preference
+  const [isNightMode, setIsNightMode] = useState(() => {
+    const saved = localStorage.getItem('skyFplNightMode');
+    return saved !== null ? saved === 'true' : false;
+  });
   const [activeBaseMap, setActiveBaseMap] = useState<BaseMapType>('roadmap');
   const [airac, setAirac] = useState<AiracCycle | null>(null);
   const [charts, setCharts] = useState<ChartConfig[]>([]);
@@ -472,7 +476,11 @@ const App: React.FC = () => {
         showPlanPanel={showPlanPanel}
         onTogglePlanPanel={() => setShowPlanPanel(!showPlanPanel)}
         isNightMode={isNightMode}
-        onToggleNightMode={() => setIsNightMode(!isNightMode)}
+        onToggleNightMode={() => {
+          const newValue = !isNightMode;
+          setIsNightMode(newValue);
+          localStorage.setItem('skyFplNightMode', String(newValue));
+        }}
         onSignOut={handleSignOut}
         activeLayers={activeLayers}
         onToggleLayer={handleToggleLayer}
