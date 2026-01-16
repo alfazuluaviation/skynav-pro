@@ -512,6 +512,7 @@ const App: React.FC = () => {
             onMoveWaypoint={handleMoveWaypoint}
             onPlanViewModeChange={setPlanViewMode}
             onAddWaypoint={handleAddWaypoint}
+            onUpdateWaypoint={(id, updates) => setWaypoints(waypoints.map(w => w.id === id ? { ...w, ...updates } : w))}
             savedPlans={savedPlans}
             onSavePlan={handleSavePlan}
             onLoadPlan={handleLoadPlan}

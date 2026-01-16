@@ -3,7 +3,7 @@ import { Waypoint, FlightSegment, SavedPlan } from '../types';
 import { NavPoint } from '../services/NavigationDataService';
 import { AutocompleteInput } from './AutocompleteInput';
 import { commonAircraft } from '../utils/aircraftData';
-import { IconPlane, IconTrash, IconSwap, IconArrowUp, IconArrowDown, IconLocation, IconMaximize, IconDisk, IconFolder, IconDownload } from './Icons';
+import { IconPlane, IconTrash, IconSwap, IconArrowUp, IconArrowDown, IconLocation, IconMaximize, IconDisk, IconFolder, IconDownload, IconEdit } from './Icons';
 
 interface FlightPlanPanelProps {
   waypoints: Waypoint[];
@@ -21,6 +21,7 @@ interface FlightPlanPanelProps {
   onMoveWaypoint: (id: string, direction: 'UP' | 'DOWN') => void;
   onPlanViewModeChange: (mode: 'ETAPA' | 'ACUMULADO') => void;
   onAddWaypoint: (point: NavPoint, type: 'ORIGIN' | 'DESTINATION' | 'WAYPOINT') => void;
+  onUpdateWaypoint?: (id: string, updates: Partial<Waypoint>) => void;
   savedPlans: SavedPlan[];
   onSavePlan: (name: string) => void;
   onLoadPlan: (plan: SavedPlan) => void;
@@ -41,6 +42,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   onRemoveWaypoint,
   onMoveWaypoint,
   onAddWaypoint,
+  onUpdateWaypoint,
   savedPlans,
   onSavePlan,
   onLoadPlan,
@@ -60,6 +62,58 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
   const [planName, setPlanName] = useState('');
+  
+  // Edit USER waypoint name
+  const [editingWaypointId, setEditingWaypointId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+
+  // Helper to check if a waypoint name looks like coordinates
+  const isCoordinateName = (name: string): boolean => {
+    // Matches patterns like "12°30.50'N 45°20.30'W" or similar coordinate formats
+    return /^\d+°\d+\.\d+'.+\d+°\d+\.\d+'/.test(name);
+  };
+
+  // Get display name for waypoint - show coordinate from description if name is coordinates
+  const getWaypointDisplayName = (wp: Waypoint): string => {
+    if (wp.type === 'USER') {
+      // If name is a coordinate pattern, show it directly
+      if (isCoordinateName(wp.name)) {
+        return wp.name;
+      }
+      // Otherwise show the custom name
+      return wp.name;
+    }
+    return wp.icao || wp.name;
+  };
+
+  // Get coordinate string for USER waypoints (from description)
+  const getCoordinateString = (wp: Waypoint): string | null => {
+    if (wp.type === 'USER' && wp.description) {
+      return wp.description;
+    }
+    return null;
+  };
+
+  // Handle starting edit of USER waypoint name
+  const handleStartEditName = (wp: Waypoint) => {
+    if (wp.type === 'USER') {
+      setEditingWaypointId(wp.id);
+      // If name is coordinates, start with empty for custom name
+      setEditingName(isCoordinateName(wp.name) ? '' : wp.name);
+    }
+  };
+
+  // Handle saving edited name
+  const handleSaveEditName = (wp: Waypoint) => {
+    if (editingWaypointId && onUpdateWaypoint) {
+      const newName = editingName.trim();
+      // If empty, revert to coordinates
+      const finalName = newName || wp.description || wp.name;
+      onUpdateWaypoint(wp.id, { name: finalName });
+    }
+    setEditingWaypointId(null);
+    setEditingName('');
+  };
 
   useEffect(() => {
     setAircraftQuery(aircraftModel.label);
@@ -238,6 +292,11 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
               const segment = flightSegments[i];
               const isOrigin = wp.role === 'ORIGIN';
               const isDest = wp.role === 'DESTINATION';
+              const isUserWaypoint = wp.type === 'USER';
+              const isEditing = editingWaypointId === wp.id;
+              const coordinateStr = getCoordinateString(wp);
+              const displayName = getWaypointDisplayName(wp);
+              const hasCustomName = isUserWaypoint && !isCoordinateName(wp.name);
               
               return (
                 <div 
@@ -249,17 +308,64 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded text-black ${
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded text-black flex-shrink-0 ${
                         isOrigin ? 'bg-teal-400' : 
                         isDest ? 'bg-purple-400' : 
+                        isUserWaypoint ? 'bg-amber-500' :
                         'bg-yellow-400'
                       }`}>
                         {isOrigin ? 'DEP' : isDest ? 'ARR' : (wp.type ? wp.type.substring(0, 3) : 'WPT')}
                       </span>
-                      <span className="font-bold text-slate-200">{wp.icao || wp.name}</span>
+                      
+                      {/* Display waypoint name/coordinates */}
+                      {isEditing ? (
+                        <div className="flex items-center gap-1 flex-1">
+                          <input
+                            type="text"
+                            autoFocus
+                            className="flex-1 px-2 py-1 text-sm bg-slate-800 border border-slate-600 rounded text-white focus:outline-none focus:border-purple-500"
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEditName(wp);
+                              if (e.key === 'Escape') {
+                                setEditingWaypointId(null);
+                                setEditingName('');
+                              }
+                            }}
+                            onBlur={() => handleSaveEditName(wp)}
+                            placeholder="Nome do ponto"
+                            maxLength={20}
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex flex-col flex-1 min-w-0">
+                          {/* Custom name or coordinate */}
+                          <span className={`font-bold truncate ${hasCustomName ? 'text-amber-300' : 'text-slate-200'}`}>
+                            {displayName}
+                          </span>
+                          {/* Show coordinates below if there's a custom name */}
+                          {hasCustomName && coordinateStr && (
+                            <span className="text-[9px] text-slate-500 font-mono truncate">
+                              {coordinateStr}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                    
+                    <div className="flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0">
+                      {/* Edit button for USER waypoints */}
+                      {isUserWaypoint && !isEditing && (
+                        <button 
+                          onClick={() => handleStartEditName(wp)} 
+                          className="p-2 sm:p-1 hover:text-amber-400 active:text-amber-300"
+                          title="Renomear ponto"
+                        >
+                          <IconEdit />
+                        </button>
+                      )}
                       {!isOrigin && !isDest && (
                         <>
                           <button onClick={() => onMoveWaypoint(wp.id, 'UP')} className="p-2 sm:p-1 hover:text-purple-400 active:text-purple-300"><IconArrowUp /></button>
@@ -339,14 +445,27 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                       const segment = flightSegments[i];
                       const inboundSegment = i > 0 ? flightSegments[i - 1] : null;
                       const accumulatedDist = flightSegments.slice(0, i).reduce((acc, s) => acc + s.distance, 0);
+                      const isUserWaypoint = wp.type === 'USER';
+                      const displayName = getWaypointDisplayName(wp);
+                      const hasCustomName = isUserWaypoint && !isCoordinateName(wp.name);
                       
                       return (
                         <tr key={wp.id} className="hover:bg-slate-800/30 transition-colors">
-                          <td className="p-3 sm:p-4 font-mono text-white text-sm sm:text-base">{wp.icao || wp.name}</td>
+                          <td className="p-3 sm:p-4 font-mono text-sm sm:text-base">
+                            <div className="flex flex-col">
+                              <span className={hasCustomName ? 'text-amber-300' : 'text-white'}>
+                                {displayName}
+                              </span>
+                              {hasCustomName && wp.description && (
+                                <span className="text-[10px] text-slate-500">{wp.description}</span>
+                              )}
+                            </div>
+                          </td>
                           <td className="p-3 sm:p-4">
                             <span className={`text-[9px] font-bold px-2 py-1 rounded text-black ${
                               wp.role === 'ORIGIN' ? 'bg-teal-400' : 
                               wp.role === 'DESTINATION' ? 'bg-purple-400' : 
+                              isUserWaypoint ? 'bg-amber-500' :
                               'bg-yellow-400'
                             }`}>
                               {wp.role === 'ORIGIN' ? 'DEP' : wp.role === 'DESTINATION' ? 'ARR' : wp.type?.substring(0, 3) || 'WPT'}
