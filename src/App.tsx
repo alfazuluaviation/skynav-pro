@@ -94,7 +94,7 @@ const App: React.FC = () => {
 
   const [isFollowing, setIsFollowing] = useState(true);
   const [isNightMode, setIsNightMode] = useState(true);
-  const [activeBaseMap, setActiveBaseMap] = useState<BaseMapType>('dark');
+  const [activeBaseMap, setActiveBaseMap] = useState<BaseMapType>('roadmap');
   const [airac, setAirac] = useState<AiracCycle | null>(null);
   const [charts, setCharts] = useState<ChartConfig[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -557,29 +557,24 @@ const App: React.FC = () => {
               showPlanPanel={showPlanPanel}
             />
 
-            {/* Base Map Layer */}
+            {/* Base Map Layer - terrain uses OpenTopoMap with elevation/relief, roadmap respects isNightMode */}
             {activeBaseMap === 'terrain' ? (
               <TileLayer
                 url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
                 maxZoom={17}
+                attribution='Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap'
               />
-            ) : activeBaseMap === 'satellite' ? (
-              <TileLayer
-                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                maxZoom={19}
-              />
-            ) : activeBaseMap === 'satellite-clean' ? (
-              <TileLayer
-                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                maxZoom={19}
-              />
-            ) : activeBaseMap === 'light' ? (
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-            ) : (
+            ) : isNightMode ? (
+              // Roadmap Dark (Night Mode ON)
               <TileLayer
                 url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                attribution='© OpenStreetMap contributors, © CARTO'
+              />
+            ) : (
+              // Roadmap Light (Night Mode OFF)
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='© OpenStreetMap contributors'
               />
             )}
 
