@@ -3,6 +3,7 @@ import { Polyline, CircleMarker, useMap, Marker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import { Waypoint, NavPoint } from '../../types';
 import { fetchNavigationData } from '../services/NavigationDataService';
+import { X, MapPin, Navigation, Radio, Plane } from 'lucide-react';
 
 interface DraggableRouteProps {
   waypoints: Waypoint[];
@@ -14,6 +15,13 @@ interface DragState {
   segmentIndex: number;
   currentPosition: [number, number] | null;
   nearbyPoint: NavPoint | null;
+}
+
+interface SelectionState {
+  isOpen: boolean;
+  position: [number, number] | null;
+  segmentIndex: number;
+  nearbyPoints: NavPoint[];
 }
 
 export const DraggableRoute: React.FC<DraggableRouteProps> = ({
@@ -28,6 +36,12 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     nearbyPoint: null,
   });
   const [nearbyPoints, setNearbyPoints] = useState<NavPoint[]>([]);
+  const [selectionState, setSelectionState] = useState<SelectionState>({
+    isOpen: false,
+    position: null,
+    segmentIndex: -1,
+    nearbyPoints: [],
+  });
   const [hoveredSegment, setHoveredSegment] = useState<number | null>(null);
   const dragStateRef = useRef(dragState);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -78,6 +92,9 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
   const startDrag = useCallback((lat: number, lng: number, segmentIndex: number) => {
     console.log('[DraggableRoute] Starting drag on segment', segmentIndex, 'at', lat.toFixed(4), lng.toFixed(4));
     
+    // Close selection if open
+    setSelectionState({ isOpen: false, position: null, segmentIndex: -1, nearbyPoints: [] });
+    
     // Disable ALL map interactions immediately
     map.dragging.disable();
     map.doubleClickZoom.disable();
@@ -98,8 +115,69 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     fetchNearbyPoints(lat, lng);
   }, [map, fetchNearbyPoints]);
 
-  // Handle drop/insert
-  const handleDrop = useCallback(() => {
+  // Format coordinates for display
+  const formatCoordinate = (lat: number, lng: number): string => {
+    const latDir = lat >= 0 ? 'N' : 'S';
+    const lngDir = lng >= 0 ? 'E' : 'W';
+    const latDeg = Math.abs(lat);
+    const lngDeg = Math.abs(lng);
+    const latMin = (latDeg % 1) * 60;
+    const lngMin = (lngDeg % 1) * 60;
+    return `${Math.floor(latDeg)}°${latMin.toFixed(2)}'${latDir} ${Math.floor(lngDeg)}°${lngMin.toFixed(2)}'${lngDir}`;
+  };
+
+  // Calculate distance between two points in NM
+  const calculateDistanceNM = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 3440.065; // Earth radius in NM
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  // Handle selection from the list
+  const handleSelectPoint = useCallback((selectedPoint: NavPoint | 'coordinates') => {
+    if (!selectionState.position) return;
+    
+    const [lat, lng] = selectionState.position;
+    const segmentIndex = selectionState.segmentIndex;
+    
+    let newWaypoint: Waypoint;
+    
+    if (selectedPoint === 'coordinates') {
+      newWaypoint = {
+        id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: `WP${String(segmentIndex + 2).padStart(2, '0')}`,
+        lat,
+        lng,
+        type: 'USER',
+        description: `Ponto em ${formatCoordinate(lat, lng)}`,
+        role: 'WAYPOINT',
+      };
+    } else {
+      newWaypoint = {
+        id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: selectedPoint.icao || selectedPoint.name,
+        icao: selectedPoint.icao,
+        lat: selectedPoint.lat,
+        lng: selectedPoint.lng,
+        type: (selectedPoint.type === 'vor' ? 'VOR' : (selectedPoint.type === 'ndb' || selectedPoint.type === 'fix') ? 'FIX' : 'AIRPORT') as 'AIRPORT' | 'FIX' | 'VOR' | 'USER',
+        description: selectedPoint.name,
+        role: 'WAYPOINT',
+      };
+    }
+    
+    onInsertWaypoint(newWaypoint, segmentIndex);
+    
+    // Close selection
+    setSelectionState({ isOpen: false, position: null, segmentIndex: -1, nearbyPoints: [] });
+  }, [selectionState, onInsertWaypoint]);
+
+  // Handle drop - show selection modal instead of inserting directly
+  const handleDrop = useCallback(async () => {
     if (!dragStateRef.current.isDragging) return;
     
     const state = dragStateRef.current;
@@ -126,39 +204,46 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     
     const [lat, lng] = state.currentPosition;
     const segmentIndex = state.segmentIndex;
-    const nearbyPoint = state.nearbyPoint;
     
-    console.log('[DraggableRoute] Drop at', lat.toFixed(4), lng.toFixed(4), 'snap:', nearbyPoint?.name);
+    console.log('[DraggableRoute] Drop at', lat.toFixed(4), lng.toFixed(4));
     
-    // Create new waypoint
-    let newWaypoint: Waypoint;
-    
-    if (nearbyPoint) {
-      newWaypoint = {
-        id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: nearbyPoint.name,
-        icao: nearbyPoint.icao,
-        lat: nearbyPoint.lat,
-        lng: nearbyPoint.lng,
-        type: (nearbyPoint.type === 'vor' ? 'VOR' : (nearbyPoint.type === 'ndb' || nearbyPoint.type === 'fix') ? 'FIX' : 'AIRPORT') as 'AIRPORT' | 'FIX' | 'VOR' | 'USER',
-        description: nearbyPoint.type,
-        role: 'WAYPOINT',
-      };
-    } else {
-      newWaypoint = {
-        id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: `WP${String(segmentIndex + 2).padStart(2, '0')}`,
-        lat,
-        lng,
-        type: 'USER',
-        description: `Ponto em ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-        role: 'WAYPOINT',
-      };
+    // Fetch nearby points for the selection list
+    try {
+      const radiusDeg = 0.5; // ~30nm radius
+      const bounds = L.latLngBounds(
+        [lat - radiusDeg, lng - radiusDeg],
+        [lat + radiusDeg, lng + radiusDeg]
+      );
+      const points = await fetchNavigationData(bounds);
+      
+      // Sort by distance from drop point
+      const sortedPoints = points
+        .map(p => ({
+          ...p,
+          distance: calculateDistanceNM(lat, lng, p.lat, p.lng)
+        }))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 10); // Limit to 10 closest
+      
+      // Open selection modal
+      setSelectionState({
+        isOpen: true,
+        position: [lat, lng],
+        segmentIndex,
+        nearbyPoints: sortedPoints,
+      });
+    } catch (error) {
+      console.error('Error fetching nearby points:', error);
+      // If fetch fails, still open modal with just coordinates
+      setSelectionState({
+        isOpen: true,
+        position: [lat, lng],
+        segmentIndex,
+        nearbyPoints: [],
+      });
     }
     
-    onInsertWaypoint(newWaypoint, segmentIndex);
-    
-    // Reset state
+    // Reset drag state
     setDragState({
       isDragging: false,
       segmentIndex: -1,
@@ -166,23 +251,24 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
       nearbyPoint: null,
     });
     setNearbyPoints([]);
-  }, [map, onInsertWaypoint]);
+  }, [map]);
 
-  // Create interactive polylines using native Leaflet (not react-leaflet)
-  // This gives us proper control over mousedown events
+  // Close selection modal
+  const handleCloseSelection = useCallback(() => {
+    setSelectionState({ isOpen: false, position: null, segmentIndex: -1, nearbyPoints: [] });
+  }, []);
+
+  // Create interactive polylines using native Leaflet
   useEffect(() => {
     if (waypoints.length < 2 || dragState.isDragging) {
-      // Remove existing polylines when dragging
       polylinesRef.current.forEach(pl => pl.remove());
       polylinesRef.current = [];
       return;
     }
     
-    // Clear old polylines
     polylinesRef.current.forEach(pl => pl.remove());
     polylinesRef.current = [];
     
-    // Create new polylines for each segment
     waypoints.slice(0, -1).forEach((start, index) => {
       const end = waypoints[index + 1];
       
@@ -197,7 +283,6 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
         }
       ).addTo(map);
       
-      // Bind tooltip
       polyline.bindTooltip('✋ Arraste para inserir ponto', {
         direction: 'top',
         offset: [0, -10],
@@ -205,7 +290,6 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
         className: 'drag-tooltip',
       });
       
-      // Mouse events
       polyline.on('mouseover', () => {
         polyline.setStyle({ color: '#22c55e', weight: 12 });
         map.getContainer().style.cursor = 'grab';
@@ -220,7 +304,6 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
         }
       });
       
-      // CRITICAL: Use native mousedown to capture before Leaflet's map drag
       const element = polyline.getElement();
       if (element) {
         element.addEventListener('mousedown', (e: MouseEvent) => {
@@ -296,7 +379,6 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
       }
     };
 
-    // Use capture phase to intercept events before Leaflet
     container.addEventListener('mousemove', onMouseMove, { capture: true });
     container.addEventListener('mouseup', onMouseUp, { capture: true });
     container.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
@@ -341,6 +423,38 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     iconAnchor: [18, 18],
   });
 
+  // Get icon for point type
+  const getPointIcon = (type: string) => {
+    switch (type) {
+      case 'airport':
+        return <Plane className="w-4 h-4" />;
+      case 'vor':
+        return <Navigation className="w-4 h-4" />;
+      case 'ndb':
+        return <Radio className="w-4 h-4" />;
+      case 'fix':
+        return <MapPin className="w-4 h-4" />;
+      default:
+        return <MapPin className="w-4 h-4" />;
+    }
+  };
+
+  // Get color for point type
+  const getPointColor = (type: string) => {
+    switch (type) {
+      case 'airport':
+        return 'bg-blue-500';
+      case 'vor':
+        return 'bg-green-500';
+      case 'ndb':
+        return 'bg-orange-500';
+      case 'fix':
+        return 'bg-purple-500';
+      default:
+        return 'bg-gray-500';
+    }
+  };
+
   if (waypoints.length < 2) return null;
 
   return (
@@ -363,6 +477,105 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
           to { transform: scale(1.15); }
         }
       `}</style>
+      
+      {/* Selection Modal */}
+      {selectionState.isOpen && selectionState.position && (
+        <div 
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={handleCloseSelection}
+        >
+          <div 
+            className="bg-card border border-border rounded-xl shadow-2xl w-[90vw] max-w-md max-h-[70vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/50">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Inserir Ponto na Rota</h3>
+                <p className="text-xs text-muted-foreground">
+                  Selecione um ponto para inserir entre {waypoints[selectionState.segmentIndex]?.name} e {waypoints[selectionState.segmentIndex + 1]?.name}
+                </p>
+              </div>
+              <button
+                onClick={handleCloseSelection}
+                className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="overflow-y-auto max-h-[calc(70vh-80px)]">
+              {/* Coordinates option - always first */}
+              <button
+                onClick={() => handleSelectPoint('coordinates')}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-primary/10 border-b border-border transition-colors group"
+              >
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-fuchsia-500 flex items-center justify-center text-white">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div className="flex-1 text-left">
+                  <div className="font-semibold text-foreground group-hover:text-primary">
+                    Usar Coordenada
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {formatCoordinate(selectionState.position[0], selectionState.position[1])}
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                  USER
+                </div>
+              </button>
+              
+              {/* Nearby points */}
+              {(selectionState.nearbyPoints as (NavPoint & { distance?: number })[]).length > 0 && (
+                <div className="px-4 py-2 bg-muted/30 border-b border-border">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Pontos Próximos
+                  </span>
+                </div>
+              )}
+              
+              {(selectionState.nearbyPoints as (NavPoint & { distance?: number })[]).map((point, idx) => (
+                <button
+                  key={`selection-${idx}`}
+                  onClick={() => handleSelectPoint(point)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-primary/10 border-b border-border transition-colors group"
+                >
+                  <div className={`flex-shrink-0 w-10 h-10 rounded-full ${getPointColor(point.type)} flex items-center justify-center text-white`}>
+                    {getPointIcon(point.type)}
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-semibold text-foreground group-hover:text-primary">
+                      {point.icao || point.name}
+                    </div>
+                    <div className="text-sm text-muted-foreground truncate">
+                      {point.name}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded uppercase">
+                      {point.type}
+                    </div>
+                    {point.distance !== undefined && (
+                      <div className="text-xs text-muted-foreground">
+                        {point.distance.toFixed(1)} NM
+                      </div>
+                    )}
+                  </div>
+                </button>
+              ))}
+              
+              {(selectionState.nearbyPoints as (NavPoint & { distance?: number })[]).length === 0 && (
+                <div className="px-4 py-6 text-center text-muted-foreground">
+                  <p className="text-sm">Nenhum ponto de navegação encontrado nas proximidades.</p>
+                  <p className="text-xs mt-1">Você pode usar a coordenada diretamente.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Drag preview when dragging */}
       {dragState.isDragging && dragState.currentPosition && (
@@ -435,7 +648,7 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
                     <small style={{ opacity: 0.8 }}>{dragState.nearbyPoint.type.toUpperCase()}</small>
                   </span>
                 ) : (
-                  <span style={{ color: '#a21caf' }}>Solte para criar ponto</span>
+                  <span style={{ color: '#a21caf' }}>Solte para selecionar ponto</span>
                 )}
               </div>
             </Tooltip>
