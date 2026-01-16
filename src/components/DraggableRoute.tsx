@@ -132,19 +132,17 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     let newWaypoint: Waypoint;
     
     if (selectedPoint === 'coordinates') {
-      // Use custom name if provided, otherwise generate WP name
+      // Use custom name if provided, otherwise use coordinates as name
       const customName = selectionState.customName.trim();
-      const waypointName = customName || `WP${String(segmentIndex + 2).padStart(2, '0')}`;
+      const coordinateStr = formatCoordinate(lat, lng);
       
       newWaypoint = {
         id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: waypointName,
+        name: customName || coordinateStr, // Use coordinates if no custom name
         lat,
         lng,
         type: 'USER',
-        description: customName 
-          ? `${customName} - ${formatCoordinate(lat, lng)}` 
-          : formatCoordinate(lat, lng),
+        description: coordinateStr, // Always store coordinates in description
         role: 'WAYPOINT',
       };
     } else {
