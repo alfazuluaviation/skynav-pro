@@ -31,6 +31,7 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
   const [hoveredSegment, setHoveredSegment] = useState<number | null>(null);
   const dragStateRef = useRef(dragState);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const polylinesRef = useRef<L.Polyline[]>([]);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -73,25 +74,19 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     }, 150);
   }, []);
 
-  // Calculate midpoint of a segment
-  const getMidpoint = useCallback((start: Waypoint, end: Waypoint): [number, number] => {
-    return [(start.lat + end.lat) / 2, (start.lng + end.lng) / 2];
-  }, []);
-
-  // Handle mousedown on route line to start drag - MUST use mousedown, not click
-  // This is critical because Leaflet starts map panning on mousedown
-  const handleRouteMouseDown = useCallback((e: L.LeafletMouseEvent, segmentIndex: number) => {
-    // Stop propagation to prevent map from starting to pan
-    L.DomEvent.stopPropagation(e.originalEvent);
-    L.DomEvent.preventDefault(e.originalEvent);
+  // Start drag - called from native Leaflet event
+  const startDrag = useCallback((lat: number, lng: number, segmentIndex: number) => {
+    console.log('[DraggableRoute] Starting drag on segment', segmentIndex, 'at', lat.toFixed(4), lng.toFixed(4));
     
-    const { lat, lng } = e.latlng;
-    console.log('[DraggableRoute] MouseDown on segment', segmentIndex, 'at', lat.toFixed(4), lng.toFixed(4));
-    
-    // Disable map dragging IMMEDIATELY
+    // Disable ALL map interactions immediately
     map.dragging.disable();
     map.doubleClickZoom.disable();
     map.scrollWheelZoom.disable();
+    map.touchZoom.disable();
+    map.boxZoom.disable();
+    map.keyboard.disable();
+    
+    map.getContainer().style.cursor = 'grabbing';
     
     setDragState({
       isDragging: true,
@@ -100,36 +95,7 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
       nearbyPoint: null,
     });
     
-    map.getContainer().style.cursor = 'grabbing';
     fetchNearbyPoints(lat, lng);
-  }, [map, fetchNearbyPoints]);
-
-  // Handle touch start on route
-  const handleTouchStart = useCallback((e: React.TouchEvent, segmentIndex: number) => {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    const touch = e.touches[0];
-    const container = map.getContainer();
-    const rect = container.getBoundingClientRect();
-    const point = map.containerPointToLatLng([touch.clientX - rect.left, touch.clientY - rect.top]);
-    
-    console.log('[DraggableRoute] Touch on segment', segmentIndex, 'at', point.lat.toFixed(4), point.lng.toFixed(4));
-    
-    // Disable map dragging IMMEDIATELY
-    map.dragging.disable();
-    map.doubleClickZoom.disable();
-    map.scrollWheelZoom.disable();
-    
-    setDragState({
-      isDragging: true,
-      segmentIndex,
-      currentPosition: [point.lat, point.lng],
-      nearbyPoint: null,
-    });
-    
-    map.getContainer().style.cursor = 'grabbing';
-    fetchNearbyPoints(point.lat, point.lng);
   }, [map, fetchNearbyPoints]);
 
   // Handle drop/insert
@@ -137,11 +103,15 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     if (!dragStateRef.current.isDragging) return;
     
     const state = dragStateRef.current;
+    console.log('[DraggableRoute] Dropping...');
     
-    // Re-enable map interactions FIRST
+    // Re-enable ALL map interactions
     map.dragging.enable();
     map.doubleClickZoom.enable();
     map.scrollWheelZoom.enable();
+    map.touchZoom.enable();
+    map.boxZoom.enable();
+    map.keyboard.enable();
     map.getContainer().style.cursor = '';
     
     if (!state.currentPosition) {
@@ -198,16 +168,105 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     setNearbyPoints([]);
   }, [map, onInsertWaypoint]);
 
-  // Map event handlers for drag (mouse + touch support)
+  // Create interactive polylines using native Leaflet (not react-leaflet)
+  // This gives us proper control over mousedown events
+  useEffect(() => {
+    if (waypoints.length < 2 || dragState.isDragging) {
+      // Remove existing polylines when dragging
+      polylinesRef.current.forEach(pl => pl.remove());
+      polylinesRef.current = [];
+      return;
+    }
+    
+    // Clear old polylines
+    polylinesRef.current.forEach(pl => pl.remove());
+    polylinesRef.current = [];
+    
+    // Create new polylines for each segment
+    waypoints.slice(0, -1).forEach((start, index) => {
+      const end = waypoints[index + 1];
+      
+      const polyline = L.polyline(
+        [[start.lat, start.lng], [end.lat, end.lng]],
+        {
+          color: '#d946ef',
+          weight: 8,
+          opacity: 0.9,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }
+      ).addTo(map);
+      
+      // Bind tooltip
+      polyline.bindTooltip('✋ Arraste para inserir ponto', {
+        direction: 'top',
+        offset: [0, -10],
+        opacity: 0.95,
+        className: 'drag-tooltip',
+      });
+      
+      // Mouse events
+      polyline.on('mouseover', () => {
+        polyline.setStyle({ color: '#22c55e', weight: 12 });
+        map.getContainer().style.cursor = 'grab';
+        setHoveredSegment(index);
+      });
+      
+      polyline.on('mouseout', () => {
+        if (!dragStateRef.current.isDragging) {
+          polyline.setStyle({ color: '#d946ef', weight: 8 });
+          map.getContainer().style.cursor = '';
+          setHoveredSegment(null);
+        }
+      });
+      
+      // CRITICAL: Use native mousedown to capture before Leaflet's map drag
+      const element = polyline.getElement();
+      if (element) {
+        element.addEventListener('mousedown', (e: MouseEvent) => {
+          e.stopPropagation();
+          e.preventDefault();
+          
+          const containerPoint = map.mouseEventToContainerPoint(e);
+          const latlng = map.containerPointToLatLng(containerPoint);
+          startDrag(latlng.lat, latlng.lng, index);
+        }, { capture: true });
+        
+        element.addEventListener('touchstart', (e: TouchEvent) => {
+          e.stopPropagation();
+          e.preventDefault();
+          
+          const touch = e.touches[0];
+          const rect = map.getContainer().getBoundingClientRect();
+          const containerPoint = L.point(touch.clientX - rect.left, touch.clientY - rect.top);
+          const latlng = map.containerPointToLatLng(containerPoint);
+          startDrag(latlng.lat, latlng.lng, index);
+        }, { capture: true, passive: false });
+      }
+      
+      polylinesRef.current.push(polyline);
+    });
+    
+    return () => {
+      polylinesRef.current.forEach(pl => pl.remove());
+      polylinesRef.current = [];
+    };
+  }, [waypoints, map, startDrag, dragState.isDragging]);
+
+  // Global mouse/touch move and up handlers
   useEffect(() => {
     const container = map.getContainer();
     
-    const onMouseMove = (e: L.LeafletMouseEvent) => {
+    const onMouseMove = (e: MouseEvent) => {
       if (!dragStateRef.current.isDragging) return;
+      e.preventDefault();
       
-      const { lat, lng } = e.latlng;
-      setDragState(prev => ({ ...prev, currentPosition: [lat, lng] }));
-      fetchNearbyPoints(lat, lng);
+      const rect = container.getBoundingClientRect();
+      const containerPoint = L.point(e.clientX - rect.left, e.clientY - rect.top);
+      const latlng = map.containerPointToLatLng(containerPoint);
+      
+      setDragState(prev => ({ ...prev, currentPosition: [latlng.lat, latlng.lng] }));
+      fetchNearbyPoints(latlng.lat, latlng.lng);
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -215,24 +274,39 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
       e.preventDefault();
       
       const touch = e.touches[0];
-      const point = map.containerPointToLatLng([touch.clientX - container.getBoundingClientRect().left, touch.clientY - container.getBoundingClientRect().top]);
-      setDragState(prev => ({ ...prev, currentPosition: [point.lat, point.lng] }));
-      fetchNearbyPoints(point.lat, point.lng);
+      const rect = container.getBoundingClientRect();
+      const containerPoint = L.point(touch.clientX - rect.left, touch.clientY - rect.top);
+      const latlng = map.containerPointToLatLng(containerPoint);
+      
+      setDragState(prev => ({ ...prev, currentPosition: [latlng.lat, latlng.lng] }));
+      fetchNearbyPoints(latlng.lat, latlng.lng);
     };
 
-    const onMouseUp = () => handleDrop();
-    const onTouchEnd = () => handleDrop();
+    const onMouseUp = (e: MouseEvent) => {
+      if (dragStateRef.current.isDragging) {
+        e.preventDefault();
+        handleDrop();
+      }
+    };
+    
+    const onTouchEnd = (e: TouchEvent) => {
+      if (dragStateRef.current.isDragging) {
+        e.preventDefault();
+        handleDrop();
+      }
+    };
 
-    map.on('mousemove', onMouseMove);
-    map.on('mouseup', onMouseUp);
-    container.addEventListener('touchmove', onTouchMove, { passive: false });
-    container.addEventListener('touchend', onTouchEnd);
+    // Use capture phase to intercept events before Leaflet
+    container.addEventListener('mousemove', onMouseMove, { capture: true });
+    container.addEventListener('mouseup', onMouseUp, { capture: true });
+    container.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+    container.addEventListener('touchend', onTouchEnd, { capture: true });
 
     return () => {
-      map.off('mousemove', onMouseMove);
-      map.off('mouseup', onMouseUp);
-      container.removeEventListener('touchmove', onTouchMove);
-      container.removeEventListener('touchend', onTouchEnd);
+      container.removeEventListener('mousemove', onMouseMove, { capture: true });
+      container.removeEventListener('mouseup', onMouseUp, { capture: true });
+      container.removeEventListener('touchmove', onTouchMove, { capture: true });
+      container.removeEventListener('touchend', onTouchEnd, { capture: true });
       if (fetchTimeoutRef.current) {
         clearTimeout(fetchTimeoutRef.current);
       }
@@ -244,8 +318,8 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     className: 'drag-indicator',
     html: `
       <div style="
-        width: 32px;
-        height: 32px;
+        width: 36px;
+        height: 36px;
         background: ${hasSnap ? '#22c55e' : '#d946ef'};
         border: 3px solid white;
         border-radius: 50%;
@@ -253,69 +327,43 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
         display: flex;
         align-items: center;
         justify-content: center;
+        animation: pulse 0.5s ease-in-out infinite alternate;
       ">
         <div style="
-          width: 10px;
-          height: 10px;
+          width: 12px;
+          height: 12px;
           background: white;
           border-radius: 50%;
         "></div>
       </div>
     `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
   });
 
   if (waypoints.length < 2) return null;
 
   return (
     <>
-      {/* Interactive route segments - each segment is a clickable polyline */}
-      {!dragState.isDragging && waypoints.slice(0, -1).map((start, index) => {
-        const end = waypoints[index + 1];
-        const isHovered = hoveredSegment === index;
-        
-        return (
-          <Polyline
-            key={`segment-${index}`}
-            positions={[[start.lat, start.lng], [end.lat, end.lng]]}
-            pathOptions={{
-              color: isHovered ? '#22c55e' : '#d946ef',
-              weight: isHovered ? 10 : 6,
-              opacity: 0.95,
-              lineCap: 'round',
-              lineJoin: 'round',
-            }}
-            eventHandlers={{
-              mousedown: (e) => handleRouteMouseDown(e, index),
-              mouseover: () => {
-                setHoveredSegment(index);
-                map.getContainer().style.cursor = 'grab';
-              },
-              mouseout: () => {
-                if (!dragState.isDragging) {
-                  setHoveredSegment(null);
-                  map.getContainer().style.cursor = '';
-                }
-              },
-            }}
-          >
-            <Tooltip direction="top" offset={[0, -15]} opacity={0.98} sticky>
-              <div style={{ 
-                fontSize: '12px', 
-                fontWeight: 'bold', 
-                padding: '6px 10px',
-                background: '#15803d',
-                color: 'white',
-                borderRadius: '6px',
-              }}>
-                ✋ Arraste para inserir ponto
-              </div>
-            </Tooltip>
-          </Polyline>
-        );
-      })}
-
+      {/* Add CSS for tooltip and animation */}
+      <style>{`
+        .drag-tooltip {
+          background: #15803d !important;
+          color: white !important;
+          font-weight: bold !important;
+          border: none !important;
+          border-radius: 6px !important;
+          padding: 6px 10px !important;
+        }
+        .drag-tooltip::before {
+          border-top-color: #15803d !important;
+        }
+        @keyframes pulse {
+          from { transform: scale(1); }
+          to { transform: scale(1.15); }
+        }
+      `}</style>
+      
       {/* Drag preview when dragging */}
       {dragState.isDragging && dragState.currentPosition && (
         <>
