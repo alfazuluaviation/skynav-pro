@@ -8,6 +8,7 @@ import { IconButton } from './IconButton';
 import { SettingsPopover } from './SettingsPopover';
 import { LayersMenu, BaseMapType } from './LayersMenu';
 import { AiracCycle } from '../../types';
+import { usePWAUpdate } from '@/hooks/usePWAUpdate';
 
 interface SidebarProps {
     userName?: string;
@@ -46,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
     const [showSettings, setShowSettings] = useState(false);
     const [showLayersMenu, setShowLayersMenu] = useState(false);
+    const { needRefresh, lastUpdateDate, handleUpdate } = usePWAUpdate();
 
     return (
         <>
@@ -72,12 +74,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </nav>
 
                 <div className="flex flex-col gap-4 relative">
-                    <IconButton
-                        icon={<IconSettings />}
-                        onClick={() => setShowSettings(!showSettings)}
-                        isActive={showSettings}
-                        activeColor="purple"
-                    />
+                    <div className="relative">
+                        <IconButton
+                            icon={<IconSettings />}
+                            onClick={() => setShowSettings(!showSettings)}
+                            isActive={showSettings}
+                            activeColor="purple"
+                        />
+                        {needRefresh && !showSettings && (
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(168,85,247,0.6)]" />
+                        )}
+                    </div>
 
                     <IconButton
                         icon={<IconMinus />}
@@ -97,6 +104,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             onDownloadLayer={onDownloadLayer}
                             syncingLayers={syncingLayers}
                             airac={airac}
+                            needRefresh={needRefresh}
+                            lastUpdateDate={lastUpdateDate}
+                            onUpdate={handleUpdate}
                         />
                     )}
                 </div>
@@ -135,12 +145,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         title="Cartas e Mapas"
                     />
 
-                    <IconButton
-                        icon={<IconSettings />}
-                        onClick={() => setShowSettings(!showSettings)}
-                        isActive={showSettings}
-                        activeColor="purple"
-                    />
+                    <div className="relative">
+                        <IconButton
+                            icon={<IconSettings />}
+                            onClick={() => setShowSettings(!showSettings)}
+                            isActive={showSettings}
+                            activeColor="purple"
+                        />
+                        {needRefresh && !showSettings && (
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(168,85,247,0.6)]" />
+                        )}
+                    </div>
 
                     <IconButton
                         icon={<IconMinus />}
@@ -192,6 +207,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             syncingLayers={syncingLayers}
                             airac={airac}
                             isMobile={true}
+                            needRefresh={needRefresh}
+                            lastUpdateDate={lastUpdateDate}
+                            onUpdate={handleUpdate}
                         />
                     </div>
                 </div>
