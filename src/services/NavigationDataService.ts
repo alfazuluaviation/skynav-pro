@@ -38,8 +38,8 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
     // Construct BBOX string: minLng,minLat,maxLng,maxLat
     const bbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
 
-    // Validated layers
-    const layers = ['ICA:airport', 'ICA:vor', 'ICA:ndb', 'ICA:waypoint'];
+    // Validated layers - including heliport for proper symbol differentiation
+    const layers = ['ICA:airport', 'ICA:heliport', 'ICA:vor', 'ICA:ndb', 'ICA:waypoint'];
 
     const results: NavPoint[] = [];
 
@@ -67,11 +67,18 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                         let type: NavPoint['type'] = 'airport';
                         let name = f.properties?.nome || f.id;
                         let icao = f.properties?.localidade_id || '';
+                        let kind: string | undefined = undefined;
 
                         // Specific property checking
                         if (layerName === 'ICA:airport') {
                             name = f.properties?.nome || name;
                             icao = f.properties?.localidade_id || icao;
+                            kind = f.properties?.tipo_uso || f.properties?.tipo || 'civil';
+                        } else if (layerName === 'ICA:heliport') {
+                            type = 'airport'; // Use airport type but with heliport kind
+                            name = f.properties?.nome || name;
+                            icao = f.properties?.localidade_id || '';
+                            kind = 'heliport';
                         } else if (layerName === 'ICA:waypoint' || layerName === 'ICA:vor' || layerName === 'ICA:ndb') {
                             type = layerName === 'ICA:waypoint' ? 'fix' : layerName === 'ICA:vor' ? 'vor' : 'ndb';
                             name = f.properties?.ident || f.properties?.nome || name;
@@ -87,6 +94,7 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                             lat,
                             lng,
                             icao,
+                            kind,
                         });
                     }
                 }

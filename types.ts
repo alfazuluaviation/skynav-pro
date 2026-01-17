@@ -63,6 +63,5 @@ export interface NavPoint {
     lat: number;
     lng: number;
     icao?: string;
-    kind?: string; // For airport type (helipad, etc) or navaid frequency
-    // magneticVariation?: number; // Removed as it will be calculated dynamically
+    kind?: string; // For airport classification: 'civil', 'military', 'heliport', etc.
 }
