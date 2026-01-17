@@ -106,17 +106,14 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     />
                 )}
 
-                {/* 2. SMALL DIRECTIONAL ARROWS (NexAtlas style) */}
+                {/* 2. POINTED DIRECTIONAL ARROWS (NexAtlas style) */}
                 {waypoints.slice(0, -1).map((start, i) => {
                     const end = waypoints[i + 1];
                     if (!start || !end) return null;
 
                     const trueTrack = calculateTrueTrack(start, end);
-                    const magVar = start.magneticVariation || 0; 
-                    const magTrack = (trueTrack - magVar + 360) % 360;
-                    const dist = calculateDistance(start, end);
                     
-                    // Calculate segment length in pixels to determine if arrow fits
+                    // Calculate segment length in pixels
                     const startPoint = map.latLngToContainerPoint([start.lat, start.lng]);
                     const endPoint = map.latLngToContainerPoint([end.lat, end.lng]);
                     const segmentPixelLength = Math.sqrt(
@@ -124,32 +121,41 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                         Math.pow(endPoint.y - startPoint.y, 2)
                     );
                     
-                    // Arrow size: 12px base, minimum segment length: 60px to show arrow
-                    const arrowSize = 12;
-                    const minSegmentLength = 60;
+                    // Arrow dimensions - proportional to segment
+                    const arrowWidth = 8;
+                    const arrowLength = 16;
                     
-                    // Don't render arrow if segment is too short
+                    // STRICT: Only show arrow if segment is at least 4x the arrow length
+                    const minSegmentLength = arrowLength * 4;
                     if (segmentPixelLength < minSegmentLength) return null;
                     
-                    // Position arrow at center of segment
+                    // Position arrow exactly at center of segment
                     const arrowLat = start.lat + (end.lat - start.lat) * 0.5;
                     const arrowLng = start.lng + (end.lng - start.lng) * 0.5;
 
-                    // Simple triangular arrow pointing in flight direction
+                    // NexAtlas style: pointed arrow shape using SVG polygon
+                    // Arrow points RIGHT by default, then rotated to trueTrack
                     const arrowIcon = L.divIcon({
                         className: 'route-direction-arrow',
                         html: `
-                            <div style="
-                                position: absolute;
-                                transform: translate(-50%, -50%) rotate(${trueTrack}deg);
-                                transform-origin: center center;
-                                width: 0;
-                                height: 0;
-                                border-left: ${arrowSize / 2}px solid transparent;
-                                border-right: ${arrowSize / 2}px solid transparent;
-                                border-bottom: ${arrowSize}px solid #047857;
-                                filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
-                            "></div>
+                            <svg 
+                                width="${arrowLength}" 
+                                height="${arrowWidth}" 
+                                viewBox="0 0 ${arrowLength} ${arrowWidth}"
+                                style="
+                                    position: absolute;
+                                    transform: translate(-50%, -50%) rotate(${trueTrack - 90}deg);
+                                    transform-origin: center center;
+                                    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+                                "
+                            >
+                                <polygon 
+                                    points="0,${arrowWidth * 0.2} ${arrowLength * 0.7},${arrowWidth * 0.2} ${arrowLength},${arrowWidth * 0.5} ${arrowLength * 0.7},${arrowWidth * 0.8} 0,${arrowWidth * 0.8}"
+                                    fill="#047857"
+                                    stroke="#fff"
+                                    stroke-width="0.5"
+                                />
+                            </svg>
                         `,
                         iconSize: [0, 0]
                     });
