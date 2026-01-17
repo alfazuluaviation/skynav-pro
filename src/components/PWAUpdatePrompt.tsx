@@ -1,27 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useRegisterSW } from 'virtual:pwa-register/react';
 import { RefreshCw, X } from 'lucide-react';
+import { usePWAUpdate } from '@/hooks/usePWAUpdate';
 
 export const PWAUpdatePrompt = () => {
   const [showPrompt, setShowPrompt] = useState(false);
-  
-  const {
-    needRefresh: [needRefresh, setNeedRefresh],
-    updateServiceWorker,
-  } = useRegisterSW({
-    onRegisteredSW(swUrl, r) {
-      console.log('SW Registered: ' + swUrl);
-      // Check for updates every 30 seconds
-      if (r) {
-        setInterval(() => {
-          r.update();
-        }, 30 * 1000);
-      }
-    },
-    onRegisterError(error) {
-      console.log('SW registration error', error);
-    },
-  });
+  const { needRefresh, handleUpdate, dismissUpdate } = usePWAUpdate();
 
   useEffect(() => {
     if (needRefresh) {
@@ -29,13 +12,13 @@ export const PWAUpdatePrompt = () => {
     }
   }, [needRefresh]);
 
-  const handleUpdate = () => {
-    updateServiceWorker(true);
+  const onUpdate = () => {
+    handleUpdate();
   };
 
   const handleClose = () => {
     setShowPrompt(false);
-    setNeedRefresh(false);
+    dismissUpdate();
   };
 
   if (!showPrompt) return null;
@@ -51,7 +34,7 @@ export const PWAUpdatePrompt = () => {
       </div>
       <div className="flex items-center gap-2">
         <button
-          onClick={handleUpdate}
+          onClick={onUpdate}
           className="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded text-sm font-medium transition-colors"
         >
           Atualizar
