@@ -395,23 +395,23 @@ const App: React.FC = () => {
     const dist = calculateDistance(from.lat, from.lng, to.lat, to.lng);
     const trueBrng = calculateBearing(from.lat, from.lng, to.lat, to.lng);
 
-    // Calculate magnetic variation dynamically using WMM
-    const magneticVariation = getMagneticDeclination(from.lat, from.lng);
+    // Calculate magnetic variation at midpoint for better accuracy
+    const midLat = (from.lat + to.lat) / 2;
+    const midLng = (from.lng + to.lng) / 2;
+    const magneticVariation = getMagneticDeclination(midLat, midLng);
 
-    console.log(`[App.tsx] Segment ${i}: From ${from.icao || from.name} (Lat: ${(from.lat || 0).toFixed(6)}, Lng: ${(from.lng || 0).toFixed(6)})`);
-    console.log(`[App.tsx] True Bearing (calculated): ${trueBrng.toFixed(2)}°`);
-    console.log(`[App.tsx] Magnetic Declination (WMM): ${((magneticVariation || 0)).toFixed(2)}°`);
+    console.log(`[SkyFPL] Segment ${i}: ${from.icao || from.name} → ${to.icao || to.name}`);
+    console.log(`[SkyFPL] True Bearing: ${trueBrng.toFixed(2)}° | Mag Var: ${magneticVariation.toFixed(2)}°`);
 
-    const magneticTrack = applyMagneticVariation(trueBrng || 0, magneticVariation || 0);
-    console.log(`[App.tsx] True Bearing (calculated): ${(trueBrng || 0).toFixed(2)}°`);
+    // Apply magnetic variation: Magnetic = True - Variation (West is negative)
+    const magneticTrack = applyMagneticVariation(trueBrng, magneticVariation);
+    console.log(`[SkyFPL] Magnetic Track: ${magneticTrack.toFixed(2)}°`);
 
     flightSegments.push({
       from,
       to,
       distance: dist,
-      // Uses the magnetic track calculated by WMM. Fallback to 0 if undefined.
-      track: Math.round(magneticTrack || 0),
-      // Prevents division by zero if plannedSpeed is not set
+      track: Math.round(magneticTrack),
       ete: formatTime(dist / (plannedSpeed || 100)),
       fuel: Math.round(dist * 1.3)
     });
