@@ -198,8 +198,15 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                 {zoom >= 8 && points.map(p => {
                     // Determine the icon type based on point type and kind
                     const iconType = p.kind === 'heliport' ? 'heliport' : p.type;
-                    const iconHTML = getAerodromeIconHTML(iconType as any, p.kind);
-                    const iconSize = getIconSize(iconType as any);
+                    
+                    // Determine if it's a principal aerodrome (SB prefix = major Brazilian airports)
+                    // SBGR, SBSP, SBRJ, SBGL, etc. are principal aerodromes
+                    const isPrincipal = p.type === 'airport' && 
+                                       p.kind !== 'heliport' && 
+                                       p.icao?.startsWith('SB');
+                    
+                    const iconHTML = getAerodromeIconHTML(iconType as any, p.kind, isPrincipal);
+                    const iconSize = getIconSize(iconType as any, isPrincipal);
                     
                     const customIcon = L.divIcon({
                         className: 'nav-point-icon',
@@ -207,6 +214,13 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                         iconSize: iconSize,
                         iconAnchor: [iconSize[0] / 2, iconSize[1] / 2]
                     });
+                    
+                    // Generate tooltip with type indication
+                    const typeLabel = p.kind === 'heliport' ? 'Heliporto' : 
+                                     isPrincipal ? 'Aeródromo Principal' : 
+                                     p.type === 'airport' ? 'Aeródromo' :
+                                     p.type === 'vor' ? 'VOR' :
+                                     p.type === 'ndb' ? 'NDB' : 'FIX';
                     
                     return (
                         <Marker 
@@ -227,7 +241,8 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                                     background: 'rgba(255,255,255,0.95)',
                                     borderRadius: '3px'
                                 }}>
-                                    {p.icao || p.name}
+                                    <div>{p.icao || p.name}</div>
+                                    <div style={{ fontSize: '9px', fontWeight: 'normal', color: '#666' }}>{typeLabel}</div>
                                 </div>
                             </Tooltip>
                         </Marker>
