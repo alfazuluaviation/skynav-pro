@@ -39,7 +39,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
 }) => {
     const containerClass = isMobile 
         ? "w-full p-5" 
-        : "absolute left-16 bottom-0 w-72 bg-slate-900 border border-slate-800 rounded-2xl shadow-3xl p-5 z-[2100] animate-in";
+        : "absolute left-16 bottom-4 w-72 max-h-[calc(100vh-2rem)] overflow-y-auto bg-slate-900 border border-slate-800 rounded-2xl shadow-3xl p-5 z-[2100] animate-in";
 
     return (
         <div
