@@ -9,7 +9,7 @@ const corsHeaders = {
 const BASE_WFS_URL = "https://geoaisweb.decea.mil.br/geoserver/wfs";
 
 // Allowed layer names to prevent arbitrary endpoint access
-const ALLOWED_LAYERS = ["ICA:airport", "ICA:waypoint", "ICA:vor", "ICA:ndb"];
+const ALLOWED_LAYERS = ["ICA:airport", "ICA:waypoint", "ICA:vor", "ICA:ndb", "ICA:heliport"];
 
 // Rate limiting configuration
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
