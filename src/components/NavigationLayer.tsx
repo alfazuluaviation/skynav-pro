@@ -106,84 +106,97 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     />
                 )}
 
-                {/* 2. DECEA STYLE ARROWS WITH MAGNETIC HEADING */}
+                {/* 2. SMALL DIRECTIONAL ARROWS (NexAtlas style) */}
+                {waypoints.slice(0, -1).map((start, i) => {
+                    const end = waypoints[i + 1];
+                    if (!start || !end) return null;
+
+                    const trueTrack = calculateTrueTrack(start, end);
+                    const magVar = start.magneticVariation || 0; 
+                    const magTrack = (trueTrack - magVar + 360) % 360;
+                    const dist = calculateDistance(start, end);
+                    
+                    // Calculate segment length in pixels to determine if arrow fits
+                    const startPoint = map.latLngToContainerPoint([start.lat, start.lng]);
+                    const endPoint = map.latLngToContainerPoint([end.lat, end.lng]);
+                    const segmentPixelLength = Math.sqrt(
+                        Math.pow(endPoint.x - startPoint.x, 2) + 
+                        Math.pow(endPoint.y - startPoint.y, 2)
+                    );
+                    
+                    // Arrow size: 12px base, minimum segment length: 60px to show arrow
+                    const arrowSize = 12;
+                    const minSegmentLength = 60;
+                    
+                    // Don't render arrow if segment is too short
+                    if (segmentPixelLength < minSegmentLength) return null;
+                    
+                    // Position arrow at center of segment
+                    const arrowLat = start.lat + (end.lat - start.lat) * 0.5;
+                    const arrowLng = start.lng + (end.lng - start.lng) * 0.5;
+
+                    // Simple triangular arrow pointing in flight direction
+                    const arrowIcon = L.divIcon({
+                        className: 'route-direction-arrow',
+                        html: `
+                            <div style="
+                                position: absolute;
+                                transform: translate(-50%, -50%) rotate(${trueTrack}deg);
+                                transform-origin: center center;
+                                width: 0;
+                                height: 0;
+                                border-left: ${arrowSize / 2}px solid transparent;
+                                border-right: ${arrowSize / 2}px solid transparent;
+                                border-bottom: ${arrowSize}px solid #047857;
+                                filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+                            "></div>
+                        `,
+                        iconSize: [0, 0]
+                    });
+
+                    return <Marker key={`arrow-${i}`} position={[arrowLat, arrowLng]} icon={arrowIcon} interactive={false} zIndexOffset={2000} />;
+                })}
+
+                {/* 3. TRACK/DISTANCE LABELS - Only show at zoom >= 8 */}
                 {zoom >= 8 && waypoints.slice(0, -1).map((start, i) => {
                     const end = waypoints[i + 1];
                     if (!start || !end) return null;
 
                     const trueTrack = calculateTrueTrack(start, end);
-                    // Use official variation from your API or 0 if not provided yet
                     const magVar = start.magneticVariation || 0; 
                     const magTrack = (trueTrack - magVar + 360) % 360;
                     const dist = calculateDistance(start, end);
                     
-                    // Position at 40% along the segment to avoid overlapping waypoints
-                    const ratio = 0.4;
-                    const arrowLat = start.lat + (end.lat - start.lat) * ratio;
-                    const arrowLng = start.lng + (end.lng - start.lng) * ratio;
+                    // Position label at 35% along the segment
+                    const labelLat = start.lat + (end.lat - start.lat) * 0.35;
+                    const labelLng = start.lng + (end.lng - start.lng) * 0.35;
                     
-                    const needsFlip = magTrack > 90 && magTrack < 270;
-                    const textRotation = needsFlip ? 180 : 0;
+                    const needsFlip = trueTrack > 90 && trueTrack < 270;
+                    const labelRotation = needsFlip ? trueTrack + 180 : trueTrack;
 
-                    const deceaIcon = L.divIcon({
-                        className: 'decea-arrow',
+                    const labelIcon = L.divIcon({
+                        className: 'route-label',
                         html: `
                             <div style="
                                 position: absolute;
-                                transform: translate(-50%, -50%) rotate(${magTrack - 90}deg);
+                                transform: translate(-50%, -50%) rotate(${labelRotation - 90}deg);
                                 transform-origin: center center;
-                            ">
-                                <div style="
-                                    background: #d946ef; 
-                                    color: white; 
-                                    padding: 3px 12px 3px 8px; 
-                                    height: 24px;
-                                    display: flex; 
-                                    align-items: center;
-                                    border: 1.5px solid white;
-                                    border-radius: 3px 0 0 3px;
-                                    position: relative;
-                                    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-                                ">
-                                    <span style="
-                                        font-weight: 900; 
-                                        font-size: 11px; 
-                                        font-family: sans-serif; 
-                                        transform: rotate(${textRotation}deg); 
-                                        white-space: nowrap;
-                                        letter-spacing: 0.5px;
-                                    ">
-                                        ${magTrack.toFixed(0).padStart(3, '0')}°M ${dist.toFixed(0)}NM
-                                    </span>
-                                </div>
-                                <div style="
-                                    position: absolute;
-                                    right: -11px;
-                                    top: 50%;
-                                    transform: translateY(-50%);
-                                    width: 0;
-                                    height: 0;
-                                    border-top: 12px solid transparent;
-                                    border-bottom: 12px solid transparent;
-                                    border-left: 12px solid #d946ef;
-                                "></div>
-                                <div style="
-                                    position: absolute;
-                                    right: -9px;
-                                    top: 50%;
-                                    transform: translateY(-50%);
-                                    width: 0;
-                                    height: 0;
-                                    border-top: 10px solid transparent;
-                                    border-bottom: 10px solid transparent;
-                                    border-left: 10px solid #d946ef;
-                                "></div>
-                            </div>
+                                background: rgba(4, 120, 87, 0.95);
+                                color: white;
+                                padding: 2px 6px;
+                                font-size: 10px;
+                                font-weight: 700;
+                                font-family: sans-serif;
+                                white-space: nowrap;
+                                border-radius: 3px;
+                                border: 1px solid rgba(255,255,255,0.5);
+                                box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+                            ">${magTrack.toFixed(0).padStart(3, '0')}° ${dist.toFixed(0)}nm</div>
                         `,
                         iconSize: [0, 0]
                     });
 
-                    return <Marker key={`arrow-${i}`} position={[arrowLat, arrowLng]} icon={deceaIcon} interactive={false} zIndexOffset={2000} />;
+                    return <Marker key={`label-${i}`} position={[labelLat, labelLng]} icon={labelIcon} interactive={false} zIndexOffset={1999} />;
                 })}
 
                 {/* 3. NAVIGATION DATA POINTS (WFS) */}
