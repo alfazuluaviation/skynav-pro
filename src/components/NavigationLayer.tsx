@@ -106,7 +106,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     />
                 )}
 
-                {/* 2. TRACK/DISTANCE LABELS WITH ARROW POINTER (NexAtlas style) */}
+                {/* 2. ARROW-SHAPED LABELS (NexAtlas style - single pentagon shape) */}
                 {waypoints.slice(0, -1).map((start, i) => {
                     const end = waypoints[i + 1];
                     if (!start || !end) return null;
@@ -124,7 +124,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                         Math.pow(endPoint.y - startPoint.y, 2)
                     );
                     
-                    // Only show label if segment is long enough (min 80px for label to fit)
+                    // Only show label if segment is long enough
                     const minSegmentLength = 80;
                     if (segmentPixelLength < minSegmentLength) return null;
                     
@@ -136,53 +136,58 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     const needsFlip = trueTrack > 90 && trueTrack < 270;
                     const labelRotation = needsFlip ? trueTrack + 180 : trueTrack;
                     
-                    // Arrow pointer points in direction of flight
-                    // If flipped, arrow should be on left side pointing left
+                    const text = `${magTrack.toFixed(0).padStart(3, '0')}° ${dist.toFixed(0)}nm`;
+                    
+                    // Arrow shape dimensions
+                    const width = 72;
+                    const height = 22;
+                    const arrowTip = 10;
+                    
+                    // Pentagon arrow shape: flat left, pointed right
+                    // If flipped, mirror the shape
                     const arrowOnRight = !needsFlip;
+                    
+                    // Points for pentagon arrow shape
+                    const points = arrowOnRight
+                        ? `0,0 ${width - arrowTip},0 ${width},${height / 2} ${width - arrowTip},${height} 0,${height}`
+                        : `${arrowTip},0 ${width},0 ${width},${height} ${arrowTip},${height} 0,${height / 2}`;
 
                     const labelIcon = L.divIcon({
-                        className: 'route-label-arrow',
+                        className: 'route-arrow-label',
                         html: `
-                            <div style="
-                                position: absolute;
-                                transform: translate(-50%, -50%) rotate(${labelRotation - 90}deg);
-                                transform-origin: center center;
-                                display: flex;
-                                align-items: center;
-                                flex-direction: ${arrowOnRight ? 'row' : 'row-reverse'};
-                                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
-                            ">
-                                <div style="
-                                    background: #047857;
-                                    color: white;
-                                    padding: 3px 8px;
-                                    font-size: 11px;
-                                    font-weight: 700;
-                                    font-family: 'Arial', sans-serif;
-                                    white-space: nowrap;
-                                    border-radius: ${arrowOnRight ? '4px 0 0 4px' : '0 4px 4px 0'};
-                                    border: 1px solid rgba(255,255,255,0.6);
-                                    ${arrowOnRight ? 'border-right: none;' : 'border-left: none;'}
-                                ">${magTrack.toFixed(0).padStart(3, '0')}° ${dist.toFixed(0)}nm</div>
-                                <svg 
-                                    width="10" 
-                                    height="22" 
-                                    viewBox="0 0 10 22"
-                                    style="flex-shrink: 0; ${arrowOnRight ? '' : 'transform: scaleX(-1);'}"
-                                >
-                                    <polygon 
-                                        points="0,0 0,22 10,11"
-                                        fill="#047857"
-                                        stroke="rgba(255,255,255,0.6)"
-                                        stroke-width="1"
-                                    />
-                                </svg>
-                            </div>
+                            <svg 
+                                width="${width}" 
+                                height="${height}" 
+                                viewBox="0 0 ${width} ${height}"
+                                style="
+                                    position: absolute;
+                                    transform: translate(-50%, -50%) rotate(${labelRotation - 90}deg);
+                                    transform-origin: center center;
+                                    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+                                "
+                            >
+                                <polygon 
+                                    points="${points}"
+                                    fill="#047857"
+                                    stroke="rgba(255,255,255,0.7)"
+                                    stroke-width="1"
+                                />
+                                <text 
+                                    x="${width / 2}" 
+                                    y="${height / 2 + 1}" 
+                                    text-anchor="middle" 
+                                    dominant-baseline="middle"
+                                    fill="white"
+                                    font-size="11"
+                                    font-weight="700"
+                                    font-family="Arial, sans-serif"
+                                >${text}</text>
+                            </svg>
                         `,
                         iconSize: [0, 0]
                     });
 
-                    return <Marker key={`label-arrow-${i}`} position={[labelLat, labelLng]} icon={labelIcon} interactive={false} zIndexOffset={2000} />;
+                    return <Marker key={`arrow-label-${i}`} position={[labelLat, labelLng]} icon={labelIcon} interactive={false} zIndexOffset={2000} />;
                 })}
 
                 {/* 3. NAVIGATION DATA POINTS (WFS) */}
