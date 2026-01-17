@@ -261,6 +261,58 @@ export const DraggableRoute: React.FC<DraggableRouteProps> = ({
     waypoints.slice(0, -1).forEach((start, index) => {
       const end = waypoints[index + 1];
       
+      // Check if this is a zero-length segment (same position waypoints)
+      const isZeroLength = start.lat === end.lat && start.lng === end.lng;
+      
+      // For zero-length segments, create a small visible circle marker instead
+      if (isZeroLength) {
+        // Create a circle marker that can be interacted with
+        const circle = L.circleMarker([start.lat, start.lng], {
+          radius: 15,
+          color: '#d946ef',
+          fillColor: '#d946ef',
+          fillOpacity: 0.3,
+          weight: 3,
+        }).addTo(map);
+        
+        circle.bindTooltip('✋ Clique para inserir ponto entre waypoints idênticos', {
+          direction: 'top',
+          offset: [0, -10],
+          opacity: 0.95,
+          className: 'drag-tooltip',
+        });
+        
+        circle.on('mouseover', () => {
+          circle.setStyle({ color: '#22c55e', fillColor: '#22c55e' });
+          map.getContainer().style.cursor = 'grab';
+          setHoveredSegment(index);
+        });
+        
+        circle.on('mouseout', () => {
+          if (!dragStateRef.current.isDragging) {
+            circle.setStyle({ color: '#d946ef', fillColor: '#d946ef' });
+            map.getContainer().style.cursor = '';
+            setHoveredSegment(null);
+          }
+        });
+        
+        circle.on('click', (e: L.LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(e);
+          // Open selection modal at this position
+          setSelectionState({
+            isOpen: true,
+            position: [start.lat, start.lng],
+            segmentIndex: index,
+            nearbyPoints: [],
+            customName: '',
+          });
+        });
+        
+        // Store as polyline for cleanup (we'll cast it)
+        polylinesRef.current.push(circle as unknown as L.Polyline);
+        return;
+      }
+      
       const polyline = L.polyline(
         [[start.lat, start.lng], [end.lat, end.lng]],
         {
