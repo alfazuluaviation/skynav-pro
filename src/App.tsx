@@ -94,6 +94,7 @@ const App: React.FC = () => {
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [showFlightPlanDownloadModal, setShowFlightPlanDownloadModal] = useState(false);
   const [chartsModalIcao, setChartsModalIcao] = useState<string | null>(null);
+  const [isSidebarMenuOpen, setIsSidebarMenuOpen] = useState(false);
 
   // Persistence Keys
   const KEY_CURRENT_PLAN = 'flight_plan_v1';
@@ -520,6 +521,7 @@ const App: React.FC = () => {
         airac={airac}
         activeBaseMap={activeBaseMap}
         onBaseMapChange={setActiveBaseMap}
+        onMenuStateChange={setIsSidebarMenuOpen}
       />
 
       {/* MAIN CONTENT AREA */}
@@ -821,7 +823,7 @@ const App: React.FC = () => {
               waypoints={waypoints}
               flightSegments={flightSegments}
               aircraftPosition={userPos ?? undefined}
-              hideLockButton={showPlanPanel}
+              hideLockButton={showPlanPanel || isSidebarMenuOpen}
               onInsertWaypoint={handleInsertWaypoint}
             />
           </MapContainer>
