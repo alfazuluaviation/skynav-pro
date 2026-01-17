@@ -252,7 +252,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
 
             {/* ARMOR CONTROL: MAP LOCK TOGGLE - Hidden on mobile when plan panel is open */}
             <div 
-                className={`${hideLockButton ? 'hidden md:flex' : 'flex'} md:w-16 md:h-16 w-12 h-12 md:bottom-10 md:right-10 bottom-[72px] right-4`}
+                className={`${hideLockButton ? 'hidden md:flex' : 'flex'} md:w-16 md:h-16 w-11 h-11 md:bottom-10 md:right-10 bottom-[58px] right-4`}
                 style={{
                     position: 'fixed', 
                     zIndex: 99999,
@@ -265,7 +265,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                 }} 
                 onClick={toggleLock}
             >
-                <svg className="w-6 h-6 md:w-8 md:h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="w-5 h-5 md:w-8 md:h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     {isLocked ? (
                         <>
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="white" fillOpacity="0.3"/>
