@@ -116,32 +116,74 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     const magVar = start.magneticVariation || 0; 
                     const magTrack = (trueTrack - magVar + 360) % 360;
                     const dist = calculateDistance(start, end);
-                    const midLat = (start.lat + end.lat) / 2;
-                    const midLng = (start.lng + end.lng) / 2;
+                    
+                    // Position at 40% along the segment to avoid overlapping waypoints
+                    const ratio = 0.4;
+                    const arrowLat = start.lat + (end.lat - start.lat) * ratio;
+                    const arrowLng = start.lng + (end.lng - start.lng) * ratio;
+                    
                     const needsFlip = magTrack > 90 && magTrack < 270;
+                    const textRotation = needsFlip ? 180 : 0;
 
                     const deceaIcon = L.divIcon({
                         className: 'decea-arrow',
                         html: `
-                            <div style="display: flex; align-items: center; justify-content: center; width: 140px; margin-left: -70px; margin-top: -15px;">
-                                <div style="transform: rotate(${magTrack - 90}deg);">
-                                    <div style="
-                                        background: #d946ef; color: white; padding: 2px 10px; height: 26px;
-                                        display: flex; align-items: center; border: 1.5px solid white;
-                                        clip-path: polygon(0% 0%, 82% 0%, 100% 50%, 82% 100%, 0% 100%);
-                                        min-width: 90px;
+                            <div style="
+                                position: absolute;
+                                transform: translate(-50%, -50%) rotate(${magTrack - 90}deg);
+                                transform-origin: center center;
+                            ">
+                                <div style="
+                                    background: #d946ef; 
+                                    color: white; 
+                                    padding: 3px 12px 3px 8px; 
+                                    height: 24px;
+                                    display: flex; 
+                                    align-items: center;
+                                    border: 1.5px solid white;
+                                    border-radius: 3px 0 0 3px;
+                                    position: relative;
+                                    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                                ">
+                                    <span style="
+                                        font-weight: 900; 
+                                        font-size: 11px; 
+                                        font-family: sans-serif; 
+                                        transform: rotate(${textRotation}deg); 
+                                        white-space: nowrap;
+                                        letter-spacing: 0.5px;
                                     ">
-                                        <span style="font-weight: 900; font-size: 11px; font-family: sans-serif; transform: rotate(${needsFlip ? 180 : 0}deg); white-space: nowrap;">
-                                            ${magTrack.toFixed(0).padStart(3, '0')}°M ${dist.toFixed(0)}NM
-                                        </span>
-                                    </div>
+                                        ${magTrack.toFixed(0).padStart(3, '0')}°M ${dist.toFixed(0)}NM
+                                    </span>
                                 </div>
+                                <div style="
+                                    position: absolute;
+                                    right: -11px;
+                                    top: 50%;
+                                    transform: translateY(-50%);
+                                    width: 0;
+                                    height: 0;
+                                    border-top: 12px solid transparent;
+                                    border-bottom: 12px solid transparent;
+                                    border-left: 12px solid #d946ef;
+                                "></div>
+                                <div style="
+                                    position: absolute;
+                                    right: -9px;
+                                    top: 50%;
+                                    transform: translateY(-50%);
+                                    width: 0;
+                                    height: 0;
+                                    border-top: 10px solid transparent;
+                                    border-bottom: 10px solid transparent;
+                                    border-left: 10px solid #d946ef;
+                                "></div>
                             </div>
                         `,
                         iconSize: [0, 0]
                     });
 
-                    return <Marker key={`arrow-${i}`} position={[midLat, midLng]} icon={deceaIcon} interactive={false} zIndexOffset={2000} />;
+                    return <Marker key={`arrow-${i}`} position={[arrowLat, arrowLng]} icon={deceaIcon} interactive={false} zIndexOffset={2000} />;
                 })}
 
                 {/* 3. NAVIGATION DATA POINTS (WFS) */}

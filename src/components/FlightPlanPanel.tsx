@@ -341,21 +341,28 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                         </div>
                       ) : (
                         <div className="flex flex-col flex-1 min-w-0">
-                          {/* Custom name or coordinate */}
-                          {hasCustomName ? (
-                            <>
-                              <span className="font-bold truncate text-amber-300">
-                                {displayName}
-                              </span>
-                              {coordinateStr && (
-                                <span className="text-[9px] text-slate-500 font-mono truncate">
-                                  Ponto em {coordinateStr}
+                          {/* For USER waypoints: show custom name or coordinates */}
+                          {isUserWaypoint ? (
+                            hasCustomName ? (
+                              <>
+                                <span className="font-bold truncate text-amber-300">
+                                  {displayName}
                                 </span>
-                              )}
-                            </>
+                                {coordinateStr && (
+                                  <span className="text-[9px] text-slate-500 font-mono truncate">
+                                    {coordinateStr}
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="font-bold truncate text-slate-200">
+                                {coordinateStr || displayName}
+                              </span>
+                            )
                           ) : (
+                            /* For non-USER waypoints: show ICAO or name directly */
                             <span className="font-bold truncate text-slate-200">
-                              Ponto em {coordinateStr || displayName}
+                              {wp.icao || wp.name}
                             </span>
                           )}
                         </div>
