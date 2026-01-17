@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useMapEvents, CircleMarker, Tooltip, LayerGroup, Polyline, Marker, useMap } from 'react-leaflet';
+import { useMapEvents, Tooltip, LayerGroup, Polyline, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { fetchNavigationData, NavPoint } from '../services/NavigationDataService';
 import { Waypoint } from '../types';
 import { DraggableRoute } from './DraggableRoute';
 import { getMagneticDeclination, applyMagneticVariation } from '../utils/geoUtils';
+import { getAerodromeIconHTML, getIconSize } from './AerodromeIcons';
 
 interface NavigationLayerProps {
     onPointSelect?: (point: NavPoint) => void;
@@ -193,12 +194,45 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     return <Marker key={`arrow-label-${i}`} position={[labelLat, labelLng]} icon={labelIcon} interactive={false} zIndexOffset={2000} />;
                 })}
 
-                {/* 3. NAVIGATION DATA POINTS (WFS) */}
-                {zoom >= 8 && points.map(p => (
-                    <CircleMarker key={`${p.type}-${p.id}`} center={[p.lat, p.lng]} radius={4} pathOptions={{ color: '#ffffff', weight: 1, fillColor: '#3b82f6', fillOpacity: 0.9 }}>
-                        <Tooltip direction="top" offset={[0, -10]} opacity={0.9}><div style={{ fontSize: '11px' }}><strong>{p.icao || p.name}</strong></div></Tooltip>
-                    </CircleMarker>
-                ))}
+                {/* 3. NAVIGATION DATA POINTS (WFS) - Using DECEA standard symbols */}
+                {zoom >= 8 && points.map(p => {
+                    // Determine the icon type based on point type and kind
+                    const iconType = p.kind === 'heliport' ? 'heliport' : p.type;
+                    const iconHTML = getAerodromeIconHTML(iconType as any, p.kind);
+                    const iconSize = getIconSize(iconType as any);
+                    
+                    const customIcon = L.divIcon({
+                        className: 'nav-point-icon',
+                        html: `<div style="display: flex; align-items: center; justify-content: center;">${iconHTML}</div>`,
+                        iconSize: iconSize,
+                        iconAnchor: [iconSize[0] / 2, iconSize[1] / 2]
+                    });
+                    
+                    return (
+                        <Marker 
+                            key={`${p.type}-${p.id}`} 
+                            position={[p.lat, p.lng]} 
+                            icon={customIcon}
+                        >
+                            <Tooltip 
+                                direction="top" 
+                                offset={[0, -iconSize[1] / 2 - 5]} 
+                                opacity={0.95}
+                            >
+                                <div style={{ 
+                                    fontSize: '11px', 
+                                    fontWeight: 'bold',
+                                    textAlign: 'center',
+                                    padding: '2px 6px',
+                                    background: 'rgba(255,255,255,0.95)',
+                                    borderRadius: '3px'
+                                }}>
+                                    {p.icao || p.name}
+                                </div>
+                            </Tooltip>
+                        </Marker>
+                    );
+                })}
             </LayerGroup>
 
             {/* ARMOR CONTROL: MAP LOCK TOGGLE - Hidden on mobile when plan panel is open */}
