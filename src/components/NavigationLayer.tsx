@@ -5,6 +5,7 @@ import L from 'leaflet';
 import { fetchNavigationData, NavPoint } from '../services/NavigationDataService';
 import { Waypoint } from '../types';
 import { DraggableRoute } from './DraggableRoute';
+import { getMagneticDeclination, applyMagneticVariation } from '../utils/geoUtils';
 
 interface NavigationLayerProps {
     onPointSelect?: (point: NavPoint) => void;
@@ -112,9 +113,13 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     if (!start || !end) return null;
 
                     const trueTrack = calculateTrueTrack(start, end);
-                    const magVar = start.magneticVariation || 0; 
-                    const magTrack = (trueTrack - magVar + 360) % 360;
                     const dist = calculateDistance(start, end);
+                    
+                    // Calculate magnetic declination using WMM at segment midpoint for accuracy
+                    const midLat = (start.lat + end.lat) / 2;
+                    const midLng = (start.lng + end.lng) / 2;
+                    const magVar = getMagneticDeclination(midLat, midLng);
+                    const magTrack = applyMagneticVariation(trueTrack, magVar);
                     
                     // Calculate segment length in pixels
                     const startPoint = map.latLngToContainerPoint([start.lat, start.lng]);
