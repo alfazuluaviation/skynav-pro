@@ -21,7 +21,7 @@ import { AerodromeModal } from './components/AerodromeModal';
 import { DownloadModal } from './components/DownloadModal';
 import { FlightPlanDownloadModal } from './components/FlightPlanDownloadModal';
 import { BaseMapType } from './components/LayersMenu';
-
+import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
@@ -867,6 +867,9 @@ const App: React.FC = () => {
         aircraftModel={aircraftModel}
         plannedSpeed={plannedSpeed}
       />
+
+      {/* PWA Update Prompt */}
+      <PWAUpdatePrompt />
     </div>
   );
 };
