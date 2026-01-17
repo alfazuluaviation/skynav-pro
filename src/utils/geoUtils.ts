@@ -20,20 +20,38 @@ export const calculateBearing = (lat1: number, lon1: number, lat2: number, lon2:
 };
 
 export const getMagneticDeclination = (lat: number, lng: number): number => {
-  // CRITICAL SAFETY CHECK: Avoid crashing if coordinates are null or 0
-  if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
-    return -24.5; 
+  // CRITICAL SAFETY CHECK: Avoid crashing if coordinates are null or invalid
+  if (lat === undefined || lat === null || lng === undefined || lng === null || isNaN(lat) || isNaN(lng)) {
+    console.warn("[WMM] Invalid coordinates, using default declination");
+    return -22.5; // Default for Brazil
   }
 
   try {
     const model = geomagnetism.model();
-    if (!model) return -24.5;
+    if (!model) {
+      console.warn("[WMM] Model not available, using default declination");
+      return -22.5;
+    }
     
+    // geomagnetism expects [lat, lng] as array
     const info = model.point([lat, lng]);
-    return info ? info.declination : -24.5;
+    
+    if (info && typeof info.decl === 'number') {
+      console.log(`[WMM] Declination at (${lat.toFixed(4)}, ${lng.toFixed(4)}): ${info.decl.toFixed(2)}°`);
+      return info.decl;
+    }
+    
+    // Try alternative property names
+    if (info && typeof info.declination === 'number') {
+      console.log(`[WMM] Declination at (${lat.toFixed(4)}, ${lng.toFixed(4)}): ${info.declination.toFixed(2)}°`);
+      return info.declination;
+    }
+    
+    console.warn("[WMM] No declination data, using default");
+    return -22.5;
   } catch (error) {
-    console.error("WMM Calculation Error:", error);
-    return -24.5;
+    console.error("[WMM] Calculation Error:", error);
+    return -22.5;
   }
 };
 
