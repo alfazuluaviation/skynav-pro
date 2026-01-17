@@ -107,6 +107,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             needRefresh={needRefresh}
                             lastUpdateDate={lastUpdateDate}
                             onUpdate={handleUpdate}
+                            onClose={() => setShowSettings(false)}
                         />
                     )}
                 </div>

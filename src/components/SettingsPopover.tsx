@@ -1,7 +1,7 @@
 import React from 'react';
 import { IconDownload, IconUser } from './Icons';
 import { AiracCycle } from '../../types';
-import { RefreshCw, Check } from 'lucide-react';
+import { RefreshCw, Check, X } from 'lucide-react';
 
 interface SettingsPopoverProps {
     userName?: string;
@@ -19,6 +19,7 @@ interface SettingsPopoverProps {
     needRefresh?: boolean;
     lastUpdateDate?: string | null;
     onUpdate?: () => void;
+    onClose?: () => void;
 }
 
 export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
@@ -36,6 +37,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
     needRefresh = false,
     lastUpdateDate = null,
     onUpdate,
+    onClose,
 }) => {
     const containerClass = isMobile 
         ? "w-full p-5" 
@@ -46,9 +48,19 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
             className={containerClass}
             style={!isMobile ? { animationName: 'slide-in' } : undefined}
         >
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 px-1">
-                Configurações
-            </h3>
+            <div className="flex items-center justify-between mb-6 px-1">
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">
+                    Configurações
+                </h3>
+                {onClose && (
+                    <button
+                        onClick={onClose}
+                        className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 flex items-center justify-center transition-colors"
+                    >
+                        <X className="w-4 h-4 text-slate-400" />
+                    </button>
+                )}
+            </div>
 
             <div className="flex flex-col gap-6">
                 {/* USER PROFILE */}
