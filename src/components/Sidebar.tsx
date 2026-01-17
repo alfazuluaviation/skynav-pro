@@ -26,6 +26,7 @@ interface SidebarProps {
     airac: AiracCycle | null;
     activeBaseMap: BaseMapType;
     onBaseMapChange: (baseMap: BaseMapType) => void;
+    onMenuStateChange?: (isMenuOpen: boolean) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -44,10 +45,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     airac,
     activeBaseMap,
     onBaseMapChange,
+    onMenuStateChange,
 }) => {
     const [showSettings, setShowSettings] = useState(false);
     const [showLayersMenu, setShowLayersMenu] = useState(false);
     const { needRefresh, lastUpdateDate, handleUpdate } = usePWAUpdate();
+
+    // Notify parent when menus are open (mobile only)
+    React.useEffect(() => {
+        if (onMenuStateChange) {
+            onMenuStateChange(showSettings || showLayersMenu);
+        }
+    }, [showSettings, showLayersMenu, onMenuStateChange]);
 
     return (
         <>
