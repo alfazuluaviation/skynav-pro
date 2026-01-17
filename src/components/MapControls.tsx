@@ -69,7 +69,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
             </div>
 
             {/* Mobile Controls - Bottom right, above bottom nav */}
-            <div className="md:hidden absolute bottom-20 right-4 z-[1000] flex flex-col items-center gap-2">
+            <div className="md:hidden absolute bottom-28 right-4 z-[1000] flex flex-col items-center gap-2">
                 <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 p-1.5 rounded-2xl shadow-2xl flex flex-col gap-1">
                     <button
                         onClick={onToggleFollowing}
