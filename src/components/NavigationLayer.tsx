@@ -115,10 +115,8 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     const trueTrack = calculateTrueTrack(start, end);
                     const dist = calculateDistance(start, end);
                     
-                    // Calculate magnetic declination using WMM at segment midpoint for accuracy
-                    const midLat = (start.lat + end.lat) / 2;
-                    const midLng = (start.lng + end.lng) / 2;
-                    const magVar = getMagneticDeclination(midLat, midLng);
+                    // Calculate magnetic declination at departure point (aviation standard)
+                    const magVar = getMagneticDeclination(start.lat, start.lng);
                     const magTrack = applyMagneticVariation(trueTrack, magVar);
                     
                     // Calculate segment length in pixels
