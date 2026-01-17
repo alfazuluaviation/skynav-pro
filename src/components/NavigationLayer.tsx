@@ -106,12 +106,15 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     />
                 )}
 
-                {/* 2. POINTED DIRECTIONAL ARROWS (NexAtlas style) */}
+                {/* 2. TRACK/DISTANCE LABELS WITH ARROW POINTER (NexAtlas style) */}
                 {waypoints.slice(0, -1).map((start, i) => {
                     const end = waypoints[i + 1];
                     if (!start || !end) return null;
 
                     const trueTrack = calculateTrueTrack(start, end);
+                    const magVar = start.magneticVariation || 0; 
+                    const magTrack = (trueTrack - magVar + 360) % 360;
+                    const dist = calculateDistance(start, end);
                     
                     // Calculate segment length in pixels
                     const startPoint = map.latLngToContainerPoint([start.lat, start.lng]);
@@ -121,88 +124,65 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                         Math.pow(endPoint.y - startPoint.y, 2)
                     );
                     
-                    // Arrow dimensions - proportional to segment
-                    const arrowWidth = 8;
-                    const arrowLength = 16;
-                    
-                    // STRICT: Only show arrow if segment is at least 4x the arrow length
-                    const minSegmentLength = arrowLength * 4;
+                    // Only show label if segment is long enough (min 80px for label to fit)
+                    const minSegmentLength = 80;
                     if (segmentPixelLength < minSegmentLength) return null;
                     
-                    // Position arrow exactly at center of segment
-                    const arrowLat = start.lat + (end.lat - start.lat) * 0.5;
-                    const arrowLng = start.lng + (end.lng - start.lng) * 0.5;
-
-                    // NexAtlas style: pointed arrow shape using SVG polygon
-                    // Arrow points RIGHT by default, then rotated to trueTrack
-                    const arrowIcon = L.divIcon({
-                        className: 'route-direction-arrow',
-                        html: `
-                            <svg 
-                                width="${arrowLength}" 
-                                height="${arrowWidth}" 
-                                viewBox="0 0 ${arrowLength} ${arrowWidth}"
-                                style="
-                                    position: absolute;
-                                    transform: translate(-50%, -50%) rotate(${trueTrack - 90}deg);
-                                    transform-origin: center center;
-                                    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
-                                "
-                            >
-                                <polygon 
-                                    points="0,${arrowWidth * 0.2} ${arrowLength * 0.7},${arrowWidth * 0.2} ${arrowLength},${arrowWidth * 0.5} ${arrowLength * 0.7},${arrowWidth * 0.8} 0,${arrowWidth * 0.8}"
-                                    fill="#047857"
-                                    stroke="#fff"
-                                    stroke-width="0.5"
-                                />
-                            </svg>
-                        `,
-                        iconSize: [0, 0]
-                    });
-
-                    return <Marker key={`arrow-${i}`} position={[arrowLat, arrowLng]} icon={arrowIcon} interactive={false} zIndexOffset={2000} />;
-                })}
-
-                {/* 3. TRACK/DISTANCE LABELS - Only show at zoom >= 8 */}
-                {zoom >= 8 && waypoints.slice(0, -1).map((start, i) => {
-                    const end = waypoints[i + 1];
-                    if (!start || !end) return null;
-
-                    const trueTrack = calculateTrueTrack(start, end);
-                    const magVar = start.magneticVariation || 0; 
-                    const magTrack = (trueTrack - magVar + 360) % 360;
-                    const dist = calculateDistance(start, end);
+                    // Position label at CENTER of segment
+                    const labelLat = start.lat + (end.lat - start.lat) * 0.5;
+                    const labelLng = start.lng + (end.lng - start.lng) * 0.5;
                     
-                    // Position label at 35% along the segment
-                    const labelLat = start.lat + (end.lat - start.lat) * 0.35;
-                    const labelLng = start.lng + (end.lng - start.lng) * 0.35;
-                    
+                    // Flip text if facing backwards (keep readable)
                     const needsFlip = trueTrack > 90 && trueTrack < 270;
                     const labelRotation = needsFlip ? trueTrack + 180 : trueTrack;
+                    
+                    // Arrow pointer points in direction of flight
+                    // If flipped, arrow should be on left side pointing left
+                    const arrowOnRight = !needsFlip;
 
                     const labelIcon = L.divIcon({
-                        className: 'route-label',
+                        className: 'route-label-arrow',
                         html: `
                             <div style="
                                 position: absolute;
                                 transform: translate(-50%, -50%) rotate(${labelRotation - 90}deg);
                                 transform-origin: center center;
-                                background: rgba(4, 120, 87, 0.95);
-                                color: white;
-                                padding: 2px 6px;
-                                font-size: 10px;
-                                font-weight: 700;
-                                font-family: sans-serif;
-                                white-space: nowrap;
-                                border-radius: 3px;
-                                border: 1px solid rgba(255,255,255,0.5);
-                                box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-                            ">${magTrack.toFixed(0).padStart(3, '0')}° ${dist.toFixed(0)}nm</div>
+                                display: flex;
+                                align-items: center;
+                                flex-direction: ${arrowOnRight ? 'row' : 'row-reverse'};
+                                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+                            ">
+                                <div style="
+                                    background: #047857;
+                                    color: white;
+                                    padding: 3px 8px;
+                                    font-size: 11px;
+                                    font-weight: 700;
+                                    font-family: 'Arial', sans-serif;
+                                    white-space: nowrap;
+                                    border-radius: ${arrowOnRight ? '4px 0 0 4px' : '0 4px 4px 0'};
+                                    border: 1px solid rgba(255,255,255,0.6);
+                                    ${arrowOnRight ? 'border-right: none;' : 'border-left: none;'}
+                                ">${magTrack.toFixed(0).padStart(3, '0')}° ${dist.toFixed(0)}nm</div>
+                                <svg 
+                                    width="10" 
+                                    height="22" 
+                                    viewBox="0 0 10 22"
+                                    style="flex-shrink: 0; ${arrowOnRight ? '' : 'transform: scaleX(-1);'}"
+                                >
+                                    <polygon 
+                                        points="0,0 0,22 10,11"
+                                        fill="#047857"
+                                        stroke="rgba(255,255,255,0.6)"
+                                        stroke-width="1"
+                                    />
+                                </svg>
+                            </div>
                         `,
                         iconSize: [0, 0]
                     });
 
-                    return <Marker key={`label-${i}`} position={[labelLat, labelLng]} icon={labelIcon} interactive={false} zIndexOffset={1999} />;
+                    return <Marker key={`label-arrow-${i}`} position={[labelLat, labelLng]} icon={labelIcon} interactive={false} zIndexOffset={2000} />;
                 })}
 
                 {/* 3. NAVIGATION DATA POINTS (WFS) */}
