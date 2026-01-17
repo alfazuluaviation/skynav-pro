@@ -22,6 +22,8 @@ import { DownloadModal } from './components/DownloadModal';
 import { FlightPlanDownloadModal } from './components/FlightPlanDownloadModal';
 import { BaseMapType } from './components/LayersMenu';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
+import { getAerodromeIconHTML, getIconSize } from './components/AerodromeIcons';
+
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
@@ -30,6 +32,62 @@ const defaultIcon = L.icon({
 });
 
 L.Marker.prototype.options.icon = defaultIcon;
+
+// Helper to create custom icon for waypoint based on its type
+const getWaypointIcon = (wp: Waypoint): L.DivIcon | L.Icon => {
+  // USER waypoints get a custom purple marker
+  if (wp.type === 'USER') {
+    return L.divIcon({
+      className: 'user-waypoint-icon',
+      html: `<svg width="20" height="20" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="8" fill="#a855f7" stroke="white" stroke-width="2"/>
+        <circle cx="12" cy="12" r="3" fill="white"/>
+      </svg>`,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10]
+    });
+  }
+  
+  // Determine icon type based on waypoint type
+  let iconType: 'airport' | 'vor' | 'ndb' | 'fix' | 'heliport' | 'dme' = 'fix';
+  let kind: string | undefined;
+  let isPrincipal = false;
+  
+  const wpType = wp.type?.toUpperCase();
+  
+  if (wpType === 'VOR' || wpType === 'VOR/DME' || wpType === 'VORDME') {
+    iconType = 'vor';
+    if (wpType === 'VOR/DME' || wpType === 'VORDME') {
+      kind = 'dme';
+    }
+  } else if (wpType === 'NDB') {
+    iconType = 'ndb';
+  } else if (wpType === 'DME') {
+    iconType = 'dme';
+  } else if (wpType === 'FIX' || wpType === 'WAYPOINT' || wpType === 'WPT') {
+    iconType = 'fix';
+  } else if (wpType === 'HELIPORT' || wpType === 'HELIPORTO') {
+    iconType = 'heliport';
+  } else if (wpType === 'AIRPORT' || wpType === 'AD' || wpType === 'AERODROME' || wp.icao) {
+    iconType = 'airport';
+    // Check if principal aerodrome (SB prefix)
+    isPrincipal = wp.icao?.startsWith('SB') || false;
+    // Check for heliport in the kind/name
+    if (wp.name?.toLowerCase().includes('heli')) {
+      iconType = 'heliport';
+    }
+  }
+  
+  const iconHTML = getAerodromeIconHTML(iconType, kind, isPrincipal);
+  const iconSize = getIconSize(iconType, isPrincipal);
+  
+  return L.divIcon({
+    className: 'route-waypoint-icon',
+    html: `<div style="display: flex; align-items: center; justify-content: center;">${iconHTML}</div>`,
+    iconSize: iconSize,
+    iconAnchor: [iconSize[0] / 2, iconSize[1] / 2]
+  });
+};
 
 const planeIcon = L.divIcon({
   html: `<div style="transform: rotate(0deg); transition: transform 0.5s;">
@@ -623,13 +681,23 @@ const App: React.FC = () => {
               const hasCustomName = wp.type === 'USER' && wp.name && !isCoordinateName(wp.name);
               const coordString = formatCoord(wp.lat, wp.lng);
               
+              const waypointIcon = getWaypointIcon(wp);
+              const iconSize = wp.type === 'USER' ? [20, 20] : getIconSize(
+                wp.type?.toUpperCase() === 'VOR' || wp.type?.toUpperCase() === 'VOR/DME' ? 'vor' :
+                wp.type?.toUpperCase() === 'NDB' ? 'ndb' :
+                wp.type?.toUpperCase() === 'DME' ? 'dme' :
+                wp.type?.toUpperCase() === 'HELIPORT' ? 'heliport' :
+                wp.icao ? 'airport' : 'fix',
+                wp.icao?.startsWith('SB')
+              );
+              
               return (
-                <Marker key={wp.id} position={[wp.lat, wp.lng]} icon={defaultIcon}>
+                <Marker key={wp.id} position={[wp.lat, wp.lng]} icon={waypointIcon}>
                   {/* Tooltip for USER waypoints showing coordinates and optional name */}
                   {wp.type === 'USER' && (
                     <Tooltip 
                       direction="top" 
-                      offset={[0, -40]} 
+                      offset={[0, -iconSize[1] / 2 - 5]} 
                       opacity={0.95}
                       className="user-waypoint-tooltip"
                     >
