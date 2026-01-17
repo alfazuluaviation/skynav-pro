@@ -395,17 +395,11 @@ const App: React.FC = () => {
     const dist = calculateDistance(from.lat, from.lng, to.lat, to.lng);
     const trueBrng = calculateBearing(from.lat, from.lng, to.lat, to.lng);
 
-    // Calculate magnetic variation at midpoint for better accuracy
-    const midLat = (from.lat + to.lat) / 2;
-    const midLng = (from.lng + to.lng) / 2;
-    const magneticVariation = getMagneticDeclination(midLat, midLng);
+    // Calculate magnetic variation at departure point (aviation standard)
+    const magneticVariation = getMagneticDeclination(from.lat, from.lng);
 
-    console.log(`[SkyFPL] Segment ${i}: ${from.icao || from.name} → ${to.icao || to.name}`);
-    console.log(`[SkyFPL] True Bearing: ${trueBrng.toFixed(2)}° | Mag Var: ${magneticVariation.toFixed(2)}°`);
-
-    // Apply magnetic variation: Magnetic = True - Variation (West is negative)
+    // Apply magnetic variation: Magnetic = True - Variation (West is negative in Brazil)
     const magneticTrack = applyMagneticVariation(trueBrng, magneticVariation);
-    console.log(`[SkyFPL] Magnetic Track: ${magneticTrack.toFixed(2)}°`);
 
     flightSegments.push({
       from,
