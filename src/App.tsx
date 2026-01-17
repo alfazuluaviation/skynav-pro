@@ -253,6 +253,13 @@ const App: React.FC = () => {
     }
   };
 
+  // Helper to get waypoint identifier for comparison
+  const getWaypointIdentifier = (wp: Waypoint | NavPoint): string => {
+    if ('icao' in wp && wp.icao) return wp.icao.toUpperCase();
+    if ('name' in wp && wp.name) return wp.name.toUpperCase();
+    return `${wp.lat.toFixed(6)},${wp.lng.toFixed(6)}`;
+  };
+
   const handleAddWaypoint = (point: NavPoint, insertionType: 'ORIGIN' | 'DESTINATION' | 'WAYPOINT') => {
     const wp: Waypoint = {
       id: `wp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -267,8 +274,18 @@ const App: React.FC = () => {
 
     setWaypoints(prev => {
       let next = [...prev];
+      const newId = getWaypointIdentifier(wp);
 
       if (insertionType === 'ORIGIN') {
+        // Check if first waypoint after origin would be the same
+        if (next.length > 0) {
+          const firstNonOrigin = next.find(w => w.role !== 'ORIGIN');
+          if (firstNonOrigin && getWaypointIdentifier(firstNonOrigin) === newId) {
+            alert('Não é permitido inserir o mesmo waypoint/aeródromo em sequência consecutiva.');
+            return prev;
+          }
+        }
+        
         // Sempre substitui o índice 0
         if (next.length > 0) {
           // Verifica se já existe uma origem e a substitui
@@ -283,6 +300,13 @@ const App: React.FC = () => {
           next = [{ ...wp, role: 'ORIGIN' }];
         }
       } else if (insertionType === 'DESTINATION') {
+        // Check if last waypoint before destination would be the same
+        const lastNonDest = [...next].reverse().find(w => w.role !== 'DESTINATION');
+        if (lastNonDest && getWaypointIdentifier(lastNonDest) === newId) {
+          alert('Não é permitido inserir o mesmo waypoint/aeródromo em sequência consecutiva.');
+          return prev;
+        }
+        
         // Substitui o destino existente ou adiciona no final
         const destinationIndex = next.findIndex(w => w.role === 'DESTINATION');
         if (destinationIndex !== -1) {
@@ -294,6 +318,18 @@ const App: React.FC = () => {
       } else {
         // WAYPOINT insertion - insere antes do destino se existir, senão no final
         const destinationIndex = next.findIndex(w => w.role === 'DESTINATION');
+        const insertIndex = destinationIndex !== -1 ? destinationIndex : next.length;
+        
+        // Check for consecutive duplicates
+        const prevWaypoint = insertIndex > 0 ? next[insertIndex - 1] : null;
+        const nextWaypoint = insertIndex < next.length ? next[insertIndex] : null;
+        
+        if ((prevWaypoint && getWaypointIdentifier(prevWaypoint) === newId) ||
+            (nextWaypoint && getWaypointIdentifier(nextWaypoint) === newId)) {
+          alert('Não é permitido inserir o mesmo waypoint/aeródromo em sequência consecutiva.');
+          return prev;
+        }
+        
         if (destinationIndex !== -1) {
           // Insere antes do destino
           next.splice(destinationIndex, 0, { ...wp, role: 'WAYPOINT' });
