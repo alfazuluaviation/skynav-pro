@@ -1,6 +1,7 @@
 import React from 'react';
 import { IconDownload, IconUser } from './Icons';
 import { AiracCycle } from '../../types';
+import { RefreshCw, Check } from 'lucide-react';
 
 interface SettingsPopoverProps {
     userName?: string;
@@ -14,6 +15,10 @@ interface SettingsPopoverProps {
     syncingLayers: Record<string, number>;
     airac: AiracCycle | null;
     isMobile?: boolean;
+    // PWA Update props
+    needRefresh?: boolean;
+    lastUpdateDate?: string | null;
+    onUpdate?: () => void;
 }
 
 export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
@@ -28,6 +33,9 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
     syncingLayers,
     airac,
     isMobile = false,
+    needRefresh = false,
+    lastUpdateDate = null,
+    onUpdate,
 }) => {
     const containerClass = isMobile 
         ? "w-full p-5" 
@@ -87,7 +95,41 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
 
                 <div className="h-px bg-slate-800 w-full opacity-50"></div>
 
-                {/* CICLO AIRAC */}
+                {/* ATUALIZAÇÃO */}
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2 px-1">
+                        <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Atualização</span>
+                    </div>
+
+                    {needRefresh ? (
+                        <button
+                            onClick={onUpdate}
+                            className="bg-purple-600/20 rounded-xl p-3 border border-purple-500/50 flex justify-between items-center group hover:border-purple-400 active:bg-purple-600/30 transition-all"
+                        >
+                            <div className="flex flex-col gap-0.5">
+                                <span className="text-[9px] text-purple-400 font-bold uppercase tracking-widest">NOVA VERSÃO</span>
+                                <span className="text-xs font-bold text-purple-300">Toque para atualizar</span>
+                            </div>
+                            <RefreshCw className="w-4 h-4 text-purple-400 group-hover:animate-spin" />
+                        </button>
+                    ) : (
+                        <div className="bg-slate-800/40 rounded-xl p-3 border border-slate-800 flex justify-between items-center">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">STATUS</span>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-xs font-bold text-emerald-400">Atualizado</span>
+                                    {lastUpdateDate && (
+                                        <span className="text-[9px] text-slate-500 font-mono">{lastUpdateDate}</span>
+                                    )}
+                                </div>
+                            </div>
+                            <Check className="w-4 h-4 text-emerald-500" />
+                        </div>
+                    )}
+                </div>
+
+                <div className="h-px bg-slate-800 w-full opacity-50"></div>
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-2 px-1">
                         <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">CICLO AIRAC</span>
