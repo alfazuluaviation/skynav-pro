@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import html2canvas from 'html2canvas';
 import { Waypoint, FlightSegment } from '../types';
 
 interface FlightPlanDownloadModalProps {
@@ -19,11 +20,76 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
   plannedSpeed
 }) => {
   const [downloadFormat, setDownloadFormat] = useState<'txt' | 'csv' | 'json'>('txt');
+  const [mapImage, setMapImage] = useState<string | null>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
+
+  // Capture map screenshot when modal opens
+  useEffect(() => {
+    if (isOpen && waypoints.length >= 2) {
+      captureMapScreenshot();
+    }
+    return () => {
+      setMapImage(null);
+    };
+  }, [isOpen, waypoints.length]);
+
+  const captureMapScreenshot = async () => {
+    setIsCapturing(true);
+    try {
+      // Find the leaflet map container
+      const mapContainer = document.querySelector('.leaflet-container') as HTMLElement;
+      if (!mapContainer) {
+        console.error('Map container not found');
+        setIsCapturing(false);
+        return;
+      }
+
+      // Use html2canvas to capture the map
+      const canvas = await html2canvas(mapContainer, {
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#1e293b',
+        scale: 2, // High resolution
+        logging: false,
+        imageTimeout: 15000,
+        onclone: (clonedDoc) => {
+          // Hide UI elements that shouldn't be in the screenshot
+          const elementsToHide = clonedDoc.querySelectorAll(
+            '.leaflet-control-container, .leaflet-control, [class*="sidebar"], [class*="menu"], [class*="panel"]'
+          );
+          elementsToHide.forEach((el) => {
+            (el as HTMLElement).style.display = 'none';
+          });
+        }
+      });
+
+      const imageData = canvas.toDataURL('image/png', 1.0);
+      setMapImage(imageData);
+    } catch (error) {
+      console.error('Error capturing map:', error);
+    } finally {
+      setIsCapturing(false);
+    }
+  };
 
   if (!isOpen) return null;
 
   const totalDistance = flightSegments.reduce((acc, s) => acc + s.distance, 0);
   const totalFuel = flightSegments.reduce((acc, s) => acc + s.fuel, 0);
+  
+  // Calculate total time from ETE strings to be consistent
+  const calculateTotalTime = (): string => {
+    let totalMinutes = 0;
+    flightSegments.forEach(s => {
+      if (s.ete && s.ete !== '--:--') {
+        const [h, m] = s.ete.split(':').map(Number);
+        totalMinutes += h * 60 + m;
+      }
+    });
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  };
 
   const generateFlightPlanText = () => {
     const date = new Date().toLocaleDateString('pt-BR');
@@ -69,6 +135,7 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
       content += `                        TOTAIS\n`;
       content += `───────────────────────────────────────────────────────────────\n\n`;
       content += `   Distância Total: ${totalDistance.toFixed(1)} NM\n`;
+      content += `   Tempo de Voo: ${calculateTotalTime()} h\n`;
       content += `   Combustível Total Est.: ${totalFuel} L\n`;
     }
     
@@ -123,6 +190,7 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
       })),
       totals: {
         distance: totalDistance,
+        time: calculateTotalTime(),
         fuel: totalFuel
       }
     };
@@ -167,11 +235,26 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadMapImage = () => {
+    if (!mapImage) return;
+    
+    const origin = waypoints.find(w => w.role === 'ORIGIN')?.icao || 'XXX';
+    const dest = waypoints.find(w => w.role === 'DESTINATION')?.icao || 'XXX';
+    const dateStr = new Date().toISOString().split('T')[0];
+    
+    const a = document.createElement('a');
+    a.href = mapImage;
+    a.download = `MAPA_${origin}_${dest}_${dateStr}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   return (
     <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-slate-900/95 border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+      <div className="bg-slate-900/95 border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="bg-gradient-to-r from-sky-600 to-blue-700 px-6 py-4 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-sky-600 to-blue-700 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -215,10 +298,62 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
                 <span className="text-white font-semibold">{totalDistance.toFixed(1)} NM</span>
               </div>
               <div>
-                <span className="text-slate-500">Combustível: </span>
-                <span className="text-white font-semibold">{totalFuel} L</span>
+                <span className="text-slate-500">Tempo: </span>
+                <span className="text-white font-semibold">{calculateTotalTime()} h</span>
               </div>
             </div>
+          </div>
+
+          {/* Map Preview */}
+          <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Imagem da Rota</h3>
+              {mapImage && (
+                <button
+                  onClick={handleDownloadMapImage}
+                  className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Baixar Imagem
+                </button>
+              )}
+            </div>
+            
+            {isCapturing ? (
+              <div className="flex items-center justify-center h-48 bg-slate-900/50 rounded-lg">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm text-slate-400">Capturando mapa...</span>
+                </div>
+              </div>
+            ) : mapImage ? (
+              <div className="relative rounded-lg overflow-hidden border border-slate-600">
+                <img 
+                  src={mapImage} 
+                  alt="Mapa da rota" 
+                  className="w-full h-auto max-h-64 object-cover"
+                />
+                <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
+                  Alta resolução
+                </div>
+              </div>
+            ) : waypoints.length < 2 ? (
+              <div className="flex items-center justify-center h-32 bg-slate-900/50 rounded-lg">
+                <span className="text-sm text-slate-500">Adicione ao menos 2 waypoints para visualizar a rota</span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-32 bg-slate-900/50 rounded-lg gap-2">
+                <span className="text-sm text-slate-500">Não foi possível capturar o mapa</span>
+                <button
+                  onClick={captureMapScreenshot}
+                  className="text-xs text-sky-400 hover:text-sky-300 underline"
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Format Selection */}
