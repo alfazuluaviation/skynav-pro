@@ -496,7 +496,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                                   )}
                                 </>
                               ) : isUserWaypoint ? (
-                                <span className="text-white">{wp.description || displayName}</span>
+                                <span className="text-white">Coordenada</span>
                               ) : (
                                 <span className="text-white">{displayName}</span>
                               )}
@@ -540,9 +540,16 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                       </td>
                       <td className="p-3 sm:p-4 text-right font-black text-white text-base sm:text-lg whitespace-nowrap">
                         Tempo de voo: {(() => {
-                          const totalHours = flightSegments.reduce((acc, s) => acc + s.distance, 0) / plannedSpeed;
-                          const hours = Math.floor(totalHours);
-                          const minutes = Math.round((totalHours - hours) * 60);
+                          // Sum ETEs by parsing HH:MM format to ensure consistency with individual segments
+                          let totalMinutes = 0;
+                          flightSegments.forEach(s => {
+                            if (s.ete && s.ete !== '--:--') {
+                              const [h, m] = s.ete.split(':').map(Number);
+                              totalMinutes += h * 60 + m;
+                            }
+                          });
+                          const hours = Math.floor(totalMinutes / 60);
+                          const minutes = totalMinutes % 60;
                           return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
                         })()} h
                       </td>
