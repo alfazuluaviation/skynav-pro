@@ -26,11 +26,16 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
     activeBaseMap = 'roadmap',
     onBaseMapChange,
 }) => {
-    const chartTypes = [
+    // Grupo 1: REA, REUL, REH, ARC
+    const chartTypesGroup1 = [
         { id: 'REA', name: 'REA' },
         { id: 'REUL', name: 'REUL' },
         { id: 'REH', name: 'REH' },
         { id: 'ARC', name: 'ARC' },
+    ];
+    
+    // Grupo 2: WAC, ENRC HIGH, ENRC LOW
+    const chartTypesGroup2 = [
         { id: 'WAC', name: 'WAC' },
         { id: 'HIGH', name: 'ENRC HIGH' },
         { id: 'LOW', name: 'ENRC LOW' }
@@ -60,8 +65,48 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                 </div>
 
                 <div className="p-4 flex flex-col gap-4">
+                    {/* Grupo 1: REA, REUL, REH, ARC */}
                     <div className="grid grid-cols-4 gap-2">
-                        {chartTypes.map((chart) => {
+                        {chartTypesGroup1.map((chart) => {
+                            const isActive = activeLayers.includes(chart.id);
+                            const isEnrc = chart.id === 'HIGH' || chart.id === 'LOW' || chart.id === 'REA';
+                            const isDownloaded = !isEnrc || downloadedLayers.includes(chart.id);
+
+                            return (
+                                <button
+                                    key={chart.id}
+                                    onClick={() => {
+                                        if (isDownloaded) onToggleLayer(chart.id);
+                                    }}
+                                    disabled={!isDownloaded}
+                                    className={`flex flex-col items-center gap-1 transition-opacity ${!isDownloaded ? 'opacity-30' : 'opacity-100'}`}
+                                >
+                                    <div
+                                        className={`w-12 h-12 rounded-xl border-2 transition-all flex items-center justify-center relative ${isActive ? 'border-purple-400 shadow-lg' : 'border-slate-800'
+                                            }`}
+                                        style={{
+                                            backgroundColor: isActive ? '#7e22ce' : 'rgba(30, 41, 59, 0.6)'
+                                        }}
+                                    >
+                                        <IconMap className={isActive ? 'text-white' : 'text-slate-400'} />
+                                        {isActive && (
+                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-purple-500 rounded-full border-2 border-slate-900"></div>
+                                        )}
+                                    </div>
+                                    <span className={`text-[8px] font-black uppercase text-center leading-tight ${isActive ? 'text-white' : 'text-slate-400'
+                                        }`}>
+                                        {chart.name}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="h-px bg-slate-800 w-full opacity-30"></div>
+
+                    {/* Grupo 2: WAC, ENRC HIGH, ENRC LOW */}
+                    <div className="grid grid-cols-3 gap-2">
+                        {chartTypesGroup2.map((chart) => {
                             const isActive = activeLayers.includes(chart.id);
                             const isEnrc = chart.id === 'HIGH' || chart.id === 'LOW' || chart.id === 'REA';
                             const isDownloaded = !isEnrc || downloadedLayers.includes(chart.id);
@@ -154,8 +199,46 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
             </div>
 
             <div className="p-5 flex flex-col gap-6 max-h-[75vh] overflow-y-auto">
+                {/* Grupo 1: REA, REUL, REH, ARC */}
                 <div className="grid grid-cols-4 gap-3">
-                    {chartTypes.map((chart) => {
+                    {chartTypesGroup1.map((chart) => {
+                        const isActive = activeLayers.includes(chart.id);
+                        const isEnrc = chart.id === 'HIGH' || chart.id === 'LOW' || chart.id === 'REA';
+                        const isDownloaded = !isEnrc || downloadedLayers.includes(chart.id);
+
+                        return (
+                            <button
+                                key={chart.id}
+                                onClick={() => isDownloaded && onToggleLayer(chart.id)}
+                                disabled={!isDownloaded}
+                                className={`flex flex-col items-center gap-1.5 group transition-opacity ${!isDownloaded ? 'opacity-30 cursor-not-allowed' : 'opacity-100'}`}
+                            >
+                                <div
+                                    className={`w-14 h-14 rounded-2xl border-2 transition-all flex items-center justify-center relative ${isActive ? 'border-purple-400 shadow-lg' : 'border-slate-800'
+                                        }`}
+                                    style={{
+                                        backgroundColor: isActive ? '#7e22ce' : 'rgba(30, 41, 59, 0.6)'
+                                    }}
+                                >
+                                    <IconMap className={isActive ? 'text-white' : 'text-slate-400'} />
+                                    {isActive && (
+                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full border-2 border-[#0d1117]"></div>
+                                    )}
+                                </div>
+                                <span className={`text-[9px] font-black uppercase text-center leading-tight transition-colors ${isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'
+                                    }`}>
+                                    {chart.name}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+
+                <div className="h-px bg-slate-800 w-full opacity-30"></div>
+
+                {/* Grupo 2: WAC, ENRC HIGH, ENRC LOW */}
+                <div className="grid grid-cols-3 gap-3">
+                    {chartTypesGroup2.map((chart) => {
                         const isActive = activeLayers.includes(chart.id);
                         const isEnrc = chart.id === 'HIGH' || chart.id === 'LOW' || chart.id === 'REA';
                         const isDownloaded = !isEnrc || downloadedLayers.includes(chart.id);
