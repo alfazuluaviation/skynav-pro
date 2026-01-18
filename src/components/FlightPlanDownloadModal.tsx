@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { Waypoint, FlightSegment } from '../types';
+import logoSkyFPL from '../assets/logo-skyfpl.png';
 
 interface FlightPlanDownloadModalProps {
   isOpen: boolean;
@@ -280,41 +282,148 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
     return JSON.stringify(data, null, 2);
   };
 
-  const handleDownload = () => {
-    let content: string;
-    let filename: string;
-    let mimeType: string;
-    
+  const handleDownload = async () => {
     const origin = waypoints.find(w => w.role === 'ORIGIN')?.icao || 'XXX';
     const dest = waypoints.find(w => w.role === 'DESTINATION')?.icao || 'XXX';
     const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `PLN_${origin}_${dest}_${dateStr}.pdf`;
     
-    switch (downloadFormat) {
-      case 'csv':
-        content = generateFlightPlanCSV();
-        filename = `PLN_${origin}_${dest}_${dateStr}.csv`;
-        mimeType = 'text/csv';
-        break;
-      case 'json':
-        content = generateFlightPlanJSON();
-        filename = `PLN_${origin}_${dest}_${dateStr}.json`;
-        mimeType = 'application/json';
-        break;
-      default:
-        content = generateFlightPlanText();
-        filename = `PLN_${origin}_${dest}_${dateStr}.txt`;
-        mimeType = 'text/plain';
+    // Create PDF using jsPDF
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 10;
+    let yPos = margin;
+
+    // Add logo
+    try {
+      const logoImg = new Image();
+      logoImg.src = logoSkyFPL;
+      await new Promise((resolve, reject) => {
+        logoImg.onload = resolve;
+        logoImg.onerror = reject;
+      });
+      const logoWidth = 40;
+      const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
+      pdf.addImage(logoImg, 'PNG', (pageWidth - logoWidth) / 2, yPos, logoWidth, logoHeight);
+      yPos += logoHeight + 5;
+    } catch (error) {
+      console.error('Error loading logo:', error);
+      yPos += 10;
     }
+
+    // Header info row
+    pdf.setFontSize(8);
+    pdf.setTextColor(100);
+    const headerLabels = ['Origem', 'Destino', 'Aeronave', 'Velocidade', 'Distância', 'Tempo', 'Combustível'];
+    const headerValues = [
+      waypoints.find(w => w.role === 'ORIGIN')?.icao || '-',
+      waypoints.find(w => w.role === 'DESTINATION')?.icao || '-',
+      aircraftModel.id,
+      `${plannedSpeed} kt`,
+      `${totalDistance.toFixed(1)} NM`,
+      `${calculateTotalTime()}h`,
+      `${totalFuel.toFixed(1)} L`
+    ];
     
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const colWidth = (pageWidth - 2 * margin) / 7;
+    headerLabels.forEach((label, i) => {
+      const x = margin + i * colWidth + colWidth / 2;
+      pdf.text(label, x, yPos, { align: 'center' });
+    });
+    yPos += 4;
+    pdf.setFontSize(10);
+    pdf.setTextColor(0);
+    headerValues.forEach((value, i) => {
+      const x = margin + i * colWidth + colWidth / 2;
+      pdf.text(value, x, yPos, { align: 'center' });
+    });
+    yPos += 8;
+
+    // Map image
+    if (mapImage) {
+      try {
+        const imgWidth = pageWidth - 2 * margin;
+        const imgHeight = 60;
+        pdf.addImage(mapImage, 'PNG', margin, yPos, imgWidth, imgHeight);
+        yPos += imgHeight + 5;
+      } catch (error) {
+        console.error('Error adding map image:', error);
+      }
+    }
+
+    // Flight plan table
+    pdf.setFontSize(8);
+    const tableHeaders = ['#', 'Ponto', 'Tipo', 'Coordenadas', 'Rumo', 'Dist', 'ETE', 'Comb'];
+    const colWidths = [8, 25, 15, 55, 18, 18, 20, 18];
+    let xPos = margin;
+    
+    // Table header
+    pdf.setFillColor(30, 41, 59);
+    pdf.rect(margin, yPos - 3, pageWidth - 2 * margin, 7, 'F');
+    pdf.setTextColor(255);
+    tableHeaders.forEach((header, i) => {
+      pdf.text(header, xPos + colWidths[i] / 2, yPos, { align: 'center' });
+      xPos += colWidths[i];
+    });
+    yPos += 6;
+    pdf.setTextColor(0);
+
+    // Table rows
+    waypoints.forEach((wp, index) => {
+      if (yPos > pageHeight - 20) {
+        pdf.addPage();
+        yPos = margin;
+      }
+      
+      const segment = index > 0 ? flightSegments[index - 1] : null;
+      const typeInfo = getTypeLabel(wp.type, wp.role);
+      const coordLat = formatCoord(wp.lat, true);
+      const coordLng = formatCoord(wp.lng, false);
+      
+      const rowData = [
+        `${index + 1}`,
+        wp.icao || wp.name?.substring(0, 8) || '-',
+        typeInfo.label,
+        `${coordLat} / ${coordLng}`,
+        segment ? `${segment.track}°` : '-',
+        segment ? `${segment.distance.toFixed(1)}` : '-',
+        segment ? segment.ete : '-',
+        segment ? `${segment.fuel.toFixed(1)}` : '-'
+      ];
+      
+      // Alternating row colors
+      if (index % 2 === 0) {
+        pdf.setFillColor(241, 245, 249);
+        pdf.rect(margin, yPos - 3, pageWidth - 2 * margin, 6, 'F');
+      }
+      
+      xPos = margin;
+      rowData.forEach((data, i) => {
+        pdf.text(data, xPos + colWidths[i] / 2, yPos, { align: 'center' });
+        xPos += colWidths[i];
+      });
+      yPos += 6;
+    });
+
+    // Totals row
+    pdf.setFillColor(51, 65, 85);
+    pdf.rect(margin, yPos - 3, pageWidth - 2 * margin, 7, 'F');
+    pdf.setTextColor(255);
+    xPos = margin;
+    const totalsData = ['', 'TOTAIS', '', '', '-', totalDistance.toFixed(1), calculateTotalTime(), totalFuel.toFixed(1)];
+    totalsData.forEach((data, i) => {
+      pdf.text(data, xPos + colWidths[i] / 2, yPos, { align: 'center' });
+      xPos += colWidths[i];
+    });
+    
+    // Footer
+    yPos = pageHeight - 10;
+    pdf.setFontSize(7);
+    pdf.setTextColor(128);
+    pdf.text(`Gerado por SkyFPL em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, pageWidth / 2, yPos, { align: 'center' });
+
+    pdf.save(filename);
   };
 
   const handleDownloadMapImage = () => {
@@ -355,6 +464,11 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
 
         {/* Content - A4 optimized layout */}
         <div className="p-4 space-y-4 print:p-0 print:space-y-2" style={{ maxWidth: '210mm' }}>
+          {/* Logo SkyFPL */}
+          <div className="flex justify-center mb-2 print:mb-4">
+            <img src={logoSkyFPL} alt="SkyFPL Logo" className="h-12 print:h-16" />
+          </div>
+
           {/* Header Info Row */}
           <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 print:bg-gray-100 print:border-gray-300 print:rounded-none">
             <div className="grid grid-cols-3 md:grid-cols-7 gap-2 text-xs">
