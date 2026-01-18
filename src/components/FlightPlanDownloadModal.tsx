@@ -140,6 +140,39 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
 
+  // Format coordinates as degrees/minutes/seconds
+  const formatCoord = (value: number, isLat: boolean): string => {
+    const abs = Math.abs(value);
+    const deg = Math.floor(abs);
+    const minFloat = (abs - deg) * 60;
+    const min = Math.floor(minFloat);
+    const sec = ((minFloat - min) * 60).toFixed(0);
+    const dir = isLat ? (value >= 0 ? 'N' : 'S') : (value >= 0 ? 'E' : 'W');
+    return `${deg}°${min.toString().padStart(2, '0')}'${sec.toString().padStart(2, '0')}"${dir}`;
+  };
+
+  // Get role label
+  const getRoleLabel = (role?: string): { label: string; color: string } => {
+    switch (role) {
+      case 'ORIGIN': return { label: 'DEP', color: 'bg-teal-600' };
+      case 'DESTINATION': return { label: 'ARR', color: 'bg-red-500' };
+      default: return { label: 'USE', color: 'bg-amber-500' };
+    }
+  };
+
+  // Get type label
+  const getTypeLabel = (type: string, role?: string): { label: string; color: string } => {
+    if (role === 'ORIGIN') return { label: 'DEP', color: 'bg-teal-600' };
+    if (role === 'DESTINATION') return { label: 'ARR', color: 'bg-red-500' };
+    switch (type) {
+      case 'AIRPORT': return { label: 'AIR', color: 'bg-amber-500' };
+      case 'VOR': return { label: 'VOR', color: 'bg-blue-500' };
+      case 'NDB': return { label: 'NDB', color: 'bg-purple-500' };
+      case 'FIX': return { label: 'FIX', color: 'bg-cyan-500' };
+      default: return { label: 'USE', color: 'bg-amber-500' };
+    }
+  };
+
   const generateFlightPlanText = () => {
     const date = new Date().toLocaleDateString('pt-BR');
     const time = new Date().toLocaleTimeString('pt-BR');
@@ -300,19 +333,19 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-slate-900/95 border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/70 backdrop-blur-sm print:bg-white print:backdrop-blur-none">
+      <div className="bg-slate-900/95 border border-slate-700/50 rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto print:bg-white print:border-none print:shadow-none print:max-w-none print:max-h-none print:overflow-visible print:rounded-none print:mx-0">
         {/* Header */}
-        <div className="bg-gradient-to-r from-sky-600 to-blue-700 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+        <div className="bg-gradient-to-r from-sky-600 to-blue-700 px-6 py-4 flex items-center justify-between sticky top-0 z-10 print:bg-slate-800 print:static">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-6 h-6 print:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
             Download do Plano de Voo
           </h2>
           <button
             onClick={onClose}
-            className="text-white/80 hover:text-white transition-colors"
+            className="text-white/80 hover:text-white transition-colors print:hidden"
           >
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -320,151 +353,244 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-6">
-          {/* Resumo do Plano */}
-          <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">Resumo do Plano</h3>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <span className="text-slate-500">Aeronave: </span>
-                <span className="text-white font-semibold">{aircraftModel.id}</span>
+        {/* Content - A4 optimized layout */}
+        <div className="p-4 space-y-4 print:p-0 print:space-y-2" style={{ maxWidth: '210mm' }}>
+          {/* Header Info Row */}
+          <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 print:bg-gray-100 print:border-gray-300 print:rounded-none">
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-xs">
+              <div className="text-center">
+                <span className="text-slate-500 print:text-gray-600 block">Aeronave</span>
+                <span className="text-white print:text-black font-bold">{aircraftModel.id}</span>
               </div>
-              <div>
-                <span className="text-slate-500">Velocidade: </span>
-                <span className="text-white font-semibold">{plannedSpeed} kt</span>
+              <div className="text-center">
+                <span className="text-slate-500 print:text-gray-600 block">Velocidade</span>
+                <span className="text-white print:text-black font-bold">{plannedSpeed} kt</span>
               </div>
-              <div>
-                <span className="text-slate-500">Waypoints: </span>
-                <span className="text-white font-semibold">{waypoints.length}</span>
+              <div className="text-center">
+                <span className="text-slate-500 print:text-gray-600 block">Waypoints</span>
+                <span className="text-white print:text-black font-bold">{waypoints.length}</span>
               </div>
-              <div>
-                <span className="text-slate-500">Legs: </span>
-                <span className="text-white font-semibold">{flightSegments.length}</span>
+              <div className="text-center">
+                <span className="text-slate-500 print:text-gray-600 block">Distância</span>
+                <span className="text-white print:text-black font-bold">{totalDistance.toFixed(1)} NM</span>
               </div>
-              <div>
-                <span className="text-slate-500">Distância: </span>
-                <span className="text-white font-semibold">{totalDistance.toFixed(1)} NM</span>
+              <div className="text-center">
+                <span className="text-slate-500 print:text-gray-600 block">Tempo</span>
+                <span className="text-white print:text-black font-bold">{calculateTotalTime()}</span>
               </div>
-              <div>
-                <span className="text-slate-500">Tempo: </span>
-                <span className="text-white font-semibold">{calculateTotalTime()} h</span>
+              <div className="text-center">
+                <span className="text-slate-500 print:text-gray-600 block">Combustível</span>
+                <span className="text-white print:text-black font-bold">{totalFuel.toFixed(1)} L</span>
               </div>
             </div>
           </div>
 
-          {/* Map Preview */}
-          <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Imagem da Rota</h3>
+          {/* Map Preview - Compact */}
+          <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 print:bg-white print:border-gray-300 print:rounded-none">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider print:text-gray-700">Mapa da Rota</h3>
               {mapImage && (
                 <button
                   onClick={handleDownloadMapImage}
-                  className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors"
+                  className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors print:hidden"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                  Baixar Imagem
+                  Baixar
                 </button>
               )}
             </div>
             
             {isCapturing ? (
-              <div className="flex items-center justify-center h-48 bg-slate-900/50 rounded-lg">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-sm text-slate-400">Capturando mapa...</span>
+              <div className="flex items-center justify-center h-40 bg-slate-900/50 rounded-lg print:hidden">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-xs text-slate-400">Capturando...</span>
                 </div>
               </div>
             ) : mapImage ? (
-              <div className="relative rounded-lg overflow-hidden border border-slate-600">
+              <div className="relative rounded-lg overflow-hidden border border-slate-600 print:border-gray-400">
                 <img 
                   src={mapImage} 
                   alt="Mapa da rota" 
-                  className="w-full h-auto max-h-64 object-cover"
+                  className="w-full h-auto max-h-48 object-contain print:max-h-64"
                 />
-                <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
-                  Alta resolução
-                </div>
               </div>
             ) : waypoints.length < 2 ? (
-              <div className="flex items-center justify-center h-32 bg-slate-900/50 rounded-lg">
-                <span className="text-sm text-slate-500">Adicione ao menos 2 waypoints para visualizar a rota</span>
+              <div className="flex items-center justify-center h-32 bg-slate-900/50 rounded-lg print:hidden">
+                <span className="text-xs text-slate-500">Mínimo 2 waypoints</span>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-32 bg-slate-900/50 rounded-lg gap-2">
-                <span className="text-sm text-slate-500">Não foi possível capturar o mapa</span>
-                <button
-                  onClick={captureMapScreenshot}
-                  className="text-xs text-sky-400 hover:text-sky-300 underline"
-                >
+              <div className="flex flex-col items-center justify-center h-32 bg-slate-900/50 rounded-lg gap-2 print:hidden">
+                <button onClick={captureMapScreenshot} className="text-xs text-sky-400 hover:text-sky-300 underline">
                   Tentar novamente
                 </button>
               </div>
             )}
           </div>
 
-          {/* Format Selection */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Formato de Download</h3>
-            <div className="grid grid-cols-3 gap-3">
+          {/* Flight Plan Table - Full Details */}
+          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden print:bg-white print:border-gray-300 print:rounded-none">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider p-3 border-b border-slate-700/50 print:text-gray-700 print:bg-gray-100 print:border-gray-300">
+              Detalhes do Plano de Voo
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-700/50 print:bg-gray-200">
+                    <th className="text-left py-2 px-3 text-slate-300 font-bold print:text-gray-700">PONTO</th>
+                    <th className="text-center py-2 px-2 text-slate-300 font-bold print:text-gray-700">TIPO</th>
+                    <th className="text-left py-2 px-3 text-slate-300 font-bold print:text-gray-700">COORDENADAS</th>
+                    <th className="text-center py-2 px-2 text-slate-300 font-bold print:text-gray-700">RUMO</th>
+                    <th className="text-center py-2 px-2 text-slate-300 font-bold print:text-gray-700">DIST</th>
+                    <th className="text-center py-2 px-2 text-slate-300 font-bold print:text-gray-700">ETE</th>
+                    <th className="text-center py-2 px-2 text-slate-300 font-bold print:text-gray-700">COMB</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {waypoints.map((wp, index) => {
+                    const segment = index < flightSegments.length ? flightSegments[index] : null;
+                    const typeInfo = getTypeLabel(wp.type, wp.role);
+                    
+                    return (
+                      <tr 
+                        key={wp.id} 
+                        className="border-t border-slate-700/30 hover:bg-slate-700/30 print:border-gray-200 print:hover:bg-transparent"
+                      >
+                        <td className="py-2 px-3">
+                          <span className="text-white print:text-black font-semibold">
+                            {wp.icao || wp.name?.substring(0, 10) || `WP${index + 1}`}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold text-white ${typeInfo.color} print:bg-gray-500`}>
+                            {typeInfo.label}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className="text-slate-300 print:text-gray-600 leading-tight">
+                            <div>{formatCoord(wp.lat, true)}</div>
+                            <div>{formatCoord(wp.lng, false)}</div>
+                          </div>
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <span className="text-white print:text-black font-medium">
+                            {segment ? `${segment.track}°` : '-'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <span className="text-slate-300 print:text-gray-600">
+                            {segment ? `${segment.distance.toFixed(1)}` : '-'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <span className="text-slate-300 print:text-gray-600">
+                            {segment ? segment.ete : '-'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <span className="text-slate-300 print:text-gray-600">
+                            {segment ? `${segment.fuel.toFixed(1)}` : '-'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {/* Totals Row */}
+                  <tr className="border-t-2 border-slate-600 bg-slate-700/50 print:border-gray-400 print:bg-gray-100">
+                    <td colSpan={3} className="py-2 px-3">
+                      <span className="text-white print:text-black font-bold">TOTAIS</span>
+                    </td>
+                    <td className="py-2 px-2 text-center text-slate-400 print:text-gray-500">-</td>
+                    <td className="py-2 px-2 text-center">
+                      <span className="text-white print:text-black font-bold">{totalDistance.toFixed(1)}</span>
+                    </td>
+                    <td className="py-2 px-2 text-center">
+                      <span className="text-white print:text-black font-bold">{calculateTotalTime()}</span>
+                    </td>
+                    <td className="py-2 px-2 text-center">
+                      <span className="text-white print:text-black font-bold">{totalFuel.toFixed(1)}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Format Selection - Hidden on print */}
+          <div className="space-y-2 print:hidden">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Formato</h3>
+            <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => setDownloadFormat('txt')}
-                className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center ${
+                className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center ${
                   downloadFormat === 'txt'
                     ? 'border-sky-500 bg-sky-500/20 text-sky-400'
                     : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
                 }`}
               >
-                <div className="text-2xl mb-1">📄</div>
-                <div className="text-sm font-bold">TXT</div>
-                <div className="text-xs text-slate-500">Texto</div>
+                <div className="text-lg mb-0.5">📄</div>
+                <div className="text-xs font-bold">TXT</div>
               </button>
               <button
                 onClick={() => setDownloadFormat('csv')}
-                className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center ${
+                className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center ${
                   downloadFormat === 'csv'
                     ? 'border-sky-500 bg-sky-500/20 text-sky-400'
                     : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
                 }`}
               >
-                <div className="text-2xl mb-1">📊</div>
-                <div className="text-sm font-bold">CSV</div>
-                <div className="text-xs text-slate-500">Planilha</div>
+                <div className="text-lg mb-0.5">📊</div>
+                <div className="text-xs font-bold">CSV</div>
               </button>
               <button
                 onClick={() => setDownloadFormat('json')}
-                className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center ${
+                className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center ${
                   downloadFormat === 'json'
                     ? 'border-sky-500 bg-sky-500/20 text-sky-400'
                     : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
                 }`}
               >
-                <div className="text-2xl mb-1">🔧</div>
-                <div className="text-sm font-bold">JSON</div>
-                <div className="text-xs text-slate-500">API</div>
+                <div className="text-lg mb-0.5">🔧</div>
+                <div className="text-xs font-bold">JSON</div>
               </button>
             </div>
           </div>
 
-          {/* Download Button */}
-          <button
-            onClick={handleDownload}
-            disabled={waypoints.length === 0}
-            className="w-full py-4 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            {waypoints.length === 0 ? 'Nenhum plano para baixar' : 'Baixar Plano de Voo'}
-          </button>
+          {/* Action Buttons */}
+          <div className="flex gap-3 print:hidden">
+            <button
+              onClick={() => window.print()}
+              className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Imprimir
+            </button>
+            <button
+              onClick={handleDownload}
+              disabled={waypoints.length === 0}
+              className="flex-1 py-3 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Baixar
+            </button>
+          </div>
 
           {waypoints.length === 0 && (
-            <p className="text-center text-sm text-slate-500">
-              Adicione waypoints ao seu plano de voo para poder fazer o download.
+            <p className="text-center text-xs text-slate-500 print:hidden">
+              Adicione waypoints para baixar.
             </p>
           )}
+
+          {/* Print Footer */}
+          <div className="hidden print:block text-center text-xs text-gray-500 pt-4 border-t border-gray-300">
+            Gerado por SkyFPL em {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}
+          </div>
         </div>
       </div>
     </div>
