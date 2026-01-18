@@ -48,7 +48,7 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
       const currentCenter = mapInstance.getCenter();
       const currentZoom = mapInstance.getZoom();
 
-      // Calculate bounds from waypoints with padding
+      // Calculate bounds from waypoints with generous padding
       const lats = waypoints.map(wp => wp.lat);
       const lngs = waypoints.map(wp => wp.lng);
       const minLat = Math.min(...lats);
@@ -56,24 +56,30 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
       const minLng = Math.min(...lngs);
       const maxLng = Math.max(...lngs);
       
-      // Add 10% padding to bounds
-      const latPadding = (maxLat - minLat) * 0.15;
-      const lngPadding = (maxLng - minLng) * 0.15;
+      // Add 25% padding to bounds to ensure all waypoints are visible
+      const latPadding = Math.max((maxLat - minLat) * 0.25, 0.1);
+      const lngPadding = Math.max((maxLng - minLng) * 0.25, 0.1);
       
       const bounds = [
         [minLat - latPadding, minLng - lngPadding],
         [maxLat + latPadding, maxLng + lngPadding]
       ] as [[number, number], [number, number]];
       
-      // Fit the map to the route bounds
+      console.log('Fitting map to bounds:', bounds, 'waypoints:', waypoints.length);
+      
+      // Fit the map to the route bounds with pixel padding
       mapInstance.fitBounds(bounds, { 
         animate: false,
         duration: 0,
-        maxZoom: 10
+        padding: [50, 50],
+        maxZoom: 9
       });
+      
+      // Force invalidate size to ensure proper rendering
+      mapInstance.invalidateSize();
 
-      // Wait for map to update and tiles to load
-      await new Promise(resolve => setTimeout(resolve, 2500));
+      // Wait for map to update and tiles to load (longer wait)
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Find the leaflet map container
       const mapContainer = document.querySelector('.leaflet-container') as HTMLElement;
