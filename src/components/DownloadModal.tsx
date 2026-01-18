@@ -193,6 +193,8 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     { id: 'HIGH', label: 'ENRC HIGH' },
     { id: 'LOW', label: 'ENRC LOW' },
     { id: 'REA', label: 'REA' },
+    { id: 'REUL', label: 'REUL' },
+    { id: 'REH', label: 'REH' },
     { id: 'WAC', label: 'WAC' },
   ];
 
@@ -221,6 +223,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
         <div className="p-6 space-y-6">
           {/* Chart Download Options */}
           <div className="space-y-3">
+            {/* Grupo 1: ENRC HIGH, ENRC LOW, REA */}
             <div className="grid grid-cols-3 gap-3">
               {chartOptions.slice(0, 3).map((chart) => {
                 const isDownloaded = downloadedLayers.includes(chart.id);
@@ -263,8 +266,10 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                 );
               })}
             </div>
-            <div className="flex justify-center">
-              {chartOptions.slice(3, 4).map((chart) => {
+            
+            {/* Grupo 2: REUL, REH, WAC */}
+            <div className="grid grid-cols-3 gap-3">
+              {chartOptions.slice(3, 6).map((chart) => {
                 const isDownloaded = downloadedLayers.includes(chart.id);
                 const progress = syncingLayers[chart.id];
                 const isSyncing = progress !== undefined;
@@ -274,7 +279,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                     key={chart.id}
                     onClick={() => handleChartDownload(chart.id)}
                     disabled={isSyncing}
-                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center w-1/3 relative overflow-hidden ${isDownloaded
+                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center relative overflow-hidden ${isDownloaded
                         ? 'border-emerald-500/30 bg-emerald-500/5'
                         : isSyncing
                           ? 'border-sky-500/50 bg-sky-500/5'
