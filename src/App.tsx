@@ -864,6 +864,9 @@ const App: React.FC = () => {
                   version="1.1.1"
                   opacity={0.9}
                   zIndex={115}
+                  tileSize={512}
+                  detectRetina={true}
+                  maxZoom={18}
                 />
 
                 {/* REA / CCV Paper-style Georeferenced Charts (Group 1A) - v1.1.1 for raster compatibility */}
@@ -875,6 +878,9 @@ const App: React.FC = () => {
                   version="1.1.1"
                   opacity={0.9}
                   zIndex={116}
+                  tileSize={512}
+                  detectRetina={true}
+                  maxZoom={18}
                 />
 
                 {/* REA / CCV Paper-style Georeferenced Charts (Group 1B) - v1.1.1 for raster compatibility */}
@@ -886,6 +892,9 @@ const App: React.FC = () => {
                   version="1.1.1"
                   opacity={0.9}
                   zIndex={117}
+                  tileSize={512}
+                  detectRetina={true}
+                  maxZoom={18}
                 />
 
                 {/* REA / CCV Paper-style Georeferenced Charts (Group 2) - v1.1.1 for raster compatibility */}
@@ -897,6 +906,9 @@ const App: React.FC = () => {
                   version="1.1.1"
                   opacity={0.9}
                   zIndex={118}
+                  tileSize={512}
+                  detectRetina={true}
+                  maxZoom={18}
                 />
               </>
             )}
@@ -911,6 +923,9 @@ const App: React.FC = () => {
                 version="1.1.1"
                 opacity={0.9}
                 zIndex={119}
+                tileSize={512}
+                detectRetina={true}
+                maxZoom={18}
               />
             )}
 
@@ -926,6 +941,9 @@ const App: React.FC = () => {
                   version="1.1.1"
                   opacity={0.9}
                   zIndex={120}
+                  tileSize={512}
+                  detectRetina={true}
+                  maxZoom={18}
                 />
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
@@ -935,6 +953,9 @@ const App: React.FC = () => {
                   version="1.1.1"
                   opacity={0.9}
                   zIndex={121}
+                  tileSize={512}
+                  detectRetina={true}
+                  maxZoom={18}
                 />
                 {/* REH adicionais */}
                 <WMSTileLayer
@@ -945,6 +966,9 @@ const App: React.FC = () => {
                   version="1.1.1"
                   opacity={0.9}
                   zIndex={122}
+                  tileSize={512}
+                  detectRetina={true}
+                  maxZoom={18}
                 />
               </>
             )}
