@@ -5,6 +5,20 @@ import { AutocompleteInput } from './AutocompleteInput';
 import { commonAircraft } from '../utils/aircraftData';
 import { IconPlane, IconTrash, IconSwap, IconArrowUp, IconArrowDown, IconLocation, IconMaximize, IconDisk, IconFolder, IconDownload, IconEdit } from './Icons';
 
+// Format coordinates to DMS format like "12°28.77'S 38°10.66'W"
+const formatCoordDMS = (lat: number, lng: number): string => {
+  const formatDMS = (coord: number, isLat: boolean): string => {
+    const abs = Math.abs(coord);
+    const deg = Math.floor(abs);
+    const minDecimal = (abs - deg) * 60;
+    const dir = isLat 
+      ? (coord >= 0 ? 'N' : 'S')
+      : (coord >= 0 ? 'E' : 'W');
+    return `${deg}°${minDecimal.toFixed(2)}'${dir}`;
+  };
+  return `${formatDMS(lat, true)} ${formatDMS(lng, false)}`;
+};
+
 interface FlightPlanPanelProps {
   waypoints: Waypoint[];
   flightSegments: FlightSegment[];
@@ -56,7 +70,14 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   
   const [isAircraftOpen, setIsAircraftOpen] = useState(false);
   const [aircraftQuery, setAircraftQuery] = useState(aircraftModel.label);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpandedState] = useState(false);
+  
+  // Expose isExpanded through a callback prop if needed for parent
+  const setIsExpanded = (val: boolean) => {
+    setIsExpandedState(val);
+    // Dispatch custom event for lock button visibility
+    window.dispatchEvent(new CustomEvent('flightPlanExpandedChange', { detail: { expanded: val } }));
+  };
   
   // Save/Load Modal States
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -471,11 +492,11 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                                 <>
                                   <span className="text-amber-300">{displayName}</span>
                                   {wp.description && (
-                                    <span className="text-[10px] text-slate-500">Ponto em {wp.description}</span>
+                                    <span className="text-[10px] text-slate-500">{wp.description}</span>
                                   )}
                                 </>
                               ) : isUserWaypoint ? (
-                                <span className="text-white">Ponto em {wp.description || displayName}</span>
+                                <span className="text-white">{wp.description || displayName}</span>
                               ) : (
                                 <span className="text-white">{displayName}</span>
                               )}
@@ -492,7 +513,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                             </span>
                           </td>
                           <td className="p-3 sm:p-4 font-mono text-slate-500 text-xs hidden sm:table-cell">
-                            {wp.lat.toFixed(4)}, {wp.lng.toFixed(4)}
+                            {formatCoordDMS(wp.lat, wp.lng)}
                           </td>
                           <td className="p-3 sm:p-4 text-right font-mono text-purple-400">
                             {inboundSegment ? `${inboundSegment.track}°` : '-'}
@@ -514,11 +535,11 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                     <tr>
                       <td colSpan={3} className="p-3 sm:p-4 text-right font-black uppercase text-slate-500 hidden sm:table-cell">Totais</td>
                       <td colSpan={2} className="p-3 sm:p-4 text-right font-black uppercase text-slate-500 sm:hidden">Totais</td>
-                      <td className="p-3 sm:p-4 text-right font-black text-white text-base sm:text-lg">
-                        {flightSegments.reduce((acc, s) => acc + s.distance, 0).toFixed(0)} NM
+                      <td className="p-3 sm:p-4 text-right font-black text-white text-base sm:text-lg whitespace-nowrap">
+                        Distância total: {flightSegments.reduce((acc, s) => acc + s.distance, 0).toFixed(1)} NM
                       </td>
-                      <td className="p-3 sm:p-4 text-right font-black text-white text-base sm:text-lg">
-                        {((flightSegments.reduce((acc, s) => acc + s.distance, 0) / plannedSpeed)).toFixed(2).replace('.', ':')} H
+                      <td className="p-3 sm:p-4 text-right font-black text-white text-base sm:text-lg whitespace-nowrap">
+                        Tempo de voo: {(flightSegments.reduce((acc, s) => acc + s.distance, 0) / plannedSpeed).toFixed(2)} h
                       </td>
                       <td className="hidden sm:table-cell"></td>
                     </tr>

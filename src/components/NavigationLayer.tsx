@@ -30,6 +30,20 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     // Map starts UNLOCKED (free to drag) - user can lock to follow aircraft position
     const [isLocked, setIsLocked] = useState(false);
     const lockRef = useRef(false);
+    
+    // Track if flight plan is expanded (to hide lock button)
+    const [isFlightPlanExpanded, setIsFlightPlanExpanded] = useState(false);
+    
+    // Listen for flight plan expanded changes
+    useEffect(() => {
+        const handleExpandedChange = (e: CustomEvent<{ expanded: boolean }>) => {
+            setIsFlightPlanExpanded(e.detail.expanded);
+        };
+        window.addEventListener('flightPlanExpandedChange', handleExpandedChange as EventListener);
+        return () => {
+            window.removeEventListener('flightPlanExpandedChange', handleExpandedChange as EventListener);
+        };
+    }, []);
 
     const toggleLock = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -250,9 +264,9 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                 })}
             </LayerGroup>
 
-            {/* ARMOR CONTROL: MAP LOCK TOGGLE - Hidden on mobile when plan panel is open */}
+            {/* ARMOR CONTROL: MAP LOCK TOGGLE - Hidden when plan panel is open or flight plan is expanded */}
             <div 
-                className={`${hideLockButton ? 'hidden md:flex' : 'flex'} md:w-10 md:h-10 w-9 h-9 md:bottom-10 md:left-[88px] bottom-[58px] left-4`}
+                className={`${(hideLockButton || isFlightPlanExpanded) ? 'hidden' : 'flex'} md:w-10 md:h-10 w-9 h-9 md:bottom-10 md:left-[88px] bottom-[58px] left-4`}
                 style={{
                     position: 'fixed', 
                     zIndex: 99999,
