@@ -494,9 +494,15 @@ const App: React.FC = () => {
       let next = isActivating ? [...prev, layer] : prev.filter(l => l !== layer);
 
       if (isActivating) {
+        // Exclusão mútua: HIGH, LOW, WAC
         if (layer === 'HIGH') next = next.filter(l => l !== 'LOW' && l !== 'WAC');
         if (layer === 'LOW') next = next.filter(l => l !== 'HIGH' && l !== 'WAC');
         if (layer === 'WAC') next = next.filter(l => l !== 'HIGH' && l !== 'LOW');
+        
+        // Exclusão mútua: REA, REUL, REH (cartas para diferentes tipos de aeronaves)
+        if (layer === 'REA') next = next.filter(l => l !== 'REUL' && l !== 'REH');
+        if (layer === 'REUL') next = next.filter(l => l !== 'REA' && l !== 'REH');
+        if (layer === 'REH') next = next.filter(l => l !== 'REA' && l !== 'REUL');
       }
 
       localStorage.setItem('sky_nav_active_layers', JSON.stringify(next));
