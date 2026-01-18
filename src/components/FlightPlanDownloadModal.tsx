@@ -44,6 +44,29 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
         return;
       }
 
+      // Get the Leaflet map instance and fit bounds to waypoints
+      const mapInstance = (window as any).leafletMapInstance;
+      
+      if (mapInstance && waypoints.length >= 2) {
+        // Calculate bounds from waypoints
+        const lats = waypoints.map(wp => wp.lat);
+        const lngs = waypoints.map(wp => wp.lng);
+        const bounds = [
+          [Math.min(...lats), Math.min(...lngs)],
+          [Math.max(...lats), Math.max(...lngs)]
+        ] as [[number, number], [number, number]];
+        
+        // Fit the map to the route bounds with padding
+        mapInstance.fitBounds(bounds, { 
+          padding: [50, 50],
+          animate: false,
+          duration: 0
+        });
+        
+        // Wait for map tiles to load
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+
       // Use html2canvas to capture the map
       const canvas = await html2canvas(mapContainer, {
         useCORS: true,
@@ -55,7 +78,7 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
         onclone: (clonedDoc) => {
           // Hide UI elements that shouldn't be in the screenshot
           const elementsToHide = clonedDoc.querySelectorAll(
-            '.leaflet-control-container, .leaflet-control, [class*="sidebar"], [class*="menu"], [class*="panel"]'
+            '.leaflet-control-container, .leaflet-control, [class*="sidebar"], [class*="menu"], [class*="panel"], [class*="Modal"], [class*="modal"]'
           );
           elementsToHide.forEach((el) => {
             (el as HTMLElement).style.display = 'none';
