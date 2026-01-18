@@ -357,7 +357,15 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
         <div className="p-4 space-y-4 print:p-0 print:space-y-2" style={{ maxWidth: '210mm' }}>
           {/* Header Info Row */}
           <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 print:bg-gray-100 print:border-gray-300 print:rounded-none">
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-xs">
+            <div className="grid grid-cols-3 md:grid-cols-7 gap-2 text-xs">
+              <div className="text-center">
+                <span className="text-slate-500 print:text-gray-600 block">Origem</span>
+                <span className="text-white print:text-black font-bold">{waypoints.find(w => w.role === 'ORIGIN')?.icao || '-'}</span>
+              </div>
+              <div className="text-center">
+                <span className="text-slate-500 print:text-gray-600 block">Destino</span>
+                <span className="text-white print:text-black font-bold">{waypoints.find(w => w.role === 'DESTINATION')?.icao || '-'}</span>
+              </div>
               <div className="text-center">
                 <span className="text-slate-500 print:text-gray-600 block">Aeronave</span>
                 <span className="text-white print:text-black font-bold">{aircraftModel.id}</span>
@@ -367,16 +375,12 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
                 <span className="text-white print:text-black font-bold">{plannedSpeed} kt</span>
               </div>
               <div className="text-center">
-                <span className="text-slate-500 print:text-gray-600 block">Waypoints</span>
-                <span className="text-white print:text-black font-bold">{waypoints.length}</span>
-              </div>
-              <div className="text-center">
                 <span className="text-slate-500 print:text-gray-600 block">Distância</span>
                 <span className="text-white print:text-black font-bold">{totalDistance.toFixed(1)} NM</span>
               </div>
               <div className="text-center">
                 <span className="text-slate-500 print:text-gray-600 block">Tempo</span>
-                <span className="text-white print:text-black font-bold">{calculateTotalTime()}</span>
+                <span className="text-white print:text-black font-bold">{calculateTotalTime()}h</span>
               </div>
               <div className="text-center">
                 <span className="text-slate-500 print:text-gray-600 block">Combustível</span>
@@ -518,45 +522,6 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
             </div>
           </div>
 
-          {/* Format Selection - Hidden on print */}
-          <div className="space-y-2 print:hidden">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Formato</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => setDownloadFormat('txt')}
-                className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center ${
-                  downloadFormat === 'txt'
-                    ? 'border-sky-500 bg-sky-500/20 text-sky-400'
-                    : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
-                }`}
-              >
-                <div className="text-lg mb-0.5">📄</div>
-                <div className="text-xs font-bold">TXT</div>
-              </button>
-              <button
-                onClick={() => setDownloadFormat('csv')}
-                className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center ${
-                  downloadFormat === 'csv'
-                    ? 'border-sky-500 bg-sky-500/20 text-sky-400'
-                    : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
-                }`}
-              >
-                <div className="text-lg mb-0.5">📊</div>
-                <div className="text-xs font-bold">CSV</div>
-              </button>
-              <button
-                onClick={() => setDownloadFormat('json')}
-                className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center ${
-                  downloadFormat === 'json'
-                    ? 'border-sky-500 bg-sky-500/20 text-sky-400'
-                    : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
-                }`}
-              >
-                <div className="text-lg mb-0.5">🔧</div>
-                <div className="text-xs font-bold">JSON</div>
-              </button>
-            </div>
-          </div>
 
           {/* Action Buttons */}
           <div className="flex gap-3 print:hidden">
