@@ -911,9 +911,10 @@ const App: React.FC = () => {
             {/* REH - Carta de Rota de Helicópteros */}
             {activeLayers.includes('REH') && (
               <>
+                {/* REH CCV - Cartas georreferenciadas */}
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
-                  layers="ICA:CCV_REH_WJ1_RIO_DE_JANEIRO"
+                  layers="ICA:CCV_REH_WH_BELO_HORIZONTE,ICA:CCV_REH_WJ1_CABO_FRIO,ICA:CCV_REH_WJ2_RIO_DE_JANEIRO,ICA:CCV_REH_WJ3_RIO_DE_JANEIRO"
                   format="image/png"
                   transparent={true}
                   version="1.1.1"
@@ -922,12 +923,22 @@ const App: React.FC = () => {
                 />
                 <WMSTileLayer
                   url="https://geoaisweb.decea.mil.br/geoserver/wms"
-                  layers="ICA:CCV_REH_XP_SAO_PAULO"
+                  layers="ICA:CCV_REH_XP1_SAO_JOSE_DOS_CAMPOS,ICA:CCV_REH_XP1_SOROCABA,ICA:CCV_REH_XP2_CAMPINAS,ICA:CCV_REH_XP2_SAO_PAULO_1,ICA:CCV_REH_XP2_SAO_PAULO_2"
                   format="image/png"
                   transparent={true}
                   version="1.1.1"
                   opacity={0.9}
                   zIndex={121}
+                />
+                {/* REH adicionais */}
+                <WMSTileLayer
+                  url="https://geoaisweb.decea.mil.br/geoserver/wms"
+                  layers="ICA:REH_BACIA_DE_SANTOS,ICA:REH_CURITIBA,ICA:REH_VITORIA"
+                  format="image/png"
+                  transparent={true}
+                  version="1.1.1"
+                  opacity={0.9}
+                  zIndex={122}
                 />
               </>
             )}
