@@ -89,7 +89,7 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
         return;
       }
 
-      // Use html2canvas to capture the map
+      // Use html2canvas to capture the map (route is already rendered on the map)
       const canvas = await html2canvas(mapContainer, {
         useCORS: true,
         allowTaint: true,
@@ -107,59 +107,6 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
           });
         }
       });
-
-      // Draw route line on canvas
-      const ctx = canvas.getContext('2d');
-      if (ctx && waypoints.length >= 2) {
-        const scale = 2; // Same scale as html2canvas
-        
-        ctx.strokeStyle = '#22c55e'; // Green route line
-        ctx.lineWidth = 4 * scale;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        
-        ctx.beginPath();
-        
-        waypoints.forEach((wp, index) => {
-          // Convert lat/lng to pixel coordinates
-          const point = mapInstance.latLngToContainerPoint([wp.lat, wp.lng]);
-          const x = point.x * scale;
-          const y = point.y * scale;
-          
-          if (index === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        });
-        
-        ctx.stroke();
-        
-        // Draw waypoint markers
-        waypoints.forEach((wp, index) => {
-          const point = mapInstance.latLngToContainerPoint([wp.lat, wp.lng]);
-          const x = point.x * scale;
-          const y = point.y * scale;
-          
-          // Draw circle marker
-          ctx.beginPath();
-          ctx.arc(x, y, 8 * scale, 0, Math.PI * 2);
-          ctx.fillStyle = wp.role === 'ORIGIN' ? '#22c55e' : wp.role === 'DESTINATION' ? '#ef4444' : '#3b82f6';
-          ctx.fill();
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 2 * scale;
-          ctx.stroke();
-          
-          // Draw waypoint label
-          const label = wp.icao || wp.name?.substring(0, 5) || `WP${index + 1}`;
-          ctx.font = `bold ${12 * scale}px Arial`;
-          ctx.fillStyle = '#ffffff';
-          ctx.strokeStyle = '#000000';
-          ctx.lineWidth = 3;
-          ctx.strokeText(label, x + 12 * scale, y + 4 * scale);
-          ctx.fillText(label, x + 12 * scale, y + 4 * scale);
-        });
-      }
 
       const imageData = canvas.toDataURL('image/png', 1.0);
       setMapImage(imageData);
