@@ -381,9 +381,19 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
       const coordLat = formatCoord(wp.lat, true);
       const coordLng = formatCoord(wp.lng, false);
       
+      // Check if waypoint is USER type and has coordinate-like name
+      const isUserWaypoint = wp.type === 'USER';
+      const isCoordName = (name: string): boolean => {
+        return /^\d+°\d+\.\d+'.+\d+°\d+\.\d+'/.test(name);
+      };
+      const hasCustomName = isUserWaypoint && wp.name && !isCoordName(wp.name);
+      const displayName = isUserWaypoint 
+        ? (hasCustomName ? wp.name.substring(0, 8) : 'Coordenada')
+        : (wp.icao || wp.name?.substring(0, 8) || '-');
+      
       const rowData = [
         `${index + 1}`,
-        wp.icao || wp.name?.substring(0, 8) || '-',
+        displayName,
         typeInfo.label,
         `${coordLat} / ${coordLng}`,
         segment ? `${segment.track}°` : '-',
@@ -571,6 +581,16 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
                     const segment = index < flightSegments.length ? flightSegments[index] : null;
                     const typeInfo = getTypeLabel(wp.type, wp.role);
                     
+                    // Check if waypoint is USER type and has coordinate-like name
+                    const isUserWaypoint = wp.type === 'USER';
+                    const isCoordinateName = (name: string): boolean => {
+                      return /^\d+°\d+\.\d+'.+\d+°\d+\.\d+'/.test(name);
+                    };
+                    const hasCustomName = isUserWaypoint && wp.name && !isCoordinateName(wp.name);
+                    const displayName = isUserWaypoint 
+                      ? (hasCustomName ? wp.name : 'Coordenada')
+                      : (wp.icao || wp.name?.substring(0, 10) || `WP${index + 1}`);
+                    
                     return (
                       <tr 
                         key={wp.id} 
@@ -578,7 +598,7 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
                       >
                         <td className="py-2 px-3">
                           <span className="text-white print:text-black font-semibold">
-                            {wp.icao || wp.name?.substring(0, 10) || `WP${index + 1}`}
+                            {displayName}
                           </span>
                         </td>
                         <td className="py-2 px-2 text-center">
