@@ -36,6 +36,45 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
   const captureMapScreenshot = async () => {
     setIsCapturing(true);
     try {
+      const mapInstance = (window as any).leafletMapInstance;
+      
+      if (!mapInstance || waypoints.length < 2) {
+        console.error('Map instance not found or not enough waypoints');
+        setIsCapturing(false);
+        return;
+      }
+
+      // Save current map view to restore later
+      const currentCenter = mapInstance.getCenter();
+      const currentZoom = mapInstance.getZoom();
+
+      // Calculate bounds from waypoints with padding
+      const lats = waypoints.map(wp => wp.lat);
+      const lngs = waypoints.map(wp => wp.lng);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+      
+      // Add 10% padding to bounds
+      const latPadding = (maxLat - minLat) * 0.15;
+      const lngPadding = (maxLng - minLng) * 0.15;
+      
+      const bounds = [
+        [minLat - latPadding, minLng - lngPadding],
+        [maxLat + latPadding, maxLng + lngPadding]
+      ] as [[number, number], [number, number]];
+      
+      // Fit the map to the route bounds
+      mapInstance.fitBounds(bounds, { 
+        animate: false,
+        duration: 0,
+        maxZoom: 10
+      });
+
+      // Wait for map to update and tiles to load
+      await new Promise(resolve => setTimeout(resolve, 2500));
+
       // Find the leaflet map container
       const mapContainer = document.querySelector('.leaflet-container') as HTMLElement;
       if (!mapContainer) {
@@ -44,41 +83,18 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
         return;
       }
 
-      // Get the Leaflet map instance and fit bounds to waypoints
-      const mapInstance = (window as any).leafletMapInstance;
-      
-      if (mapInstance && waypoints.length >= 2) {
-        // Calculate bounds from waypoints
-        const lats = waypoints.map(wp => wp.lat);
-        const lngs = waypoints.map(wp => wp.lng);
-        const bounds = [
-          [Math.min(...lats), Math.min(...lngs)],
-          [Math.max(...lats), Math.max(...lngs)]
-        ] as [[number, number], [number, number]];
-        
-        // Fit the map to the route bounds with padding
-        mapInstance.fitBounds(bounds, { 
-          padding: [50, 50],
-          animate: false,
-          duration: 0
-        });
-        
-        // Wait for map tiles to load
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      }
-
       // Use html2canvas to capture the map
       const canvas = await html2canvas(mapContainer, {
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#1e293b',
-        scale: 2, // High resolution
+        scale: 2,
         logging: false,
-        imageTimeout: 15000,
+        imageTimeout: 20000,
         onclone: (clonedDoc) => {
           // Hide UI elements that shouldn't be in the screenshot
           const elementsToHide = clonedDoc.querySelectorAll(
-            '.leaflet-control-container, .leaflet-control, [class*="sidebar"], [class*="menu"], [class*="panel"], [class*="Modal"], [class*="modal"]'
+            '.leaflet-control-container, .leaflet-control, [class*="sidebar"], [class*="menu"], [class*="panel"], [class*="Modal"], [class*="modal"], [class*="Popover"], [class*="popover"]'
           );
           elementsToHide.forEach((el) => {
             (el as HTMLElement).style.display = 'none';
@@ -86,8 +102,65 @@ export const FlightPlanDownloadModal: React.FC<FlightPlanDownloadModalProps> = (
         }
       });
 
+      // Draw route line on canvas
+      const ctx = canvas.getContext('2d');
+      if (ctx && waypoints.length >= 2) {
+        const scale = 2; // Same scale as html2canvas
+        
+        ctx.strokeStyle = '#22c55e'; // Green route line
+        ctx.lineWidth = 4 * scale;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        ctx.beginPath();
+        
+        waypoints.forEach((wp, index) => {
+          // Convert lat/lng to pixel coordinates
+          const point = mapInstance.latLngToContainerPoint([wp.lat, wp.lng]);
+          const x = point.x * scale;
+          const y = point.y * scale;
+          
+          if (index === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        
+        ctx.stroke();
+        
+        // Draw waypoint markers
+        waypoints.forEach((wp, index) => {
+          const point = mapInstance.latLngToContainerPoint([wp.lat, wp.lng]);
+          const x = point.x * scale;
+          const y = point.y * scale;
+          
+          // Draw circle marker
+          ctx.beginPath();
+          ctx.arc(x, y, 8 * scale, 0, Math.PI * 2);
+          ctx.fillStyle = wp.role === 'ORIGIN' ? '#22c55e' : wp.role === 'DESTINATION' ? '#ef4444' : '#3b82f6';
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2 * scale;
+          ctx.stroke();
+          
+          // Draw waypoint label
+          const label = wp.icao || wp.name?.substring(0, 5) || `WP${index + 1}`;
+          ctx.font = `bold ${12 * scale}px Arial`;
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 3;
+          ctx.strokeText(label, x + 12 * scale, y + 4 * scale);
+          ctx.fillText(label, x + 12 * scale, y + 4 * scale);
+        });
+      }
+
       const imageData = canvas.toDataURL('image/png', 1.0);
       setMapImage(imageData);
+      
+      // Restore original map view
+      mapInstance.setView(currentCenter, currentZoom, { animate: false });
+      
     } catch (error) {
       console.error('Error capturing map:', error);
     } finally {
