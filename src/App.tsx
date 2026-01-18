@@ -895,6 +895,19 @@ const App: React.FC = () => {
               </>
             )}
 
+            {/* REA ULTRALEVES (REUL) - Carta para Ultraleves */}
+            {activeLayers.includes('REUL') && (
+              <WMSTileLayer
+                url="https://geoaisweb.decea.mil.br/geoserver/wms"
+                layers="ICA:CCV_REUL_WJ3_RIO_DE_JANEIRO"
+                format="image/png"
+                transparent={true}
+                version="1.1.1"
+                opacity={0.9}
+                zIndex={119}
+              />
+            )}
+
             {/* DYNAMIC NAVIGATION DATA (Airports, Navaids, Route) */}
             <NavigationLayer
               onPointSelect={(point) => handleAddWaypoint(point, 'WAYPOINT')}
