@@ -28,9 +28,9 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
 }) => {
     const chartTypes = [
         { id: 'REA', name: 'REA' },
-        { id: 'ARC', name: 'ARC' },
+        { id: 'REUL', name: 'REUL' },
         { id: 'REH', name: 'REH' },
-        { id: 'REUL', name: 'REA ULTRALEVES' },
+        { id: 'ARC', name: 'ARC' },
         { id: 'WAC', name: 'WAC' },
         { id: 'HIGH', name: 'ENRC HIGH' },
         { id: 'LOW', name: 'ENRC LOW' }
