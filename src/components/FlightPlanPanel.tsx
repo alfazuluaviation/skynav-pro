@@ -539,7 +539,12 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                         Distância total: {flightSegments.reduce((acc, s) => acc + s.distance, 0).toFixed(1)} NM
                       </td>
                       <td className="p-3 sm:p-4 text-right font-black text-white text-base sm:text-lg whitespace-nowrap">
-                        Tempo de voo: {(flightSegments.reduce((acc, s) => acc + s.distance, 0) / plannedSpeed).toFixed(2)} h
+                        Tempo de voo: {(() => {
+                          const totalHours = flightSegments.reduce((acc, s) => acc + s.distance, 0) / plannedSpeed;
+                          const hours = Math.floor(totalHours);
+                          const minutes = Math.round((totalHours - hours) * 60);
+                          return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                        })()} h
                       </td>
                       <td className="hidden sm:table-cell"></td>
                     </tr>
