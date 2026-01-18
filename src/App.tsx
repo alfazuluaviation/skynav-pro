@@ -895,7 +895,7 @@ const App: React.FC = () => {
               </>
             )}
 
-            {/* REA ULTRALEVES (REUL) - Carta para Ultraleves */}
+            {/* REUL - Carta para Ultraleves */}
             {activeLayers.includes('REUL') && (
               <WMSTileLayer
                 url="https://geoaisweb.decea.mil.br/geoserver/wms"
@@ -906,6 +906,30 @@ const App: React.FC = () => {
                 opacity={0.9}
                 zIndex={119}
               />
+            )}
+
+            {/* REH - Carta de Rota de Helicópteros */}
+            {activeLayers.includes('REH') && (
+              <>
+                <WMSTileLayer
+                  url="https://geoaisweb.decea.mil.br/geoserver/wms"
+                  layers="ICA:CCV_REH_WJ1_RIO_DE_JANEIRO"
+                  format="image/png"
+                  transparent={true}
+                  version="1.1.1"
+                  opacity={0.9}
+                  zIndex={120}
+                />
+                <WMSTileLayer
+                  url="https://geoaisweb.decea.mil.br/geoserver/wms"
+                  layers="ICA:CCV_REH_XP_SAO_PAULO"
+                  format="image/png"
+                  transparent={true}
+                  version="1.1.1"
+                  opacity={0.9}
+                  zIndex={121}
+                />
+              </>
             )}
 
             {/* DYNAMIC NAVIGATION DATA (Airports, Navaids, Route) */}
