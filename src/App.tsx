@@ -177,6 +177,16 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Expose map instance globally for FlightPlanDownloadModal map capture
+  useEffect(() => {
+    if (mapRef) {
+      (window as any).leafletMapInstance = mapRef;
+    }
+    return () => {
+      (window as any).leafletMapInstance = null;
+    };
+  }, [mapRef]);
+
   // Initialization & Auto-Load
   useEffect(() => {
     // 1. Load Settings & Layers
