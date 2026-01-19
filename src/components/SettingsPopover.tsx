@@ -1,7 +1,8 @@
 import React from 'react';
 import { IconDownload, IconUser } from './Icons';
 import { AiracCycle } from '../../types';
-import { RefreshCw, Check, X } from 'lucide-react';
+import { RefreshCw, Check, X, MapPin, Loader2 } from 'lucide-react';
+import { LocationPermissionStatus } from '@/hooks/useLocationPermission';
 
 interface SettingsPopoverProps {
     userName?: string;
@@ -19,7 +20,13 @@ interface SettingsPopoverProps {
     needRefresh?: boolean;
     lastUpdateDate?: string | null;
     onUpdate?: () => void;
+    onCheckUpdate?: () => void;
+    isCheckingUpdate?: boolean;
     onClose?: () => void;
+    // Location props
+    locationPermission?: LocationPermissionStatus;
+    onRequestLocation?: () => void;
+    isRequestingLocation?: boolean;
 }
 
 export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
@@ -37,11 +44,34 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
     needRefresh = false,
     lastUpdateDate = null,
     onUpdate,
+    onCheckUpdate,
+    isCheckingUpdate = false,
     onClose,
+    locationPermission = 'unknown',
+    onRequestLocation,
+    isRequestingLocation = false,
 }) => {
     const containerClass = isMobile 
         ? "w-full p-5" 
         : "absolute left-16 bottom-4 w-72 max-h-[calc(100vh-2rem)] overflow-y-auto bg-slate-900 border border-slate-800 rounded-2xl shadow-3xl p-5 z-[2100] animate-in";
+
+    const getLocationStatusColor = () => {
+        switch (locationPermission) {
+            case 'granted': return 'bg-emerald-500';
+            case 'denied': return 'bg-red-500';
+            case 'prompt': return 'bg-amber-500';
+            default: return 'bg-slate-600';
+        }
+    };
+
+    const getLocationStatusText = () => {
+        switch (locationPermission) {
+            case 'granted': return 'Permitido';
+            case 'denied': return 'Negado';
+            case 'prompt': return 'Não solicitado';
+            default: return 'Verificando...';
+        }
+    };
 
     return (
         <div
@@ -107,11 +137,72 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
 
                 <div className="h-px bg-slate-800 w-full opacity-50"></div>
 
-                {/* ATUALIZAÇÃO */}
+                {/* LOCALIZAÇÃO */}
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-2 px-1">
-                        <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Atualização</span>
+                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Localização</span>
+                    </div>
+
+                    <div className="bg-slate-800/40 rounded-xl p-3 border border-slate-800">
+                        <div className="flex justify-between items-center mb-2">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">STATUS</span>
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${getLocationStatusColor()} shadow-[0_0_6px_rgba(0,0,0,0.3)]`}></div>
+                                    <span className={`text-xs font-bold ${locationPermission === 'granted' ? 'text-emerald-400' : locationPermission === 'denied' ? 'text-red-400' : 'text-amber-400'}`}>
+                                        {getLocationStatusText()}
+                                    </span>
+                                </div>
+                            </div>
+                            {locationPermission !== 'granted' && (
+                                <button
+                                    onClick={onRequestLocation}
+                                    disabled={isRequestingLocation || locationPermission === 'denied'}
+                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all ${
+                                        locationPermission === 'denied' 
+                                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                            : 'bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white'
+                                    }`}
+                                >
+                                    {isRequestingLocation ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : locationPermission === 'denied' ? (
+                                        'Bloqueado'
+                                    ) : (
+                                        'Solicitar'
+                                    )}
+                                </button>
+                            )}
+                        </div>
+                        <p className="text-[9px] text-slate-500 leading-tight">
+                            {locationPermission === 'denied' 
+                                ? 'Acesse as configurações do navegador para permitir a localização.'
+                                : 'Necessário para navegação GPS e cálculo de posição em voo.'
+                            }
+                        </p>
+                    </div>
+                </div>
+
+                <div className="h-px bg-slate-800 w-full opacity-50"></div>
+
+                {/* ATUALIZAÇÃO */}
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-2">
+                            <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+                            <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Atualização</span>
+                        </div>
+                        {!needRefresh && onCheckUpdate && (
+                            <button
+                                onClick={onCheckUpdate}
+                                disabled={isCheckingUpdate}
+                                className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 flex items-center justify-center transition-colors disabled:opacity-50"
+                                title="Verificar atualizações"
+                            >
+                                <RefreshCw className={`w-3.5 h-3.5 text-slate-400 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                            </button>
+                        )}
                     </div>
 
                     {needRefresh ? (
@@ -126,17 +217,20 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                             <RefreshCw className="w-4 h-4 text-purple-400 group-hover:animate-spin" />
                         </button>
                     ) : (
-                        <div className="bg-slate-800/40 rounded-xl p-3 border border-slate-800 flex justify-between items-center">
-                            <div className="flex flex-col gap-0.5">
-                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">STATUS</span>
-                                <div className="flex items-baseline gap-2">
+                        <div className="bg-slate-800/40 rounded-xl p-3 border border-slate-800 flex flex-col gap-2">
+                            <div className="flex justify-between items-center">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">STATUS</span>
                                     <span className="text-xs font-bold text-emerald-400">Atualizado</span>
-                                    {lastUpdateDate && (
-                                        <span className="text-[9px] text-slate-500 font-mono">{lastUpdateDate}</span>
-                                    )}
                                 </div>
+                                <Check className="w-4 h-4 text-emerald-500" />
                             </div>
-                            <Check className="w-4 h-4 text-emerald-500" />
+                            {lastUpdateDate && (
+                                <div className="flex items-center gap-1.5 pt-1 border-t border-slate-800/50">
+                                    <span className="text-[9px] text-slate-600 font-medium">Última verificação:</span>
+                                    <span className="text-[10px] text-slate-400 font-mono">{lastUpdateDate}</span>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
