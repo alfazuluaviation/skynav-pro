@@ -27,6 +27,7 @@ interface SettingsPopoverProps {
     locationPermission?: LocationPermissionStatus;
     onRequestLocation?: () => void;
     isRequestingLocation?: boolean;
+    showIOSInstructions?: boolean;
 }
 
 export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
@@ -50,6 +51,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
     locationPermission = 'unknown',
     onRequestLocation,
     isRequestingLocation = false,
+    showIOSInstructions = false,
 }) => {
     const containerClass = isMobile 
         ? "w-full p-5" 
@@ -158,17 +160,17 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                             {locationPermission !== 'granted' && (
                                 <button
                                     onClick={onRequestLocation}
-                                    disabled={isRequestingLocation || locationPermission === 'denied'}
+                                    disabled={isRequestingLocation}
                                     className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all ${
-                                        locationPermission === 'denied' 
-                                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                        isRequestingLocation
+                                            ? 'bg-slate-700 text-slate-400'
                                             : 'bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white'
                                     }`}
                                 >
                                     {isRequestingLocation ? (
                                         <Loader2 className="w-3 h-3 animate-spin" />
                                     ) : locationPermission === 'denied' ? (
-                                        'Bloqueado'
+                                        'Tentar Novamente'
                                     ) : (
                                         'Solicitar'
                                     )}
@@ -177,7 +179,9 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                         </div>
                         <p className="text-[9px] text-slate-500 leading-tight">
                             {locationPermission === 'denied' 
-                                ? 'Acesse as configurações do navegador para permitir a localização.'
+                                ? showIOSInstructions
+                                    ? '📱 iPad/iPhone: Vá em Ajustes → Safari → Localização → Permitir. Depois volte e toque em "Tentar Novamente".'
+                                    : 'Permissão negada. Acesse as configurações do navegador/dispositivo para permitir a localização e tente novamente.'
                                 : 'Necessário para navegação GPS e cálculo de posição em voo.'
                             }
                         </p>
