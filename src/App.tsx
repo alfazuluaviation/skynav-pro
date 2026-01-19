@@ -25,7 +25,7 @@ import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { getAerodromeIconHTML, getIconSize } from './components/AerodromeIcons';
 import { CachedWMSTileLayer } from './components/CachedWMSTileLayer';
 import { downloadChartLayer, isLayerAvailableOffline } from './services/chartDownloader';
-import { getCachedLayerIds } from './services/tileCache';
+import { getCachedLayerIds, clearLayerCache } from './services/tileCache';
 
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -625,6 +625,31 @@ const App: React.FC = () => {
     });
   };
 
+  const handleClearLayerCache = async (layer: string) => {
+    try {
+      // Clear from IndexedDB cache
+      await clearLayerCache(layer);
+      
+      // Remove from active layers
+      setActiveLayers(prev => {
+        const next = prev.filter(l => l !== layer);
+        localStorage.setItem('sky_nav_active_layers', JSON.stringify(next));
+        return next;
+      });
+      
+      // Remove from downloaded layers
+      setDownloadedLayers(prev => {
+        const next = prev.filter(l => l !== layer);
+        localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
+        return next;
+      });
+      
+      console.log(`Cache cleared for layer: ${layer}`);
+    } catch (error) {
+      console.error('Failed to clear layer cache:', error);
+    }
+  };
+
   // Plan Management
   const handleSavePlan = (name: string) => {
     const newPlan: SavedPlan = {
@@ -1004,8 +1029,11 @@ const App: React.FC = () => {
         aircraftModel={aircraftModel}
         plannedSpeed={plannedSpeed}
         downloadedLayers={downloadedLayers}
+        activeLayers={activeLayers}
         syncingLayers={syncingLayers}
         onDownloadLayer={handleChartDownload}
+        onToggleLayer={handleToggleLayer}
+        onClearLayerCache={handleClearLayerCache}
       />
 
       {/* Flight Plan Download Modal */}
