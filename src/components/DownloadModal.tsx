@@ -9,8 +9,11 @@ interface DownloadModalProps {
   aircraftModel: { id: string; label: string; speed: number };
   plannedSpeed: number;
   downloadedLayers: string[];
+  activeLayers: string[];
   syncingLayers: Record<string, number>;
   onDownloadLayer: (layer: string) => Promise<void>;
+  onToggleLayer: (layer: string) => void;
+  onClearLayerCache: (layer: string) => void;
 }
 
 export const DownloadModal: React.FC<DownloadModalProps> = ({
@@ -21,8 +24,11 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   aircraftModel,
   plannedSpeed,
   downloadedLayers,
+  activeLayers,
   syncingLayers,
-  onDownloadLayer
+  onDownloadLayer,
+  onToggleLayer,
+  onClearLayerCache
 }) => {
   const [downloadFormat, setDownloadFormat] = useState<'txt' | 'csv' | 'json'>('txt');
 
@@ -175,13 +181,27 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleChartDownload = async (chartId: string) => {
-    if (downloadedLayers.includes(chartId) || syncingLayers[chartId] !== undefined) return;
-    await onDownloadLayer(chartId);
+  const handleChartClick = async (chartId: string) => {
+    const isSyncing = syncingLayers[chartId] !== undefined;
+    if (isSyncing) return;
+
+    const isDownloaded = downloadedLayers.includes(chartId);
+    
+    if (isDownloaded) {
+      // Toggle visibility on map
+      onToggleLayer(chartId);
+    } else {
+      // Download the chart
+      await onDownloadLayer(chartId);
+    }
+  };
+
+  const handleClearCache = (e: React.MouseEvent, chartId: string) => {
+    e.stopPropagation();
+    onClearLayerCache(chartId);
   };
 
   const handleDownloadAll = async () => {
-    // Download all charts one by one
     for (const chart of chartOptions) {
       if (!downloadedLayers.includes(chart.id)) {
         await onDownloadLayer(chart.id);
@@ -198,6 +218,67 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     { id: 'WAC', label: 'WAC' },
   ];
 
+  const renderChartButton = (chart: { id: string; label: string }) => {
+    const isDownloaded = downloadedLayers.includes(chart.id);
+    const isActive = activeLayers.includes(chart.id);
+    const progress = syncingLayers[chart.id];
+    const isSyncing = progress !== undefined;
+
+    return (
+      <div key={chart.id} className="relative">
+        <button
+          onClick={() => handleChartClick(chart.id)}
+          disabled={isSyncing}
+          className={`w-full p-4 rounded-xl border-2 transition-all flex flex-col items-center relative overflow-hidden ${
+            isActive
+              ? 'border-purple-500 bg-purple-500/20 ring-2 ring-purple-400/50'
+              : isDownloaded
+                ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-400'
+                : isSyncing
+                  ? 'border-sky-500/50 bg-sky-500/5'
+                  : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+          }`}
+        >
+          <div className="text-sm font-bold text-white mb-1 relative z-10">{chart.label}</div>
+
+          {isSyncing ? (
+            <div className="w-full mt-1 relative z-10">
+              <div className="h-1 w-full bg-slate-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-sky-500 transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              <div className="text-[10px] text-sky-400 mt-1 font-bold">{progress}%</div>
+            </div>
+          ) : isActive ? (
+            <div className="flex items-center gap-1 text-xs text-purple-300 relative z-10">
+              <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
+              NO MAPA
+            </div>
+          ) : isDownloaded ? (
+            <div className="flex items-center gap-1 text-xs text-emerald-400 relative z-10">
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              ATIVAR
+            </div>
+          ) : (
+            <div className="text-xs text-slate-500 relative z-10 font-bold">BAIXAR</div>
+          )}
+        </button>
+        {/* Clear cache button */}
+        {isDownloaded && !isSyncing && (
+          <button
+            onClick={(e) => handleClearCache(e, chart.id)}
+            className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-400 rounded-full flex items-center justify-center text-white text-xs shadow-lg transition-colors"
+            title="Limpar cache e rebaixar"
+          >
+            ×
+          </button>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-[3000] flex items-end md:items-center justify-center bg-black/70 backdrop-blur-sm">
       <div className="bg-slate-900/95 border-t md:border border-slate-700/50 rounded-t-3xl md:rounded-2xl shadow-2xl w-full md:max-w-lg md:mx-4 overflow-hidden animate-slide-up md:animate-in">
@@ -207,7 +288,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            Download
+            Cartas Aeronáuticas
           </h2>
           <button
             onClick={onClose}
@@ -221,94 +302,21 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          {/* Chart Download Options */}
+          {/* Info text */}
+          <p className="text-xs text-slate-400 text-center">
+            Clique para baixar ou ativar/desativar no mapa. Use o × para limpar cache.
+          </p>
+
+          {/* Chart Options */}
           <div className="space-y-3">
             {/* Grupo 1: ENRC HIGH, ENRC LOW, REA */}
             <div className="grid grid-cols-3 gap-3">
-              {chartOptions.slice(0, 3).map((chart) => {
-                const isDownloaded = downloadedLayers.includes(chart.id);
-                const progress = syncingLayers[chart.id];
-                const isSyncing = progress !== undefined;
-
-                return (
-                  <button
-                    key={chart.id}
-                    onClick={() => handleChartDownload(chart.id)}
-                    disabled={isSyncing}
-                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center relative overflow-hidden ${isDownloaded
-                        ? 'border-emerald-500/30 bg-emerald-500/5'
-                        : isSyncing
-                          ? 'border-sky-500/50 bg-sky-500/5'
-                          : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
-                      }`}
-                  >
-                    <div className="text-sm font-bold text-white mb-1 relative z-10">{chart.label}</div>
-
-                    {isSyncing ? (
-                      <div className="w-full mt-1 relative z-10">
-                        <div className="h-1 w-full bg-slate-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-sky-500 transition-all duration-300"
-                            style={{ width: `${progress}%` }}
-                          ></div>
-                        </div>
-                        <div className="text-[10px] text-sky-400 mt-1 font-bold">{progress}%</div>
-                      </div>
-                    ) : isDownloaded ? (
-                      <div className="flex items-center gap-1 text-xs text-emerald-400 relative z-10">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                        DISPONÍVEL
-                      </div>
-                    ) : (
-                      <div className="text-xs text-slate-500 relative z-10 font-bold">BAIXAR</div>
-                    )}
-                  </button>
-                );
-              })}
+              {chartOptions.slice(0, 3).map(renderChartButton)}
             </div>
             
             {/* Grupo 2: REUL, REH, WAC */}
             <div className="grid grid-cols-3 gap-3">
-              {chartOptions.slice(3, 6).map((chart) => {
-                const isDownloaded = downloadedLayers.includes(chart.id);
-                const progress = syncingLayers[chart.id];
-                const isSyncing = progress !== undefined;
-
-                return (
-                  <button
-                    key={chart.id}
-                    onClick={() => handleChartDownload(chart.id)}
-                    disabled={isSyncing}
-                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center relative overflow-hidden ${isDownloaded
-                        ? 'border-emerald-500/30 bg-emerald-500/5'
-                        : isSyncing
-                          ? 'border-sky-500/50 bg-sky-500/5'
-                          : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
-                      }`}
-                  >
-                    <div className="text-sm font-bold text-white mb-1 relative z-10">{chart.label}</div>
-
-                    {isSyncing ? (
-                      <div className="w-full mt-1 relative z-10">
-                        <div className="h-1 w-full bg-slate-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-sky-500 transition-all duration-300"
-                            style={{ width: `${progress}%` }}
-                          ></div>
-                        </div>
-                        <div className="text-[10px] text-sky-400 mt-1 font-bold">{progress}%</div>
-                      </div>
-                    ) : isDownloaded ? (
-                      <div className="flex items-center gap-1 text-xs text-emerald-400 relative z-10">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                        DISPONÍVEL
-                      </div>
-                    ) : (
-                      <div className="text-xs text-slate-500 relative z-10 font-bold">BAIXAR</div>
-                    )}
-                  </button>
-                );
-              })}
+              {chartOptions.slice(3, 6).map(renderChartButton)}
             </div>
           </div>
 
@@ -316,12 +324,13 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           <button
             onClick={handleDownloadAll}
             disabled={Object.keys(syncingLayers).length > 0 || downloadedLayers.length === chartOptions.length}
-            className={`w-full py-4 font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 ${downloadedLayers.length === chartOptions.length
+            className={`w-full py-4 font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 ${
+              downloadedLayers.length === chartOptions.length
                 ? 'bg-emerald-600 text-white cursor-default'
                 : Object.keys(syncingLayers).length > 0
                   ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
                   : 'bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white shadow-sky-500/25'
-              }`}
+            }`}
           >
             {downloadedLayers.length === chartOptions.length ? (
               <>
