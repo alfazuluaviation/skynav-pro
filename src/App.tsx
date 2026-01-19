@@ -345,6 +345,24 @@ const App: React.FC = () => {
   const handleChartDownload = async (layer: string) => {
     if (syncingLayers[layer] !== undefined) return;
 
+    // Helper to activate layer with mutual exclusion logic
+    const activateLayer = (layerId: string) => {
+      setActiveLayers(prev => {
+        if (prev.includes(layerId)) return prev; // Already active
+        let next = [...prev, layerId];
+        // Mutual exclusion: HIGH, LOW, WAC
+        if (layerId === 'HIGH') next = next.filter(l => l !== 'LOW' && l !== 'WAC');
+        if (layerId === 'LOW') next = next.filter(l => l !== 'HIGH' && l !== 'WAC');
+        if (layerId === 'WAC') next = next.filter(l => l !== 'HIGH' && l !== 'LOW');
+        // Mutual exclusion: REA, REUL, REH
+        if (layerId === 'REA') next = next.filter(l => l !== 'REUL' && l !== 'REH');
+        if (layerId === 'REUL') next = next.filter(l => l !== 'REA' && l !== 'REH');
+        if (layerId === 'REH') next = next.filter(l => l !== 'REA' && l !== 'REUL');
+        localStorage.setItem('sky_nav_active_layers', JSON.stringify(next));
+        return next;
+      });
+    };
+
     try {
       // Start real tile download with progress callback
       await downloadChartLayer(layer, (progress) => {
@@ -357,8 +375,19 @@ const App: React.FC = () => {
         localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
         return next;
       });
+
+      // Auto-activate the layer on the map after download
+      activateLayer(layer);
     } catch (error) {
       console.error('Failed to download layer:', layer, error);
+      // Even if IndexedDB fails, still mark as "available" for network loading
+      setDownloadedLayers(prev => {
+        const next = prev.includes(layer) ? prev : [...prev, layer];
+        localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
+        return next;
+      });
+      // Auto-activate even on error (will load from network)
+      activateLayer(layer);
     } finally {
       setSyncingLayers(prev => {
         const next = { ...prev };
