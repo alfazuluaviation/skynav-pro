@@ -906,6 +906,7 @@ const App: React.FC = () => {
                 maxZoom={18}
                 layerId="HIGH"
                 useCache={downloadedLayers.includes('HIGH')}
+                useProxy={true}
               />
             )}
 
@@ -922,6 +923,7 @@ const App: React.FC = () => {
                 maxZoom={18}
                 layerId="LOW"
                 useCache={downloadedLayers.includes('LOW')}
+                useProxy={true}
               />
             )}
 
@@ -938,6 +940,7 @@ const App: React.FC = () => {
                 maxZoom={18}
                 layerId="WAC"
                 useCache={downloadedLayers.includes('WAC')}
+                useProxy={true}
               />
             )}
 
@@ -954,6 +957,7 @@ const App: React.FC = () => {
                 maxZoom={18}
                 layerId="REA"
                 useCache={downloadedLayers.includes('REA')}
+                useProxy={true}
               />
             )}
 
@@ -970,6 +974,7 @@ const App: React.FC = () => {
                 maxZoom={18}
                 layerId="REUL"
                 useCache={downloadedLayers.includes('REUL')}
+                useProxy={true}
               />
             )}
 
@@ -986,6 +991,7 @@ const App: React.FC = () => {
                 maxZoom={18}
                 layerId="REH"
                 useCache={downloadedLayers.includes('REH')}
+                useProxy={true}
               />
             )}
 
