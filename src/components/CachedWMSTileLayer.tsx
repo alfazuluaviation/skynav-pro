@@ -41,28 +41,40 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
   },
 
   // Override getTileUrl to use proxy with correct EPSG:4326 coordinates
+  // MUST match the URL format used in chartDownloader.ts for cache to work
   getTileUrl: function (coords: L.Coords) {
-    const tileBounds = this._tileCoordsToBounds(coords);
+    // Convert tile coordinates to bounding box using same logic as chartDownloader
+    const zoom = coords.z;
+    const x = coords.x;
+    const y = coords.y;
     
-    // Get bounds in lat/lng (EPSG:4326) - NOT projected coordinates
-    const sw = tileBounds.getSouthWest();
-    const ne = tileBounds.getNorthEast();
+    const n = Math.pow(2, zoom);
+    const minLng = x / n * 360 - 180;
+    const maxLng = (x + 1) / n * 360 - 180;
+    
+    const minLatRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 1) / n)));
+    const maxLatRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n)));
+    
+    const minLat = minLatRad * 180 / Math.PI;
+    const maxLat = maxLatRad * 180 / Math.PI;
     
     // WMS 1.1.1 bbox format: minx,miny,maxx,maxy (lon,lat,lon,lat for EPSG:4326)
-    const bbox = [sw.lng, sw.lat, ne.lng, ne.lat].join(',');
+    const bboxStr = `${minLng},${minLat},${maxLng},${maxLat}`;
+    
+    const tileSize = this.options.tileSize || 256;
     
     const params = new URLSearchParams({
       service: 'WMS',
       request: 'GetMap',
       layers: this.wmsParams.layers,
-      styles: this.wmsParams.styles || '',
-      format: this.wmsParams.format,
-      transparent: String(this.wmsParams.transparent),
-      version: this.wmsParams.version,
-      width: String(this.wmsParams.width || this.options.tileSize),
-      height: String(this.wmsParams.height || this.options.tileSize),
-      srs: 'EPSG:4326', // Use geographic coordinates
-      bbox: bbox
+      styles: '',
+      format: 'image/png',
+      transparent: 'true',
+      version: '1.1.1',
+      width: tileSize.toString(),
+      height: tileSize.toString(),
+      srs: 'EPSG:4326',
+      bbox: bboxStr
     });
 
     // Use proxy if enabled, otherwise direct URL
@@ -166,7 +178,8 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
   useEffect(() => {
     if (!map) return;
 
-    // Create the cached WMS layer - use EPSG:4326 for proper geographic coords
+    // Create the cached WMS layer - use simple Mercator for tile coords
+    // but generate EPSG:4326 bbox in getTileUrl to match chartDownloader
     const wmsLayer = new CachedWMSLayer(url, {
       layers,
       format,
@@ -182,8 +195,10 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       useProxy,
       proxyUrl: WMS_PROXY_URL,
       attribution,
-      // Use EPSG:4326 CRS for WMS requests (lat/lng coordinates)
-      crs: L.CRS.EPSG4326,
+      // Use simple Mercator CRS for tile coordinate system
+      // but we convert to EPSG:4326 bbox in getTileUrl
+      crs: L.CRS.EPSG3857,
+      continuousWorld: true,
       // Optimize loading
       updateWhenIdle: false,
       updateWhenZooming: false,
