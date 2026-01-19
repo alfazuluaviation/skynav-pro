@@ -19,14 +19,14 @@ const BRAZIL_BOUNDS = {
   maxLng: -34.0
 };
 
-// Zoom levels to cache for different chart types
+// Optimized zoom levels - fewer levels for faster downloads
 const ZOOM_LEVELS = {
-  HIGH: [5, 6, 7, 8],
-  LOW: [5, 6, 7, 8],
-  REA: [6, 7, 8, 9, 10],
-  REUL: [7, 8, 9, 10],
-  REH: [7, 8, 9, 10],
-  WAC: [5, 6, 7, 8]
+  HIGH: [5, 6, 7],      // Reduced from [5, 6, 7, 8]
+  LOW: [5, 6, 7],       // Reduced from [5, 6, 7, 8]
+  REA: [6, 7, 8],       // Reduced from [6, 7, 8, 9, 10]
+  REUL: [7, 8, 9],      // Reduced from [7, 8, 9, 10]
+  REH: [7, 8, 9],       // Reduced from [7, 8, 9, 10]
+  WAC: [5, 6, 7]        // Reduced from [5, 6, 7, 8]
 };
 
 // Layer configurations for downloading
@@ -219,35 +219,52 @@ function getTilesForZoom(zoom: number): Array<{ x: number; y: number }> {
 }
 
 /**
- * Download a single tile
+ * Download a single tile with retry
  */
-async function downloadTile(url: string, layerId: string): Promise<boolean> {
-  try {
-    const response = await fetch(url, {
-      mode: 'cors',
-      credentials: 'omit',
-      headers: {
-        'Accept': 'image/png,image/*'
-      }
-    });
+async function downloadTile(url: string, layerId: string, retries: number = 2): Promise<boolean> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      
+      const response = await fetch(url, {
+        mode: 'cors',
+        credentials: 'omit',
+        signal: controller.signal,
+        headers: {
+          'Accept': 'image/png,image/*'
+        }
+      });
+      
+      clearTimeout(timeout);
 
-    if (!response.ok) {
+      if (!response.ok) {
+        if (attempt < retries) {
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+        return false;
+      }
+
+      const blob = await response.blob();
+      
+      // Only cache if we got actual image data
+      if (blob.size > 0 && blob.type.startsWith('image/')) {
+        await cacheTile(url, blob, layerId);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, 500));
+        continue;
+      }
+      console.warn('Failed to download tile after retries:', error);
       return false;
     }
-
-    const blob = await response.blob();
-    
-    // Only cache if we got actual image data
-    if (blob.size > 0 && blob.type.startsWith('image/')) {
-      await cacheTile(url, blob, layerId);
-      return true;
-    }
-    
-    return false;
-  } catch (error) {
-    console.warn('Failed to download tile:', error);
-    return false;
   }
+  return false;
 }
 
 /**
@@ -264,7 +281,7 @@ export async function downloadChartLayer(
   }
 
   const zoomLevels = ZOOM_LEVELS[layerId as keyof typeof ZOOM_LEVELS] || [6, 7, 8];
-  const tileSize = 256; // Use 256 for caching, keeps file sizes reasonable
+  const tileSize = 256;
 
   // Calculate total tiles
   let allTiles: Array<{ url: string; zoom: number; x: number; y: number }> = [];
@@ -272,7 +289,7 @@ export async function downloadChartLayer(
   for (const zoom of zoomLevels) {
     const tiles = getTilesForZoom(zoom);
     for (const tile of tiles) {
-      // For each tile, we need to fetch all layers combined
+      // Combine all layers into single request for efficiency
       const layersStr = config.layers.join(',');
       const url = buildWMSTileUrl(config.url, layersStr, tile.x, tile.y, zoom, tileSize);
       allTiles.push({ url, zoom, ...tile });
@@ -280,7 +297,13 @@ export async function downloadChartLayer(
   }
 
   const totalTiles = allTiles.length;
+  let processedTiles = 0;
   let downloadedTiles = 0;
+
+  console.log(`Starting download of ${layerId}: ${totalTiles} tiles across zoom levels ${zoomLevels.join(', ')}`);
+
+  // Report initial progress immediately
+  onProgress?.(0);
 
   // Update metadata to downloading
   await updateLayerMetadata({
@@ -291,8 +314,8 @@ export async function downloadChartLayer(
     status: 'downloading'
   });
 
-  // Download in batches to avoid overwhelming the server
-  const batchSize = 5;
+  // Download in larger batches for speed
+  const batchSize = 10;
   
   for (let i = 0; i < allTiles.length; i += batchSize) {
     const batch = allTiles.slice(i, i + batchSize);
@@ -303,16 +326,20 @@ export async function downloadChartLayer(
         if (success) {
           downloadedTiles++;
         }
+        processedTiles++;
         
-        // Report progress
-        const progress = Math.round((downloadedTiles / totalTiles) * 100);
+        // Report progress based on processed tiles (not just successful)
+        // This ensures progress always moves forward
+        const progress = Math.round((processedTiles / totalTiles) * 100);
         onProgress?.(progress);
       })
     );
 
-    // Small delay between batches to be nice to the server
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Smaller delay between batches
+    await new Promise(resolve => setTimeout(resolve, 50));
   }
+
+  console.log(`Download complete for ${layerId}: ${downloadedTiles}/${totalTiles} tiles cached`);
 
   // Update metadata to complete
   await updateLayerMetadata({
