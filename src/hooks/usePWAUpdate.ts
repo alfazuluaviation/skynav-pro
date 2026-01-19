@@ -1,7 +1,17 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
 const LAST_UPDATE_KEY = 'pwa_last_update_date';
+
+const formatDate = () => {
+  return new Date().toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
 
 export const usePWAUpdate = () => {
   const [lastUpdateDate, setLastUpdateDate] = useState<string | null>(() => {
@@ -9,6 +19,15 @@ export const usePWAUpdate = () => {
   });
   const [isChecking, setIsChecking] = useState(false);
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
+
+  // Set initial date if none exists
+  useEffect(() => {
+    if (!lastUpdateDate) {
+      const now = formatDate();
+      localStorage.setItem(LAST_UPDATE_KEY, now);
+      setLastUpdateDate(now);
+    }
+  }, [lastUpdateDate]);
 
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -30,13 +49,7 @@ export const usePWAUpdate = () => {
   });
 
   const handleUpdate = useCallback(() => {
-    const now = new Date().toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    const now = formatDate();
     localStorage.setItem(LAST_UPDATE_KEY, now);
     setLastUpdateDate(now);
     updateServiceWorker(true);
@@ -53,13 +66,7 @@ export const usePWAUpdate = () => {
         await registrationRef.current.update();
       }
       // Update last check time
-      const now = new Date().toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      const now = formatDate();
       localStorage.setItem(LAST_UPDATE_KEY, now);
       setLastUpdateDate(now);
     } catch (error) {
