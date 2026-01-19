@@ -2,9 +2,14 @@
  * Chart Downloader Service
  * Pre-downloads WMS tiles for offline use by fetching tiles for key zoom levels
  * and geographic areas of Brazil.
+ * Uses a proxy to avoid CORS issues with DECEA GeoServer.
  */
 
 import { cacheTile, updateLayerMetadata, getCachedTileCount, isLayerCached } from './tileCache';
+
+// Supabase edge function URL for WMS proxy
+const SUPABASE_URL = "https://gongoqjjpwphhttumdjm.supabase.co";
+const WMS_PROXY_URL = `${SUPABASE_URL}/functions/v1/proxy-wms`;
 
 // Brazil bounding box (approximate)
 const BRAZIL_BOUNDS = {
@@ -170,7 +175,7 @@ function tileToBBox(x: number, y: number, zoom: number): { minLng: number; minLa
 }
 
 /**
- * Build WMS tile URL
+ * Build WMS tile URL using proxy to avoid CORS
  */
 function buildWMSTileUrl(baseUrl: string, layers: string, x: number, y: number, zoom: number, tileSize: number = 256): string {
   const bbox = tileToBBox(x, y, zoom);
@@ -191,7 +196,8 @@ function buildWMSTileUrl(baseUrl: string, layers: string, x: number, y: number, 
     bbox: bboxStr
   });
 
-  return `${baseUrl}?${params.toString()}`;
+  // Use proxy to avoid CORS issues
+  return `${WMS_PROXY_URL}?${params.toString()}`;
 }
 
 /**
