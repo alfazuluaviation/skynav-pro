@@ -2,12 +2,17 @@
  * CachedWMSTileLayer
  * A WMS tile layer component that uses IndexedDB for offline caching.
  * Tiles are served from cache when available, with network fallback.
+ * Uses a proxy to avoid CORS issues with DECEA GeoServer.
  */
 
 import React, { useEffect, useRef } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { getCachedTile, cacheTile } from '../services/tileCache';
+
+// Supabase edge function URL for WMS proxy
+const SUPABASE_URL = "https://gongoqjjpwphhttumdjm.supabase.co";
+const WMS_PROXY_URL = `${SUPABASE_URL}/functions/v1/proxy-wms`;
 
 interface CachedWMSTileLayerProps {
   url: string;
@@ -22,14 +27,47 @@ interface CachedWMSTileLayerProps {
   maxZoom?: number;
   layerId: string; // Unique ID for caching
   useCache?: boolean; // Enable/disable cache
+  useProxy?: boolean; // Use proxy for CORS
   attribution?: string;
 }
 
-// Custom TileLayer class with IndexedDB caching
+// Custom TileLayer class with IndexedDB caching and proxy support
 const CachedWMSLayer = L.TileLayer.WMS.extend({
   options: {
     layerId: '',
-    useCache: true
+    useCache: true,
+    useProxy: true,
+    proxyUrl: WMS_PROXY_URL
+  },
+
+  // Override getTileUrl to use proxy
+  getTileUrl: function (coords: L.Coords) {
+    const tileBounds = this._tileCoordsToBounds(coords);
+    const nw = this._crs.project(tileBounds.getNorthWest());
+    const se = this._crs.project(tileBounds.getSouthEast());
+
+    const bbox = [se.x, se.y, nw.x, nw.y].join(',');
+    
+    const params = new URLSearchParams({
+      service: 'WMS',
+      request: 'GetMap',
+      layers: this.wmsParams.layers,
+      styles: this.wmsParams.styles || '',
+      format: this.wmsParams.format,
+      transparent: String(this.wmsParams.transparent),
+      version: this.wmsParams.version,
+      width: String(this.wmsParams.width),
+      height: String(this.wmsParams.height),
+      srs: this._crs.code || 'EPSG:3857',
+      bbox: bbox
+    });
+
+    // Use proxy if enabled, otherwise direct URL
+    if (this.options.useProxy) {
+      return `${this.options.proxyUrl}?${params.toString()}`;
+    }
+    
+    return `${this._url}?${params.toString()}`;
   },
 
   createTile: function (coords: L.Coords, done: L.DoneCallback) {
@@ -49,18 +87,22 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
         // Cache the tile after loading from network
         if (useCache) {
           fetch(tileUrl, { mode: 'cors', credentials: 'omit' })
-            .then(res => res.blob())
+            .then(res => {
+              if (res.ok) return res.blob();
+              throw new Error(`HTTP ${res.status}`);
+            })
             .then(blob => {
               cacheTile(tileUrl, blob, layerId);
             })
-            .catch(() => {
-              // Ignore caching errors
+            .catch((err) => {
+              console.debug('Failed to cache tile:', err);
             });
         }
         done(null, tile);
       };
 
       tile.onerror = () => {
+        console.debug('Failed to load tile:', tileUrl);
         done(new Error('Failed to load tile'), tile);
       };
 
@@ -112,6 +154,7 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
   maxZoom = 18,
   layerId,
   useCache = true,
+  useProxy = true,
   attribution
 }) => {
   const map = useMap();
@@ -133,6 +176,8 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       maxZoom,
       layerId,
       useCache,
+      useProxy,
+      proxyUrl: WMS_PROXY_URL,
       attribution,
       // Additional WMS options for better quality
       crs: L.CRS.EPSG3857,
@@ -151,7 +196,7 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
         layerRef.current = null;
       }
     };
-  }, [map, url, layers, format, transparent, version, opacity, zIndex, tileSize, detectRetina, maxZoom, layerId, useCache, attribution]);
+  }, [map, url, layers, format, transparent, version, opacity, zIndex, tileSize, detectRetina, maxZoom, layerId, useCache, useProxy, attribution]);
 
   // Update opacity if it changes
   useEffect(() => {
