@@ -19,14 +19,14 @@ const BRAZIL_BOUNDS = {
   maxLng: -34.0
 };
 
-// Optimized zoom levels - fewer levels for faster downloads
+// All zoom levels for complete aviation coverage
 const ZOOM_LEVELS = {
-  HIGH: [5, 6, 7],      // Reduced from [5, 6, 7, 8]
-  LOW: [5, 6, 7],       // Reduced from [5, 6, 7, 8]
-  REA: [6, 7, 8],       // Reduced from [6, 7, 8, 9, 10]
-  REUL: [7, 8, 9],      // Reduced from [7, 8, 9, 10]
-  REH: [7, 8, 9],       // Reduced from [7, 8, 9, 10]
-  WAC: [5, 6, 7]        // Reduced from [5, 6, 7, 8]
+  HIGH: [5, 6, 7, 8],
+  LOW: [5, 6, 7, 8],
+  REA: [6, 7, 8, 9, 10],
+  REUL: [7, 8, 9, 10],
+  REH: [7, 8, 9, 10],
+  WAC: [5, 6, 7, 8]
 };
 
 // Layer configurations for downloading
