@@ -40,13 +40,16 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
     proxyUrl: WMS_PROXY_URL
   },
 
-  // Override getTileUrl to use proxy
+  // Override getTileUrl to use proxy with correct EPSG:4326 coordinates
   getTileUrl: function (coords: L.Coords) {
     const tileBounds = this._tileCoordsToBounds(coords);
-    const nw = this._crs.project(tileBounds.getNorthWest());
-    const se = this._crs.project(tileBounds.getSouthEast());
-
-    const bbox = [se.x, se.y, nw.x, nw.y].join(',');
+    
+    // Get bounds in lat/lng (EPSG:4326) - NOT projected coordinates
+    const sw = tileBounds.getSouthWest();
+    const ne = tileBounds.getNorthEast();
+    
+    // WMS 1.1.1 bbox format: minx,miny,maxx,maxy (lon,lat,lon,lat for EPSG:4326)
+    const bbox = [sw.lng, sw.lat, ne.lng, ne.lat].join(',');
     
     const params = new URLSearchParams({
       service: 'WMS',
@@ -56,9 +59,9 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
       format: this.wmsParams.format,
       transparent: String(this.wmsParams.transparent),
       version: this.wmsParams.version,
-      width: String(this.wmsParams.width),
-      height: String(this.wmsParams.height),
-      srs: this._crs.code || 'EPSG:3857',
+      width: String(this.wmsParams.width || this.options.tileSize),
+      height: String(this.wmsParams.height || this.options.tileSize),
+      srs: 'EPSG:4326', // Use geographic coordinates
       bbox: bbox
     });
 
@@ -163,7 +166,7 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
   useEffect(() => {
     if (!map) return;
 
-    // Create the cached WMS layer
+    // Create the cached WMS layer - use EPSG:4326 for proper geographic coords
     const wmsLayer = new CachedWMSLayer(url, {
       layers,
       format,
@@ -179,8 +182,8 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       useProxy,
       proxyUrl: WMS_PROXY_URL,
       attribution,
-      // Additional WMS options for better quality
-      crs: L.CRS.EPSG3857,
+      // Use EPSG:4326 CRS for WMS requests (lat/lng coordinates)
+      crs: L.CRS.EPSG4326,
       // Optimize loading
       updateWhenIdle: false,
       updateWhenZooming: false,
