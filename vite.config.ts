@@ -56,15 +56,36 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          // Increase max file size for precaching
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
           runtimeCaching: [
             {
+              // Cache WMS tiles with CacheFirst strategy for speed
+              urlPattern: /^https:\/\/geoaisweb\.decea\.mil\.br\/geoserver\/wms\?.*GetMap.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'wms-tiles-cache',
+                expiration: {
+                  maxEntries: 10000, // Store many tiles
+                  maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              // Cache other geoserver requests with StaleWhileRevalidate
               urlPattern: /^https:\/\/geoaisweb\.decea\.mil\.br\/.*/i,
-              handler: 'NetworkFirst',
+              handler: 'StaleWhileRevalidate',
               options: {
                 cacheName: 'geoserver-cache',
                 expiration: {
-                  maxEntries: 100,
-                  maxAgeSeconds: 60 * 60 * 24 // 24 hours
+                  maxEntries: 1000,
+                  maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
                 }
               }
             }
