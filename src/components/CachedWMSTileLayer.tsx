@@ -86,7 +86,9 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
         } else {
           loadFromNetwork();
         }
-      }).catch(() => {
+      }).catch((err) => {
+        // IndexedDB might not be available (e.g., in iframe/preview)
+        console.debug('Cache unavailable, loading from network:', err);
         loadFromNetwork();
       });
     } else {
