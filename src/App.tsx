@@ -23,6 +23,9 @@ import { FlightPlanDownloadModal } from './components/FlightPlanDownloadModal';
 import { BaseMapType } from './components/LayersMenu';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { getAerodromeIconHTML, getIconSize } from './components/AerodromeIcons';
+import { CachedWMSTileLayer } from './components/CachedWMSTileLayer';
+import { downloadChartLayer, isLayerAvailableOffline } from './services/chartDownloader';
+import { getCachedLayerIds } from './services/tileCache';
 
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -282,24 +285,47 @@ const App: React.FC = () => {
   const handleChartDownload = async (layer: string) => {
     if (syncingLayers[layer] !== undefined) return;
 
-    // Iniciar progresso
-    for (let p = 0; p <= 100; p += 10) {
-      setSyncingLayers(prev => ({ ...prev, [layer]: p }));
-      await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 500));
+    try {
+      // Start real tile download with progress callback
+      await downloadChartLayer(layer, (progress) => {
+        setSyncingLayers(prev => ({ ...prev, [layer]: progress }));
+      });
+
+      // Mark as downloaded
+      setDownloadedLayers(prev => {
+        const next = prev.includes(layer) ? prev : [...prev, layer];
+        localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
+        return next;
+      });
+    } catch (error) {
+      console.error('Failed to download layer:', layer, error);
+    } finally {
+      setSyncingLayers(prev => {
+        const next = { ...prev };
+        delete next[layer];
+        return next;
+      });
     }
-
-    setDownloadedLayers(prev => {
-      const next = prev.includes(layer) ? prev : [...prev, layer];
-      localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
-      return next;
-    });
-
-    setSyncingLayers(prev => {
-      const next = { ...prev };
-      delete next[layer];
-      return next;
-    });
   };
+
+  // Load cached layers on mount
+  useEffect(() => {
+    const loadCachedLayers = async () => {
+      try {
+        const cachedIds = await getCachedLayerIds();
+        if (cachedIds.length > 0) {
+          setDownloadedLayers(prev => {
+            const combined = [...new Set([...prev, ...cachedIds])];
+            localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(combined));
+            return combined;
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load cached layers:', error);
+      }
+    };
+    loadCachedLayers();
+  }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -742,175 +768,101 @@ const App: React.FC = () => {
 
             {/* Route rendered in NavigationLayer */}
 
-            {/* DECEA WMS Layers */}
+            {/* DECEA WMS Layers with Caching */}
             {activeLayers.includes('HIGH') && (
-              <WMSTileLayer
+              <CachedWMSTileLayer
                 url="https://geoaisweb.decea.mil.br/geoserver/wms"
                 layers="ICA:ENRC_H1,ICA:ENRC_H2,ICA:ENRC_H3,ICA:ENRC_H4,ICA:ENRC_H5,ICA:ENRC_H6,ICA:ENRC_H7,ICA:ENRC_H8,ICA:ENRC_H9"
                 format="image/png"
                 transparent={true}
-                version="1.3.0"
-                opacity={0.8}
+                version="1.1.1"
+                opacity={0.85}
                 zIndex={100}
+                tileSize={256}
+                maxZoom={18}
+                layerId="HIGH"
+                useCache={downloadedLayers.includes('HIGH')}
               />
             )}
 
             {activeLayers.includes('LOW') && (
-              <WMSTileLayer
+              <CachedWMSTileLayer
                 url="https://geoaisweb.decea.mil.br/geoserver/wms"
                 layers="ICA:ENRC_L1,ICA:ENRC_L2,ICA:ENRC_L3,ICA:ENRC_L4,ICA:ENRC_L5,ICA:ENRC_L6,ICA:ENRC_L7,ICA:ENRC_L8,ICA:ENRC_L9"
                 format="image/png"
                 transparent={true}
-                version="1.3.0"
-                opacity={0.8}
+                version="1.1.1"
+                opacity={0.85}
                 zIndex={100}
+                tileSize={256}
+                maxZoom={18}
+                layerId="LOW"
+                useCache={downloadedLayers.includes('LOW')}
               />
             )}
 
             {activeLayers.includes('WAC') && (
-              <>
-                {/* WAC Group 1 (North/Northwest) */}
-                <WMSTileLayer
-                  url="https://geoaisweb.decea.mil.br/geoserver/wms"
-                  layers={[
-                    'ICA:WAC_2825_CABO_ORANGE',
-                    'ICA:WAC_2826_MONTE_RORAIMA',
-                    'ICA:WAC_2827_SERRA_PACARAIMA',
-                    'ICA:WAC_2892_PICO_DA_NEBLINA',
-                    'ICA:WAC_2893_BOA_VISTA',
-                    'ICA:WAC_2894_TUMUCUMAQUE',
-                    'ICA:WAC_2895_MACAPA',
-                    'ICA:WAC_2944_FORTALEZA',
-                    'ICA:WAC_2945_SAO_LUIS',
-                    'ICA:WAC_2946_BELEM',
-                    'ICA:WAC_2947_SANTAREM',
-                    'ICA:WAC_2948_MANAUS',
-                    'ICA:WAC_2949_SAO_GABRIEL_DA_CACHOEIRA',
-                    'ICA:WAC_3012_CRUZEIRO_DO_SUL',
-                    'ICA:WAC_3013_TABATINGA'
-                  ].join(',')}
-                  format="image/png"
-                  transparent={true}
-                  version="1.1.1"
-                  opacity={0.8}
-                  zIndex={114}
-                />
-
-                {/* WAC Group 2 (Center/Northeast) */}
-                <WMSTileLayer
-                  url="https://geoaisweb.decea.mil.br/geoserver/wms"
-                  layers={[
-                    'ICA:WAC_3014_HUMAITA',
-                    'ICA:WAC_3015_ITAITUBA',
-                    'ICA:WAC_3016_IMPERATRIZ',
-                    'ICA:WAC_3017_TERESINA',
-                    'ICA:WAC_3018_NATAL',
-                    'ICA:WAC_3019_FERNANDO_DE_NORONHA',
-                    'ICA:WAC_3066_RECIFE',
-                    'ICA:WAC_3067_PETROLINA',
-                    'ICA:WAC_3068_PORTO_NACIONAL',
-                    'ICA:WAC_3069_CACHIMBO',
-                    'ICA:WAC_3070_JI_PARANA',
-                    'ICA:WAC_3071_PORTO_VELHO',
-                    'ICA:WAC_3072_TARAUACA',
-                    'ICA:WAC_3137_PRINCIPE_DA_BEIRA',
-                    'ICA:WAC_3138_CUIABA'
-                  ].join(',')}
-                  format="image/png"
-                  transparent={true}
-                  version="1.1.1"
-                  opacity={0.8}
-                  zIndex={114}
-                />
-
-                {/* WAC Group 3 (South/Southeast) */}
-                <WMSTileLayer
-                  url="https://geoaisweb.decea.mil.br/geoserver/wms"
-                  layers={[
-                    'ICA:WAC_3139_ARAGARCAS',
-                    'ICA:WAC_3140_BRASILIA',
-                    'ICA:WAC_3141_SALVADOR',
-                    'ICA:WAC_3189_BELO_HORIZONTE',
-                    'ICA:WAC_3190_GOIANIA',
-                    'ICA:WAC_3191_RONDONOPOLIS',
-                    'ICA:WAC_3192_CORUMBA',
-                    'ICA:WAC_3260_BELA_VISTA',
-                    'ICA:WAC_3261_CAMPO_GRANDE',
-                    'ICA:WAC_3262_SAO_PAULO',
-                    'ICA:WAC_3263_RIO_DE_JANEIRO',
-                    'ICA:WAC_3313_CURITIBA',
-                    'ICA:WAC_3314_FOZ_DO_IGUACU',
-                    'ICA:WAC_3383_URUGUAIANA',
-                    'ICA:WAC_3384_PORTO_ALEGRE',
-                    'ICA:WAC_3434_RIO_DA_PRATA'
-                  ].join(',')}
-                  format="image/png"
-                  transparent={true}
-                  version="1.1.1"
-                  opacity={0.8}
-                  zIndex={114}
-                />
-              </>
+              <CachedWMSTileLayer
+                url="https://geoaisweb.decea.mil.br/geoserver/wms"
+                layers="ICA:WAC_2825_CABO_ORANGE,ICA:WAC_2826_MONTE_RORAIMA,ICA:WAC_2827_SERRA_PACARAIMA,ICA:WAC_2892_PICO_DA_NEBLINA,ICA:WAC_2893_BOA_VISTA,ICA:WAC_2894_TUMUCUMAQUE,ICA:WAC_2895_MACAPA,ICA:WAC_2944_FORTALEZA,ICA:WAC_2945_SAO_LUIS,ICA:WAC_2946_BELEM,ICA:WAC_2947_SANTAREM,ICA:WAC_2948_MANAUS,ICA:WAC_2949_SAO_GABRIEL_DA_CACHOEIRA,ICA:WAC_3012_CRUZEIRO_DO_SUL,ICA:WAC_3013_TABATINGA,ICA:WAC_3014_HUMAITA,ICA:WAC_3015_ITAITUBA,ICA:WAC_3016_IMPERATRIZ,ICA:WAC_3017_TERESINA,ICA:WAC_3018_NATAL,ICA:WAC_3019_FERNANDO_DE_NORONHA,ICA:WAC_3066_RECIFE,ICA:WAC_3067_PETROLINA,ICA:WAC_3068_PORTO_NACIONAL,ICA:WAC_3069_CACHIMBO,ICA:WAC_3070_JI_PARANA,ICA:WAC_3071_PORTO_VELHO,ICA:WAC_3072_TARAUACA,ICA:WAC_3137_PRINCIPE_DA_BEIRA,ICA:WAC_3138_CUIABA,ICA:WAC_3139_ARAGARCAS,ICA:WAC_3140_BRASILIA,ICA:WAC_3141_SALVADOR,ICA:WAC_3189_BELO_HORIZONTE,ICA:WAC_3190_GOIANIA,ICA:WAC_3191_RONDONOPOLIS,ICA:WAC_3192_CORUMBA,ICA:WAC_3260_BELA_VISTA,ICA:WAC_3261_CAMPO_GRANDE,ICA:WAC_3262_SAO_PAULO,ICA:WAC_3263_RIO_DE_JANEIRO,ICA:WAC_3313_CURITIBA,ICA:WAC_3314_FOZ_DO_IGUACU,ICA:WAC_3383_URUGUAIANA,ICA:WAC_3384_PORTO_ALEGRE,ICA:WAC_3434_RIO_DA_PRATA"
+                format="image/png"
+                transparent={true}
+                version="1.1.1"
+                opacity={0.85}
+                zIndex={114}
+                tileSize={256}
+                maxZoom={18}
+                layerId="WAC"
+                useCache={downloadedLayers.includes('WAC')}
+              />
             )}
 
             {activeLayers.includes('REA') && (
-              <>
-                {/* REA / CCV - Specialized Layer for Recife to ensure loading reliability */}
-                <WMSTileLayer
-                  url="https://geoaisweb.decea.mil.br/geoserver/wms"
-                  layers="ICA:CCV_REA_WF_RECIFE"
-                  format="image/png"
-                  transparent={true}
-                  version="1.1.1"
-                  opacity={0.9}
-                  zIndex={115}
-                  tileSize={512}
-                  detectRetina={true}
-                  maxZoom={18}
-                />
+              <CachedWMSTileLayer
+                url="https://geoaisweb.decea.mil.br/geoserver/wms"
+                layers="ICA:CCV_REA_WF_RECIFE,ICA:CCV_REA_CY_CUIABA,ICA:CCV_REA_WA_TABATINGA,ICA:CCV_REA_WB_BELEM,ICA:CCV_REA_WG_CAMPO_GRANDE,ICA:CCV_REA_WH_BELO_HORIZONTE,ICA:CCV_REA_WJ1_RIO_DE_JANEIRO,ICA:CCV_REA_WK_PORTO_SEGURO,ICA:CCV_REA_WN2_MANAUS,ICA:CCV_REA_WP_PORTO_ALEGRE,ICA:CCV_REA_WR_BRASILIA,ICA:CCV_REA_WS_SAO_LUIS,ICA:CCV_REA_WX_SANTAREM,ICA:CCV_REA_WZ_FORTALEZA,ICA:CCV_REA_XF_FLORIANOPOLIS,ICA:CCV_REA_XK_MACAPA,ICA:CCV_REA_XN-ANAPOLIS,ICA:CCV_REA_XP1_SAO_PAULO,ICA:CCV_REA_XP2_SAO_PAULO,ICA:CCV_REA_XR_VITORIA,ICA:CCV_REA_XS_SALVADOR,ICA:CCV_REA_XT_NATAL"
+                format="image/png"
+                transparent={true}
+                version="1.1.1"
+                opacity={0.9}
+                zIndex={116}
+                tileSize={256}
+                maxZoom={18}
+                layerId="REA"
+                useCache={downloadedLayers.includes('REA')}
+              />
+            )}
 
-                {/* REA / CCV Paper-style Georeferenced Charts (Group 1A) - v1.1.1 for raster compatibility */}
-                <WMSTileLayer
-                  url="https://geoaisweb.decea.mil.br/geoserver/wms"
-                  layers="ICA:CCV_REA_CY_CUIABA,ICA:CCV_REA_WA_TABATINGA,ICA:CCV_REA_WB_BELEM,ICA:CCV_REA_WG_CAMPO_GRANDE,ICA:CCV_REA_WH_BELO_HORIZONTE"
-                  format="image/png"
-                  transparent={true}
-                  version="1.1.1"
-                  opacity={0.9}
-                  zIndex={116}
-                  tileSize={512}
-                  detectRetina={true}
-                  maxZoom={18}
-                />
+            {activeLayers.includes('REUL') && (
+              <CachedWMSTileLayer
+                url="https://geoaisweb.decea.mil.br/geoserver/wms"
+                layers="ICA:CCV_REUL_WJ3_RIO_DE_JANEIRO"
+                format="image/png"
+                transparent={true}
+                version="1.1.1"
+                opacity={0.9}
+                zIndex={119}
+                tileSize={256}
+                maxZoom={18}
+                layerId="REUL"
+                useCache={downloadedLayers.includes('REUL')}
+              />
+            )}
 
-                {/* REA / CCV Paper-style Georeferenced Charts (Group 1B) - v1.1.1 for raster compatibility */}
-                <WMSTileLayer
-                  url="https://geoaisweb.decea.mil.br/geoserver/wms"
-                  layers="ICA:CCV_REA_WJ1_RIO_DE_JANEIRO,ICA:CCV_REA_WK_PORTO_SEGURO,ICA:CCV_REA_WN2_MANAUS,ICA:CCV_REA_WP_PORTO_ALEGRE,ICA:CCV_REA_WR_BRASILIA"
-                  format="image/png"
-                  transparent={true}
-                  version="1.1.1"
-                  opacity={0.9}
-                  zIndex={117}
-                  tileSize={512}
-                  detectRetina={true}
-                  maxZoom={18}
-                />
-
-                {/* REA / CCV Paper-style Georeferenced Charts (Group 2) - v1.1.1 for raster compatibility */}
-                <WMSTileLayer
-                  url="https://geoaisweb.decea.mil.br/geoserver/wms"
-                  layers="ICA:CCV_REA_WS_SAO_LUIS,ICA:CCV_REA_WX_SANTAREM,ICA:CCV_REA_WZ_FORTALEZA,ICA:CCV_REA_XF_FLORIANOPOLIS,ICA:CCV_REA_XK_MACAPA,ICA:CCV_REA_XN-ANAPOLIS,ICA:CCV_REA_XP1_SAO_PAULO,ICA:CCV_REA_XP2_SAO_PAULO,ICA:CCV_REA_XR_VITORIA,ICA:CCV_REA_XS_SALVADOR,ICA:CCV_REA_XT_NATAL"
-                  format="image/png"
-                  transparent={true}
-                  version="1.1.1"
-                  opacity={0.9}
-                  zIndex={118}
-                  tileSize={512}
-                  detectRetina={true}
-                  maxZoom={18}
-                />
-              </>
+            {activeLayers.includes('REH') && (
+              <CachedWMSTileLayer
+                url="https://geoaisweb.decea.mil.br/geoserver/wms"
+                layers="ICA:CCV_REH_WH_BELO_HORIZONTE,ICA:CCV_REH_WJ1_CABO_FRIO,ICA:CCV_REH_WJ2_RIO_DE_JANEIRO,ICA:CCV_REH_WJ3_RIO_DE_JANEIRO,ICA:CCV_REH_XP1_SAO_JOSE_DOS_CAMPOS,ICA:CCV_REH_XP1_SOROCABA,ICA:CCV_REH_XP2_CAMPINAS,ICA:CCV_REH_XP2_SAO_PAULO_1,ICA:CCV_REH_XP2_SAO_PAULO_2,ICA:REH_BACIA_DE_SANTOS,ICA:REH_CURITIBA,ICA:REH_VITORIA"
+                format="image/png"
+                transparent={true}
+                version="1.1.1"
+                opacity={0.9}
+                zIndex={120}
+                tileSize={256}
+                maxZoom={18}
+                layerId="REH"
+                useCache={downloadedLayers.includes('REH')}
+              />
             )}
 
             {/* REUL - Carta para Ultraleves */}
