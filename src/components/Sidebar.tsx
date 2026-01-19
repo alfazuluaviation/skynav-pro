@@ -9,6 +9,7 @@ import { SettingsPopover } from './SettingsPopover';
 import { LayersMenu, BaseMapType } from './LayersMenu';
 import { AiracCycle } from '../../types';
 import { usePWAUpdate } from '@/hooks/usePWAUpdate';
+import { useLocationPermission } from '@/hooks/useLocationPermission';
 
 interface SidebarProps {
     userName?: string;
@@ -49,7 +50,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
     const [showSettings, setShowSettings] = useState(false);
     const [showLayersMenu, setShowLayersMenu] = useState(false);
-    const { needRefresh, lastUpdateDate, handleUpdate } = usePWAUpdate();
+    const { needRefresh, lastUpdateDate, handleUpdate, checkForUpdate, isChecking } = usePWAUpdate();
+    const { permissionStatus, isRequesting, requestPermission } = useLocationPermission();
 
     // Notify parent when menus are open (mobile only)
     React.useEffect(() => {
@@ -116,6 +118,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             needRefresh={needRefresh}
                             lastUpdateDate={lastUpdateDate}
                             onUpdate={handleUpdate}
+                            onCheckUpdate={checkForUpdate}
+                            isCheckingUpdate={isChecking}
+                            locationPermission={permissionStatus}
+                            onRequestLocation={requestPermission}
+                            isRequestingLocation={isRequesting}
                             onClose={() => setShowSettings(false)}
                         />
                     )}
@@ -220,6 +227,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             needRefresh={needRefresh}
                             lastUpdateDate={lastUpdateDate}
                             onUpdate={handleUpdate}
+                            onCheckUpdate={checkForUpdate}
+                            isCheckingUpdate={isChecking}
+                            locationPermission={permissionStatus}
+                            onRequestLocation={requestPermission}
+                            isRequestingLocation={isRequesting}
                             onClose={() => setShowSettings(false)}
                         />
                     </div>
