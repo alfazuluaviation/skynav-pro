@@ -92,8 +92,9 @@ const getWaypointIcon = (wp: Waypoint): L.DivIcon | L.Icon => {
   });
 };
 
-const planeIcon = L.divIcon({
-  html: `<div style="transform: rotate(0deg); transition: transform 0.5s;">
+// Dynamic plane icon that rotates based on heading
+const createPlaneIcon = (heading: number) => L.divIcon({
+  html: `<div style="transform: rotate(${heading}deg); transition: transform 0.3s ease-out;">
     <svg width="40" height="40" viewBox="0 0 24 24" fill="#a855f7" stroke="white" stroke-width="0.5">
       <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
     </svg>
@@ -102,6 +103,65 @@ const planeIcon = L.divIcon({
   iconSize: [40, 40],
   iconAnchor: [20, 20],
 });
+
+// Calculate heading from current position to next waypoint on route
+const calculateHeadingToNextWaypoint = (
+  currentPos: [number, number], 
+  waypoints: Waypoint[]
+): number => {
+  if (!waypoints || waypoints.length === 0) return 0;
+  
+  // Find the next waypoint to fly to (first one not yet passed)
+  // For simplicity, we'll target the first waypoint and check distance
+  let targetWaypoint = waypoints[0];
+  
+  // Find the closest upcoming waypoint
+  let minDistance = Infinity;
+  let closestIdx = 0;
+  
+  for (let i = 0; i < waypoints.length; i++) {
+    const wp = waypoints[i];
+    const dist = calculateDistance(currentPos[0], currentPos[1], wp.lat, wp.lng);
+    
+    // If within 0.5nm of a waypoint, target the next one
+    if (dist < 0.5 && i < waypoints.length - 1) {
+      targetWaypoint = waypoints[i + 1];
+      break;
+    }
+    
+    // Find the segment we're closest to
+    if (i < waypoints.length - 1) {
+      const nextWp = waypoints[i + 1];
+      // Check if we're between this waypoint and the next
+      const distToNext = calculateDistance(currentPos[0], currentPos[1], nextWp.lat, nextWp.lng);
+      const segmentDist = calculateDistance(wp.lat, wp.lng, nextWp.lat, nextWp.lng);
+      
+      // If distances suggest we're on this segment, target the next waypoint
+      if (dist + distToNext <= segmentDist * 1.3) {
+        targetWaypoint = nextWp;
+        break;
+      }
+    }
+    
+    if (dist < minDistance) {
+      minDistance = dist;
+      closestIdx = i;
+    }
+  }
+  
+  // If we're past the last waypoint, keep heading to it
+  if (closestIdx === waypoints.length - 1) {
+    targetWaypoint = waypoints[closestIdx];
+  }
+  
+  // Calculate bearing to target waypoint
+  return calculateBearing(
+    currentPos[0], 
+    currentPos[1], 
+    targetWaypoint.lat, 
+    targetWaypoint.lng
+  );
+};
 
 // Component to handle map resize
 function MapUIControls({ showPlanPanel }: { showPlanPanel: boolean }) {
@@ -700,7 +760,17 @@ const App: React.FC = () => {
               />
             )}
 
-            {userPos && <Marker position={userPos} icon={planeIcon} zIndexOffset={1000} />}
+            {userPos && (
+              <Marker 
+                position={userPos} 
+                icon={createPlaneIcon(
+                  waypoints.length > 0 
+                    ? calculateHeadingToNextWaypoint(userPos, waypoints) 
+                    : stats.heading
+                )} 
+                zIndexOffset={1000} 
+              />
+            )}
 
             {waypoints.map((wp) => {
               // Format coordinates for USER waypoints
