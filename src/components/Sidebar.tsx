@@ -51,7 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [showSettings, setShowSettings] = useState(false);
     const [showLayersMenu, setShowLayersMenu] = useState(false);
     const { needRefresh, lastUpdateDate, handleUpdate, checkForUpdate, isChecking } = usePWAUpdate();
-    const { permissionStatus, isRequesting, requestPermission } = useLocationPermission();
+    const { permissionStatus, isRequesting, requestPermission, showIOSInstructions } = useLocationPermission();
 
     // Notify parent when menus are open (mobile only)
     React.useEffect(() => {
@@ -123,6 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             locationPermission={permissionStatus}
                             onRequestLocation={requestPermission}
                             isRequestingLocation={isRequesting}
+                            showIOSInstructions={showIOSInstructions}
                             onClose={() => setShowSettings(false)}
                         />
                     )}
@@ -232,6 +233,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             locationPermission={permissionStatus}
                             onRequestLocation={requestPermission}
                             isRequestingLocation={isRequesting}
+                            showIOSInstructions={showIOSInstructions}
                             onClose={() => setShowSettings(false)}
                         />
                     </div>
