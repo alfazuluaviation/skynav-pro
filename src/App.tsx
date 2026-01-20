@@ -399,22 +399,42 @@ const App: React.FC = () => {
   };
 
   // Load cached layers on mount
+  // Sync downloaded and active layers with actual IndexedDB cache on startup
   useEffect(() => {
-    const loadCachedLayers = async () => {
+    const syncCachedLayers = async () => {
       try {
+        // Get actual cached layer IDs from IndexedDB
         const cachedIds = await getCachedLayerIds();
-        if (cachedIds.length > 0) {
-          setDownloadedLayers(prev => {
-            const combined = [...new Set([...prev, ...cachedIds])];
-            localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(combined));
-            return combined;
-          });
-        }
+        console.log('[CACHE SYNC] IndexedDB cached layers:', cachedIds);
+        
+        // Update downloadedLayers to match what's actually in IndexedDB
+        setDownloadedLayers(prev => {
+          // Only keep layers that are actually cached
+          const validated = prev.filter(id => cachedIds.includes(id));
+          // Add any cached layers not in prev
+          const combined = [...new Set([...validated, ...cachedIds])];
+          console.log('[CACHE SYNC] Validated downloadedLayers:', combined);
+          localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(combined));
+          return combined;
+        });
+        
+        // Also clean up activeLayers - remove any that aren't downloaded
+        setActiveLayers(prev => {
+          const validated = prev.filter(id => cachedIds.includes(id));
+          console.log('[CACHE SYNC] Validated activeLayers:', validated);
+          localStorage.setItem('sky_nav_active_layers', JSON.stringify(validated));
+          return validated;
+        });
       } catch (error) {
-        console.error('Failed to load cached layers:', error);
+        console.error('[CACHE SYNC] Failed to sync cached layers:', error);
+        // In case of IndexedDB error (e.g., in iframe), clear both states
+        setDownloadedLayers([]);
+        setActiveLayers([]);
+        localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify([]));
+        localStorage.setItem('sky_nav_active_layers', JSON.stringify([]));
       }
     };
-    loadCachedLayers();
+    syncCachedLayers();
   }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -627,27 +647,29 @@ const App: React.FC = () => {
   };
 
   const handleClearLayerCache = async (layer: string) => {
+    console.log(`[CACHE CLEAR] Starting clear for layer: ${layer}`);
+    
+    // FIRST: Immediately remove from active and downloaded layers to stop rendering
+    setActiveLayers(prev => {
+      const next = prev.filter(l => l !== layer);
+      localStorage.setItem('sky_nav_active_layers', JSON.stringify(next));
+      console.log(`[CACHE CLEAR] Removed ${layer} from activeLayers:`, next);
+      return next;
+    });
+    
+    setDownloadedLayers(prev => {
+      const next = prev.filter(l => l !== layer);
+      localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
+      console.log(`[CACHE CLEAR] Removed ${layer} from downloadedLayers:`, next);
+      return next;
+    });
+    
+    // THEN: Clear from IndexedDB cache
     try {
-      // Clear from IndexedDB cache
       await clearLayerCache(layer);
-      
-      // Remove from active layers
-      setActiveLayers(prev => {
-        const next = prev.filter(l => l !== layer);
-        localStorage.setItem('sky_nav_active_layers', JSON.stringify(next));
-        return next;
-      });
-      
-      // Remove from downloaded layers
-      setDownloadedLayers(prev => {
-        const next = prev.filter(l => l !== layer);
-        localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
-        return next;
-      });
-      
-      console.log(`Cache cleared for layer: ${layer}`);
+      console.log(`[CACHE CLEAR] IndexedDB cache cleared for layer: ${layer}`);
     } catch (error) {
-      console.error('Failed to clear layer cache:', error);
+      console.error('[CACHE CLEAR] Failed to clear IndexedDB:', error);
     }
   };
 
