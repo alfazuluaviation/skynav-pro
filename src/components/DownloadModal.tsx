@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Waypoint, FlightSegment } from '../types';
 import { useDownloadManager } from '../hooks/useDownloadManager';
-import { Wifi, WifiOff } from 'lucide-react';
+import { Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 
 interface DownloadModalProps {
   isOpen: boolean;
@@ -31,6 +31,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   onClearLayerCache
 }) => {
   const [downloadFormat, setDownloadFormat] = useState<'txt' | 'csv' | 'json'>('txt');
+  const [confirmClearLayer, setConfirmClearLayer] = useState<string | null>(null);
   const { syncingLayers, isOnline, getError } = useDownloadManager();
 
   if (!isOpen) return null;
@@ -201,9 +202,25 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     }
   };
 
-  const handleClearCache = (e: React.MouseEvent, chartId: string) => {
+  const handleClearCacheRequest = (e: React.MouseEvent, chartId: string) => {
     e.stopPropagation();
-    onClearLayerCache(chartId);
+    setConfirmClearLayer(chartId);
+  };
+
+  const handleConfirmClearCache = () => {
+    if (confirmClearLayer) {
+      onClearLayerCache(confirmClearLayer);
+      setConfirmClearLayer(null);
+    }
+  };
+
+  const handleCancelClearCache = () => {
+    setConfirmClearLayer(null);
+  };
+
+  const getLayerLabel = (layerId: string): string => {
+    const allOptions = [...chartOptions, ...baseMapOptions];
+    return allOptions.find(o => o.id === layerId)?.label || layerId;
   };
 
   const handleDownloadAll = async () => {
@@ -290,7 +307,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
         {/* Clear cache button */}
         {isDownloaded && !isSyncing && (
           <button
-            onClick={(e) => handleClearCache(e, chart.id)}
+            onClick={(e) => handleClearCacheRequest(e, chart.id)}
             className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-400 rounded-full flex items-center justify-center text-white text-xs shadow-lg transition-colors"
             title="Limpar cache e rebaixar"
           >
@@ -404,6 +421,52 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Confirmation Dialog for Clear Cache */}
+      {confirmClearLayer && (
+        <div className="fixed inset-0 z-[3100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden animate-in zoom-in-95">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-red-600 to-orange-600 px-5 py-4 flex items-center gap-3">
+              <AlertTriangle className="w-6 h-6 text-white" />
+              <h3 className="text-lg font-bold text-white">Limpar Cache</h3>
+            </div>
+            
+            {/* Content */}
+            <div className="p-5 space-y-4">
+              <p className="text-slate-300 text-sm leading-relaxed">
+                Você está prestes a remover a carta <span className="font-bold text-white">{getLayerLabel(confirmClearLayer)}</span> do cache offline.
+              </p>
+              
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                <p className="text-red-300 text-xs leading-relaxed">
+                  <strong>⚠️ Atenção:</strong> Esta carta não estará mais disponível offline. Você precisará baixá-la novamente para usar sem conexão com a internet.
+                </p>
+              </div>
+
+              <p className="text-slate-400 text-xs">
+                Deseja continuar?
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="px-5 pb-5 flex gap-3">
+              <button
+                onClick={handleCancelClearCache}
+                className="flex-1 py-3 px-4 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmClearCache}
+                className="flex-1 py-3 px-4 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold rounded-xl transition-all shadow-lg"
+              >
+                Limpar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
