@@ -185,11 +185,14 @@ export async function getCachedTileCount(layerId: string): Promise<number> {
  * Clear all cached tiles for a specific layer
  */
 export async function clearLayerCache(layerId: string): Promise<void> {
+  console.log(`[TILE CACHE] Clearing cache for layer: ${layerId}`);
+  
   try {
     const db = await openDatabase();
-
+    
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([STORE_NAME, METADATA_STORE], 'readwrite');
+      let deletedCount = 0;
       
       // Get all tiles for this layer and delete them
       const tileStore = transaction.objectStore(STORE_NAME);
@@ -200,6 +203,7 @@ export async function clearLayerCache(layerId: string): Promise<void> {
         const cursor = (event.target as IDBRequest).result;
         if (cursor) {
           cursor.delete();
+          deletedCount++;
           cursor.continue();
         }
       };
@@ -208,11 +212,18 @@ export async function clearLayerCache(layerId: string): Promise<void> {
       const metadataStore = transaction.objectStore(METADATA_STORE);
       metadataStore.delete(layerId);
 
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
+      transaction.oncomplete = () => {
+        console.log(`[TILE CACHE] Cleared ${deletedCount} tiles for layer: ${layerId}`);
+        resolve();
+      };
+      transaction.onerror = () => {
+        console.error(`[TILE CACHE] Error clearing cache for ${layerId}:`, transaction.error);
+        reject(transaction.error);
+      };
     });
   } catch (error) {
-    console.error('Error clearing layer cache:', error);
+    console.error('[TILE CACHE] Error clearing layer cache:', error);
+    throw error;
   }
 }
 
@@ -275,7 +286,9 @@ export async function getCacheStats(): Promise<{ tileCount: number; estimatedSiz
  */
 export async function isLayerCached(layerId: string): Promise<boolean> {
   const metadata = await getLayerMetadata(layerId);
-  return metadata?.status === 'complete';
+  const isCached = metadata?.status === 'complete';
+  console.log(`[TILE CACHE] isLayerCached(${layerId}): ${isCached}, metadata:`, metadata);
+  return isCached;
 }
 
 /**
