@@ -98,6 +98,13 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
     tile.crossOrigin = 'anonymous';
 
     const loadFromNetwork = () => {
+      // Block network requests when offline
+      if (!navigator.onLine) {
+        console.debug(`[WMS OFFLINE] ${layerId} - skipping network request`);
+        done(null, tile); // Return empty tile
+        return;
+      }
+
       tile.onload = () => {
         // Cache the tile after loading from network
         if (useCache) {
@@ -138,22 +145,41 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
           tile.onerror = () => {
             console.warn(`[CACHE ERROR] Failed to render cached tile for ${layerId}, falling back to network`);
             URL.revokeObjectURL(objectUrl);
-            // Fallback to network
-            loadFromNetwork();
+            // Fallback to network only if online
+            if (navigator.onLine) {
+              loadFromNetwork();
+            } else {
+              done(null, tile);
+            }
           };
           tile.src = objectUrl;
         } else {
-          console.debug(`[CACHE MISS] ${layerId} - no cached tile found, loading from network`);
-          loadFromNetwork();
+          // No cache - only load from network if online
+          if (navigator.onLine) {
+            console.debug(`[CACHE MISS] ${layerId} - loading from network`);
+            loadFromNetwork();
+          } else {
+            console.debug(`[WMS OFFLINE] ${layerId} - not cached, returning empty tile`);
+            done(null, tile);
+          }
         }
       }).catch((err) => {
-        // IndexedDB might not be available (e.g., in iframe/preview)
+        // IndexedDB might not be available
         console.warn(`[CACHE UNAVAILABLE] ${layerId} - IndexedDB error:`, err.message || err);
-        loadFromNetwork();
+        if (navigator.onLine) {
+          loadFromNetwork();
+        } else {
+          done(null, tile);
+        }
       });
     } else {
-      console.debug(`[CACHE DISABLED] ${layerId} - loading directly from network`);
-      loadFromNetwork();
+      // Cache disabled - only load from network if online
+      if (navigator.onLine) {
+        console.debug(`[CACHE DISABLED] ${layerId} - loading from network`);
+        loadFromNetwork();
+      } else {
+        done(null, tile);
+      }
     }
 
     return tile;
