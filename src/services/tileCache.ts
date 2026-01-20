@@ -60,9 +60,15 @@ async function openDatabase(): Promise<IDBDatabase> {
 
 /**
  * Generate a unique cache key for a tile
+ * Normalizes subdomain to 'a' for consistent caching
  */
 export function getTileCacheKey(url: string): string {
-  return url;
+  // Normalize subdomain (a, b, c, d) to 'a' for consistent cache keys
+  // This ensures tiles cached with subdomain 'b' can be retrieved when looking up with 'a'
+  return url
+    .replace(/https:\/\/[abcd]\.tile\.openstreetmap\.org/, 'https://a.tile.openstreetmap.org')
+    .replace(/https:\/\/[abcd]\.basemaps\.cartocdn\.com/, 'https://a.basemaps.cartocdn.com')
+    .replace(/https:\/\/[abc]\.tile\.opentopomap\.org/, 'https://a.tile.opentopomap.org');
 }
 
 /**
