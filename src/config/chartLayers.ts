@@ -41,3 +41,27 @@ export type ChartLayerId = keyof typeof CHART_LAYERS;
 export function getChartConfig(layerId: ChartLayerId) {
   return CHART_LAYERS[layerId];
 }
+
+// Base map configurations for offline caching
+export const BASE_MAP_LAYERS = {
+  OSM: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c'],
+    zoomLevels: [4, 5, 6, 7, 8],
+    label: 'OpenStreetMap'
+  },
+  DARK: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    subdomains: ['a', 'b', 'c', 'd'],
+    zoomLevels: [4, 5, 6, 7, 8],
+    label: 'Modo Noturno'
+  },
+  TOPO: {
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c'],
+    zoomLevels: [4, 5, 6, 7],
+    label: 'Terreno'
+  }
+} as const;
+
+export type BaseMapLayerId = keyof typeof BASE_MAP_LAYERS;
