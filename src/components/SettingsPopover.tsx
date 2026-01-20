@@ -1,5 +1,5 @@
 import React from 'react';
-import { IconDownload, IconUser } from './Icons';
+import { IconUser } from './Icons';
 import { AiracCycle } from '../../types';
 import { RefreshCw, Check, X, MapPin, Loader2 } from 'lucide-react';
 import { LocationPermissionStatus } from '@/hooks/useLocationPermission';
@@ -9,11 +9,6 @@ interface SettingsPopoverProps {
     userEmail?: string;
     isNightMode: boolean;
     onToggleNightMode: () => void;
-    activeLayers: string[];
-    onToggleLayer: (layer: string) => void;
-    downloadedLayers: string[];
-    onDownloadLayer: (layer: string) => void;
-    syncingLayers: Record<string, number>;
     airac: AiracCycle | null;
     isMobile?: boolean;
     // PWA Update props
@@ -35,11 +30,6 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
     userEmail,
     isNightMode,
     onToggleNightMode,
-    activeLayers,
-    onToggleLayer,
-    downloadedLayers,
-    onDownloadLayer,
-    syncingLayers,
     airac,
     isMobile = false,
     needRefresh = false,
@@ -270,60 +260,6 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                     </div>
                 </div>
 
-                <div className="h-px bg-slate-800 w-full opacity-50"></div>
-
-                {/* DOWNLOAD */}
-                <div className="flex flex-col gap-4">
-                    <div className="flex items-center gap-2 px-1">
-                        <IconDownload />
-                        <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Download</span>
-                    </div>
-
-                    <div className="grid grid-cols-4 sm:grid-cols-3 gap-2">
-                        {['HIGH', 'LOW', 'REA', 'WAC'].map(type => {
-                            const isDownloaded = downloadedLayers.includes(type);
-                            const progress = syncingLayers[type];
-                            const isSyncing = progress !== undefined;
-
-                            return (
-                                <button
-                                    key={type}
-                                    onClick={() => onDownloadLayer(type)}
-                                    disabled={isSyncing && !isDownloaded}
-                                    className={`hover:bg-[#21262d] active:bg-[#2d333b] border py-3 rounded-xl flex flex-col items-center justify-center gap-1.5 group transition-all relative overflow-hidden ${isDownloaded
-                                        ? 'bg-[#161b22] border-slate-800'
-                                        : 'bg-slate-800/30 border-slate-800 border-dashed opacity-70'
-                                        }`}
-                                >
-                                    <span className={`text-[9px] font-black uppercase tracking-tighter ${isDownloaded
-                                        ? 'text-slate-100'
-                                        : 'text-slate-500'
-                                        }`}>
-                                        {type === 'HIGH' ? 'ENRC HIGH' : type === 'LOW' ? 'ENRC LOW' : type}
-                                    </span>
-
-                                    {isDownloaded ? (
-                                        <div className="flex items-center gap-1">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                                            <div className="text-[8px] font-bold text-slate-500 group-hover:text-slate-400">DISPONÍVEL</div>
-                                        </div>
-                                    ) : (
-                                        <div className="text-[8px] font-bold text-slate-600 group-hover:text-slate-400">
-                                            {isSyncing ? `${progress}%` : 'BAIXAR'}
-                                        </div>
-                                    )}
-
-                                    {isSyncing && (
-                                        <div
-                                            className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-teal-600 to-teal-400 transition-all duration-300"
-                                            style={{ width: `${progress}%` }}
-                                        ></div>
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
             </div>
         </div>
     );
