@@ -212,7 +212,7 @@ const App: React.FC = () => {
   const [mapRef, setMapRef] = useState<L.Map | null>(null);
   const [activeLayers, setActiveLayers] = useState<string[]>([]);
   const [downloadedLayers, setDownloadedLayers] = useState<string[]>([]);
-  const [syncingLayers, setSyncingLayers] = useState<Record<string, number>>({});
+  // syncingLayers state removed - now handled by DownloadManager
   const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
   const [showChartsModal, setShowChartsModal] = useState(false);
   const [showAerodromeModal, setShowAerodromeModal] = useState(false);
@@ -1074,7 +1074,6 @@ const App: React.FC = () => {
         plannedSpeed={plannedSpeed}
         downloadedLayers={downloadedLayers}
         activeLayers={activeLayers}
-        syncingLayers={syncingLayers}
         onDownloadLayer={handleChartDownload}
         onToggleLayer={handleToggleLayer}
         onClearLayerCache={handleClearLayerCache}
