@@ -10,6 +10,7 @@ import { LayersMenu, BaseMapType } from './LayersMenu';
 import { AiracCycle } from '../../types';
 import { usePWAUpdate } from '@/hooks/usePWAUpdate';
 import { useLocationPermission } from '@/hooks/useLocationPermission';
+import { useDownloadManager } from '@/hooks/useDownloadManager';
 
 interface SidebarProps {
     userName?: string;
@@ -23,7 +24,6 @@ interface SidebarProps {
     onToggleLayer: (layer: string) => void;
     downloadedLayers: string[];
     onDownloadLayer: (layer: string) => void;
-    syncingLayers: Record<string, number>;
     airac: AiracCycle | null;
     activeBaseMap: BaseMapType;
     onBaseMapChange: (baseMap: BaseMapType) => void;
@@ -42,7 +42,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onToggleLayer,
     downloadedLayers,
     onDownloadLayer,
-    syncingLayers,
     airac,
     activeBaseMap,
     onBaseMapChange,
@@ -52,6 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [showLayersMenu, setShowLayersMenu] = useState(false);
     const { needRefresh, lastUpdateDate, handleUpdate, checkForUpdate, isChecking } = usePWAUpdate();
     const { permissionStatus, isRequesting, requestPermission, showIOSInstructions } = useLocationPermission();
+    const { syncingLayers } = useDownloadManager();
 
     // Notify parent when menus are open (mobile only)
     React.useEffect(() => {

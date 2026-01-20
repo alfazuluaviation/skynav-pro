@@ -764,7 +764,6 @@ const App: React.FC = () => {
         onToggleLayer={handleToggleLayer}
         downloadedLayers={downloadedLayers}
         onDownloadLayer={handleChartDownload}
-        syncingLayers={syncingLayers}
         airac={airac}
         activeBaseMap={activeBaseMap}
         onBaseMapChange={setActiveBaseMap}
