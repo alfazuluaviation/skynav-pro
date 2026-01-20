@@ -50,6 +50,11 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
     const results: NavPoint[] = [];
 
     const fetchLayer = async (layerName: string) => {
+        // Double-check offline status before each fetch
+        if (!navigator.onLine) {
+            return;
+        }
+
         try {
             const params = new URLSearchParams({
                 typeName: layerName,
@@ -64,10 +69,10 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
 
             // Parse features
             if (data.features) {
-                for (const f of data.features) { // Changed to for...of to allow await inside
+                for (const f of data.features) {
                     // Check geometry type
                     if (f.geometry && (f.geometry.type === 'Point' || f.geometry.type === 'MultiPoint')) {
-                        const coords = f.geometry.type === 'MultiPoint' ? f.geometry.coordinates[0] : f.geometry.coordinates; // GeoJSON is always lng, lat
+                        const coords = f.geometry.type === 'MultiPoint' ? f.geometry.coordinates[0] : f.geometry.coordinates;
                         const [lng, lat] = coords;
 
                         let type: NavPoint['type'] = 'airport';
@@ -75,13 +80,12 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                         let icao = f.properties?.localidade_id || '';
                         let kind: string | undefined = undefined;
 
-                        // Specific property checking
                         if (layerName === 'ICA:airport') {
                             name = f.properties?.nome || name;
                             icao = f.properties?.localidade_id || icao;
                             kind = f.properties?.tipo_uso || f.properties?.tipo || 'civil';
                         } else if (layerName === 'ICA:heliport') {
-                            type = 'airport'; // Use airport type but with heliport kind
+                            type = 'airport';
                             name = f.properties?.nome || name;
                             icao = f.properties?.localidade_id || '';
                             kind = 'heliport';
@@ -106,9 +110,9 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                 }
             }
         } catch (error) {
-            // Only log warning if online - offline errors are expected
+            // Silently ignore errors when offline
             if (navigator.onLine) {
-                console.warn(`[NavDataService - fetchNavigationData] Failed to fetch layer ${layerName}`, error);
+                console.warn(`[NavDataService] Failed to fetch layer ${layerName}`, error);
             }
         }
     };
@@ -136,6 +140,11 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
     const results: NavPoint[] = [];
 
     const fetchLayer = async (layerName: string) => {
+        // Double-check offline status before each fetch
+        if (!navigator.onLine) {
+            return;
+        }
+
         // Sanitize and escape input before using in CQL query
         const sanitizedQuery = sanitizeCQLInput(query);
         const escapedQuery = escapeCQLValue(sanitizedQuery);
@@ -183,7 +192,6 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
                             name = f.properties?.nome || icao;
                         }
 
-                        // Use a more unique key for deduplication: type + icao/name
                         const key = (icao || name).toUpperCase();
                         if (!results.find(r => r.type === type && (r.icao?.toUpperCase() === key || r.name.toUpperCase() === key))) {
                             results.push({
@@ -199,9 +207,9 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
                 }
             }
         } catch (error) {
-            // Only log error if online - offline errors are expected
+            // Silently ignore errors when offline
             if (navigator.onLine) {
-                console.error(`[NavDataService - searchNavigationPoints] Search failed for ${layerName}`, error);
+                console.error(`[NavDataService] Search failed for ${layerName}`, error);
             }
         }
     };
