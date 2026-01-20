@@ -63,8 +63,14 @@ const CachedTileLayerClass = L.TileLayer.extend({
     };
 
     if (useCache) {
+      // Normalize URL for cache lookup (subdomains a/b/c/d -> a)
+      const normalizedUrl = tileUrl
+        .replace(/https:\/\/[abcd]\.tile\.openstreetmap\.org/, 'https://a.tile.openstreetmap.org')
+        .replace(/https:\/\/[abcd]\.basemaps\.cartocdn\.com/, 'https://a.basemaps.cartocdn.com')
+        .replace(/https:\/\/[abc]\.tile\.opentopomap\.org/, 'https://a.tile.opentopomap.org');
+      
       // Try to load from cache first
-      getCachedTile(tileUrl).then(blob => {
+      getCachedTile(normalizedUrl).then(blob => {
         if (blob && blob.size > 0) {
           console.log(`[BASE CACHE HIT] ${layerId} tile loaded from cache`);
           const objectUrl = URL.createObjectURL(blob);
@@ -74,17 +80,36 @@ const CachedTileLayerClass = L.TileLayer.extend({
           };
           tile.onerror = () => {
             URL.revokeObjectURL(objectUrl);
-            loadFromNetwork();
+            // Only try network if online
+            if (navigator.onLine) {
+              loadFromNetwork();
+            } else {
+              done(null, tile); // Return empty tile offline
+            }
           };
           tile.src = objectUrl;
         } else {
-          loadFromNetwork();
+          // Only try network if online
+          if (navigator.onLine) {
+            loadFromNetwork();
+          } else {
+            console.debug(`[BASE TILE] ${layerId} - offline and not cached:`, tileUrl);
+            done(null, tile); // Return empty tile offline
+          }
         }
       }).catch(() => {
-        loadFromNetwork();
+        if (navigator.onLine) {
+          loadFromNetwork();
+        } else {
+          done(null, tile);
+        }
       });
     } else {
-      loadFromNetwork();
+      if (navigator.onLine) {
+        loadFromNetwork();
+      } else {
+        done(null, tile);
+      }
     }
 
     return tile;
