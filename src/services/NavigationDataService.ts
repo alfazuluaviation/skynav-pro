@@ -34,6 +34,23 @@ const validateSearchQuery = (query: string): boolean => {
   return /^[a-zA-Z0-9\s\-áàâãéèêíìîóòôõúùûçÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ]+$/.test(query);
 };
 
+// Safe fetch that catches network errors silently when offline
+const safeFetch = async (url: string): Promise<Response | null> => {
+    if (!navigator.onLine) {
+        return null;
+    }
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        // Silently ignore network errors (ERR_INTERNET_DISCONNECTED, etc.)
+        return null;
+    }
+};
+
 export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoint[]> => {
     // Skip network requests when offline to avoid console errors
     if (!navigator.onLine) {
@@ -62,7 +79,8 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                 maxFeatures: '100'
             });
 
-            const response = await fetch(`${getProxyUrl()}?${params.toString()}`);
+            const response = await safeFetch(`${getProxyUrl()}?${params.toString()}`);
+            if (!response) return; // Offline or network error
             if (!response.ok) return;
 
             const data = await response.json();
@@ -164,7 +182,8 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
             });
 
             const url = `${getProxyUrl()}?${params.toString()}`;
-            const response = await fetch(url);
+            const response = await safeFetch(url);
+            if (!response) return; // Offline or network error
             if (!response.ok) {
                 console.error(`[NavDataService] Search failed for ${layerName} with status ${response.status}`);
                 return;
