@@ -186,12 +186,16 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     if (isSyncing) return;
 
     const isDownloaded = downloadedLayers.includes(chartId);
+    const isBaseMap = chartId.startsWith('BASEMAP_');
     
     if (isDownloaded) {
-      // Toggle visibility on map
-      onToggleLayer(chartId);
+      // Base maps don't toggle - they're always used based on theme
+      if (!isBaseMap) {
+        // Toggle visibility on map
+        onToggleLayer(chartId);
+      }
     } else {
-      // Download the chart
+      // Download the chart/base map
       await onDownloadLayer(chartId);
     }
   };
@@ -218,11 +222,18 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     { id: 'WAC', label: 'WAC' },
   ];
 
+  // Base map options for offline
+  const baseMapOptions = [
+    { id: 'BASEMAP_OSM', label: 'Mapa Base (Dia)' },
+    { id: 'BASEMAP_DARK', label: 'Mapa Base (Noite)' },
+  ];
+
   const renderChartButton = (chart: { id: string; label: string }) => {
     const isDownloaded = downloadedLayers.includes(chart.id);
     const isActive = activeLayers.includes(chart.id);
     const progress = syncingLayers[chart.id];
     const isSyncing = progress !== undefined;
+    const isBaseMap = chart.id.startsWith('BASEMAP_');
 
     return (
       <div key={chart.id} className="relative">
@@ -230,7 +241,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           onClick={() => handleChartClick(chart.id)}
           disabled={isSyncing}
           className={`w-full p-4 rounded-xl border-2 transition-all flex flex-col items-center relative overflow-hidden ${
-            isActive
+            isActive && !isBaseMap
               ? 'border-purple-500 bg-purple-500/20 ring-2 ring-purple-400/50'
               : isDownloaded
                 ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-400'
@@ -251,7 +262,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
               </div>
               <div className="text-[10px] text-sky-400 mt-1 font-bold">{progress}%</div>
             </div>
-          ) : isActive ? (
+          ) : isActive && !isBaseMap ? (
             <div className="flex items-center gap-1 text-xs text-purple-300 relative z-10">
               <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
               NO MAPA
@@ -259,7 +270,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           ) : isDownloaded ? (
             <div className="flex items-center gap-1 text-xs text-emerald-400 relative z-10">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              ATIVAR
+              {isBaseMap ? 'OFFLINE ✓' : 'ATIVAR'}
             </div>
           ) : (
             <div className="text-xs text-slate-500 relative z-10 font-bold">BAIXAR</div>
@@ -301,20 +312,39 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
           {/* Info text */}
           <p className="text-xs text-slate-400 text-center">
-            Clique para baixar ou ativar/desativar no mapa. Use o × para limpar cache.
+            Baixe cartas e mapas para uso offline. Clique para baixar ou ativar/desativar no mapa.
           </p>
 
+          {/* Base Map Options */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+              Mapa Base (OSM)
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              {baseMapOptions.map(renderChartButton)}
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-slate-700/50"></div>
+
           {/* Chart Options */}
-          <div className="space-y-3">
-            {/* Grupo 1: ENRC HIGH, ENRC LOW, REA */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              Cartas Aeronáuticas
+            </h3>
             <div className="grid grid-cols-3 gap-3">
               {chartOptions.slice(0, 3).map(renderChartButton)}
             </div>
-            
-            {/* Grupo 2: REUL, REH, WAC */}
             <div className="grid grid-cols-3 gap-3">
               {chartOptions.slice(3, 6).map(renderChartButton)}
             </div>
