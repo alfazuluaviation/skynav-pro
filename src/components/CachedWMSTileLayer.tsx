@@ -105,30 +105,47 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
         return;
       }
 
-      tile.onload = () => {
-        // Cache the tile after loading from network
-        if (useCache) {
-          fetch(tileUrl, { mode: 'cors', credentials: 'omit' })
-            .then(res => {
-              if (res.ok) return res.blob();
-              throw new Error(`HTTP ${res.status}`);
-            })
-            .then(blob => {
-              cacheTile(tileUrl, blob, layerId);
-            })
-            .catch((err) => {
-              console.debug('Failed to cache tile:', err);
-            });
-        }
-        done(null, tile);
-      };
+      // Use fetch with AbortController for better offline handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      tile.onerror = () => {
-        console.debug('Failed to load tile:', tileUrl);
-        done(new Error('Failed to load tile'), tile);
-      };
-
-      tile.src = tileUrl;
+      fetch(tileUrl, { 
+        mode: 'cors', 
+        credentials: 'omit',
+        signal: controller.signal 
+      })
+        .then(res => {
+          clearTimeout(timeoutId);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.blob();
+        })
+        .then(blob => {
+          // Cache the blob
+          if (useCache) {
+            cacheTile(tileUrl, blob, layerId);
+          }
+          // Create object URL and load into tile
+          const objectUrl = URL.createObjectURL(blob);
+          tile.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            done(null, tile);
+          };
+          tile.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            done(new Error('Failed to render tile'), tile);
+          };
+          tile.src = objectUrl;
+        })
+        .catch((err) => {
+          clearTimeout(timeoutId);
+          // Silently handle network errors when offline
+          if (!navigator.onLine || err.name === 'AbortError' || err.message?.includes('Failed to fetch')) {
+            console.debug(`[WMS OFFLINE] ${layerId} - network unavailable`);
+          } else {
+            console.debug('Failed to load tile:', err.message);
+          }
+          done(null, tile); // Return empty tile on error
+        });
     };
 
     if (useCache) {
