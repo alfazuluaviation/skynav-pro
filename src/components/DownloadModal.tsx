@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Waypoint, FlightSegment } from '../types';
+import { useDownloadManager } from '../hooks/useDownloadManager';
+import { Wifi, WifiOff } from 'lucide-react';
 
 interface DownloadModalProps {
   isOpen: boolean;
@@ -10,7 +12,6 @@ interface DownloadModalProps {
   plannedSpeed: number;
   downloadedLayers: string[];
   activeLayers: string[];
-  syncingLayers: Record<string, number>;
   onDownloadLayer: (layer: string) => Promise<void>;
   onToggleLayer: (layer: string) => void;
   onClearLayerCache: (layer: string) => void;
@@ -25,12 +26,12 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   plannedSpeed,
   downloadedLayers,
   activeLayers,
-  syncingLayers,
   onDownloadLayer,
   onToggleLayer,
   onClearLayerCache
 }) => {
   const [downloadFormat, setDownloadFormat] = useState<'txt' | 'csv' | 'json'>('txt');
+  const { syncingLayers, isOnline, getError } = useDownloadManager();
 
   if (!isOpen) return null;
 
@@ -234,25 +235,35 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     const progress = syncingLayers[chart.id];
     const isSyncing = progress !== undefined;
     const isBaseMap = chart.id.startsWith('BASEMAP_');
+    const error = getError(chart.id);
 
     return (
       <div key={chart.id} className="relative">
         <button
           onClick={() => handleChartClick(chart.id)}
-          disabled={isSyncing}
+          disabled={isSyncing || (!isOnline && !isDownloaded)}
           className={`w-full p-4 rounded-xl border-2 transition-all flex flex-col items-center relative overflow-hidden ${
-            isActive && !isBaseMap
-              ? 'border-purple-500 bg-purple-500/20 ring-2 ring-purple-400/50'
-              : isDownloaded
-                ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-400'
-                : isSyncing
-                  ? 'border-sky-500/50 bg-sky-500/5'
-                  : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+            error
+              ? 'border-red-500/50 bg-red-500/10'
+              : isActive && !isBaseMap
+                ? 'border-purple-500 bg-purple-500/20 ring-2 ring-purple-400/50'
+                : isDownloaded
+                  ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-400'
+                  : isSyncing
+                    ? 'border-sky-500/50 bg-sky-500/5'
+                    : !isOnline
+                      ? 'border-slate-700 bg-slate-800/30 opacity-50 cursor-not-allowed'
+                      : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
           }`}
         >
           <div className="text-sm font-bold text-white mb-1 relative z-10">{chart.label}</div>
 
-          {isSyncing ? (
+          {error ? (
+            <div className="flex items-center gap-1 text-xs text-red-400 relative z-10">
+              <WifiOff className="w-3 h-3" />
+              Sem internet
+            </div>
+          ) : isSyncing ? (
             <div className="w-full mt-1 relative z-10">
               <div className="h-1 w-full bg-slate-700 rounded-full overflow-hidden">
                 <div
@@ -313,6 +324,14 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
 
         {/* Content */}
         <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+          {/* Connection status */}
+          {!isOnline && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-lg">
+              <WifiOff className="w-4 h-4 text-red-400" />
+              <span className="text-sm text-red-300">Sem conexão com a internet</span>
+            </div>
+          )}
+          
           {/* Info text */}
           <p className="text-xs text-slate-400 text-center">
             Baixe cartas e mapas para uso offline. Clique para baixar ou ativar/desativar no mapa.
