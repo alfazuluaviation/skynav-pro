@@ -24,9 +24,11 @@ import { BaseMapType } from './components/LayersMenu';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { getAerodromeIconHTML, getIconSize } from './components/AerodromeIcons';
 import { CachedWMSTileLayer } from './components/CachedWMSTileLayer';
+import { CachedBaseTileLayer } from './components/CachedBaseTileLayer';
 import { downloadChartLayer, isLayerAvailableOffline } from './services/chartDownloader';
+import { downloadBaseMapLayer, isBaseMapAvailableOffline } from './services/baseMapDownloader';
 import { getCachedLayerIds, clearLayerCache } from './services/tileCache';
-import { CHART_LAYERS, ChartLayerId } from './config/chartLayers';
+import { CHART_LAYERS, ChartLayerId, BASE_MAP_LAYERS, BaseMapLayerId } from './config/chartLayers';
 
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -346,8 +348,14 @@ const App: React.FC = () => {
   const handleChartDownload = async (layer: string) => {
     if (syncingLayers[layer] !== undefined) return;
 
+    // Check if it's a base map layer
+    const isBaseMap = layer.startsWith('BASEMAP_');
+
     // Helper to activate layer with mutual exclusion logic
     const activateLayer = (layerId: string) => {
+      // Don't auto-activate base maps (they're automatically used based on theme)
+      if (layerId.startsWith('BASEMAP_')) return;
+      
       setActiveLayers(prev => {
         if (prev.includes(layerId)) return prev; // Already active
         let next = [...prev, layerId];
@@ -366,9 +374,17 @@ const App: React.FC = () => {
 
     try {
       // Start real tile download with progress callback
-      await downloadChartLayer(layer, (progress) => {
-        setSyncingLayers(prev => ({ ...prev, [layer]: progress }));
-      });
+      if (isBaseMap) {
+        // Extract base map type from layer ID (e.g., BASEMAP_OSM -> OSM)
+        const baseMapType = layer.replace('BASEMAP_', '') as 'OSM' | 'DARK';
+        await downloadBaseMapLayer(baseMapType, (progress) => {
+          setSyncingLayers(prev => ({ ...prev, [layer]: progress }));
+        });
+      } else {
+        await downloadChartLayer(layer, (progress) => {
+          setSyncingLayers(prev => ({ ...prev, [layer]: progress }));
+        });
+      }
 
       // Mark as downloaded
       setDownloadedLayers(prev => {
@@ -377,7 +393,7 @@ const App: React.FC = () => {
         return next;
       });
 
-      // Auto-activate the layer on the map after download
+      // Auto-activate the layer on the map after download (not for base maps)
       activateLayer(layer);
     } catch (error) {
       console.error('Failed to download layer:', layer, error);
@@ -814,9 +830,8 @@ const App: React.FC = () => {
               showPlanPanel={showPlanPanel}
             />
 
-            {/* Base Map Layer - terrain uses OpenTopoMap with elevation/relief/hillshading, roadmap respects isNightMode */}
-            {/* TERRAIN: Shows contour lines, hillshading, vegetation, hydrography. Max zoom ~17 (detail fades at higher zooms) */}
-            {/* ROADMAP: Full street detail, respects night mode for dark/light theme */}
+            {/* Base Map Layer with offline caching support */}
+            {/* Uses CachedBaseTileLayer for OSM/DARK, regular for terrain (complex to cache) */}
             {activeBaseMap === 'terrain' ? (
               <TileLayer
                 url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
@@ -824,15 +839,21 @@ const App: React.FC = () => {
                 attribution='Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)'
               />
             ) : isNightMode ? (
-              // Roadmap Dark (Night Mode ON)
-              <TileLayer
-                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              // Roadmap Dark (Night Mode ON) with caching
+              <CachedBaseTileLayer
+                url="https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
+                layerId="BASEMAP_DARK"
+                useCache={downloadedLayers.includes('BASEMAP_DARK')}
+                maxZoom={19}
                 attribution='© OpenStreetMap contributors, © CARTO'
               />
             ) : (
-              // Roadmap Light (Night Mode OFF)
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              // Roadmap Light (Night Mode OFF) with caching
+              <CachedBaseTileLayer
+                url="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                layerId="BASEMAP_OSM"
+                useCache={downloadedLayers.includes('BASEMAP_OSM')}
+                maxZoom={19}
                 attribution='© OpenStreetMap contributors'
               />
             )}
