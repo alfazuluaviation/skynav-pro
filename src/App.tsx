@@ -25,10 +25,11 @@ import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { getAerodromeIconHTML, getIconSize } from './components/AerodromeIcons';
 import { CachedWMSTileLayer } from './components/CachedWMSTileLayer';
 import { CachedBaseTileLayer } from './components/CachedBaseTileLayer';
-import { downloadChartLayer, isLayerAvailableOffline } from './services/chartDownloader';
-import { downloadBaseMapLayer, isBaseMapAvailableOffline } from './services/baseMapDownloader';
+import { isLayerAvailableOffline } from './services/chartDownloader';
+import { isBaseMapAvailableOffline } from './services/baseMapDownloader';
 import { getCachedLayerIds, clearLayerCache } from './services/tileCache';
 import { CHART_LAYERS, ChartLayerId, BASE_MAP_LAYERS, BaseMapLayerId } from './config/chartLayers';
+import { getDownloadManager } from './services/downloadManager';
 
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -346,7 +347,16 @@ const App: React.FC = () => {
   };
 
   const handleChartDownload = async (layer: string) => {
-    if (syncingLayers[layer] !== undefined) return;
+    const downloadManager = getDownloadManager();
+    
+    // Check if already downloading
+    if (downloadManager.isDownloading(layer)) return;
+
+    // Check connectivity - manager will handle the error message
+    if (!downloadManager.isOnline()) {
+      console.warn('[App] Cannot start download - offline');
+      return;
+    }
 
     // Check if it's a base map layer
     const isBaseMap = layer.startsWith('BASEMAP_');
@@ -373,44 +383,28 @@ const App: React.FC = () => {
     };
 
     try {
-      // Start real tile download with progress callback
+      // Start download via manager (runs in background)
+      let success: boolean;
       if (isBaseMap) {
-        // Extract base map type from layer ID (e.g., BASEMAP_OSM -> OSM)
-        const baseMapType = layer.replace('BASEMAP_', '') as 'OSM' | 'DARK';
-        await downloadBaseMapLayer(baseMapType, (progress) => {
-          setSyncingLayers(prev => ({ ...prev, [layer]: progress }));
-        });
+        const baseMapType = layer.replace('BASEMAP_', '') as BaseMapLayerId;
+        success = await downloadManager.downloadBaseMap(baseMapType);
       } else {
-        await downloadChartLayer(layer, (progress) => {
-          setSyncingLayers(prev => ({ ...prev, [layer]: progress }));
-        });
+        success = await downloadManager.downloadChart(layer);
       }
 
-      // Mark as downloaded
-      setDownloadedLayers(prev => {
-        const next = prev.includes(layer) ? prev : [...prev, layer];
-        localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
-        return next;
-      });
+      if (success) {
+        // Mark as downloaded
+        setDownloadedLayers(prev => {
+          const next = prev.includes(layer) ? prev : [...prev, layer];
+          localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
+          return next;
+        });
 
-      // Auto-activate the layer on the map after download (not for base maps)
-      activateLayer(layer);
+        // Auto-activate the layer on the map after download (not for base maps)
+        activateLayer(layer);
+      }
     } catch (error) {
       console.error('Failed to download layer:', layer, error);
-      // Even if IndexedDB fails, still mark as "available" for network loading
-      setDownloadedLayers(prev => {
-        const next = prev.includes(layer) ? prev : [...prev, layer];
-        localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
-        return next;
-      });
-      // Auto-activate even on error (will load from network)
-      activateLayer(layer);
-    } finally {
-      setSyncingLayers(prev => {
-        const next = { ...prev };
-        delete next[layer];
-        return next;
-      });
     }
   };
 
