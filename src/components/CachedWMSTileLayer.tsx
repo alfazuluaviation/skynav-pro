@@ -127,8 +127,8 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
     if (useCache) {
       // Try to load from cache first
       getCachedTile(tileUrl).then(blob => {
-        if (blob) {
-          console.log(`[CACHE HIT] ${layerId} tile from cache, size: ${blob.size}`);
+        if (blob && blob.size > 0) {
+          console.log(`[CACHE HIT] ${layerId} tile loaded from cache, size: ${blob.size} bytes`);
           // Create object URL from cached blob
           const objectUrl = URL.createObjectURL(blob);
           tile.onload = () => {
@@ -136,22 +136,23 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
             done(null, tile);
           };
           tile.onerror = () => {
-            console.warn(`[CACHE ERROR] Failed to render cached tile for ${layerId}`);
+            console.warn(`[CACHE ERROR] Failed to render cached tile for ${layerId}, falling back to network`);
             URL.revokeObjectURL(objectUrl);
             // Fallback to network
             loadFromNetwork();
           };
           tile.src = objectUrl;
         } else {
-          console.debug(`[CACHE MISS] ${layerId} - loading from network`);
+          console.debug(`[CACHE MISS] ${layerId} - no cached tile found, loading from network`);
           loadFromNetwork();
         }
       }).catch((err) => {
         // IndexedDB might not be available (e.g., in iframe/preview)
-        console.warn('[CACHE UNAVAILABLE]', err);
+        console.warn(`[CACHE UNAVAILABLE] ${layerId} - IndexedDB error:`, err.message || err);
         loadFromNetwork();
       });
     } else {
+      console.debug(`[CACHE DISABLED] ${layerId} - loading directly from network`);
       loadFromNetwork();
     }
 
