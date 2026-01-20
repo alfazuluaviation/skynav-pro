@@ -35,6 +35,12 @@ const validateSearchQuery = (query: string): boolean => {
 };
 
 export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoint[]> => {
+    // Skip network requests when offline to avoid console errors
+    if (!navigator.onLine) {
+        console.debug('[NavDataService] Offline - skipping navigation data fetch');
+        return [];
+    }
+
     // Construct BBOX string: minLng,minLat,maxLng,maxLat
     const bbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
 
@@ -100,7 +106,10 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
                 }
             }
         } catch (error) {
-            console.warn(`[NavDataService - fetchNavigationData] Failed to fetch layer ${layerName}`, error);
+            // Only log warning if online - offline errors are expected
+            if (navigator.onLine) {
+                console.warn(`[NavDataService - fetchNavigationData] Failed to fetch layer ${layerName}`, error);
+            }
         }
     };
 
@@ -110,6 +119,12 @@ export const fetchNavigationData = async (bounds: LatLngBounds): Promise<NavPoin
 };
 
 export const searchNavigationPoints = async (query: string): Promise<NavPoint[]> => {
+    // Skip network requests when offline
+    if (!navigator.onLine) {
+        console.debug('[NavDataService] Offline - skipping search');
+        return [];
+    }
+
     // Validate input
     if (!validateSearchQuery(query)) {
         console.warn('[NavDataService] Invalid search query format');
@@ -184,7 +199,10 @@ export const searchNavigationPoints = async (query: string): Promise<NavPoint[]>
                 }
             }
         } catch (error) {
-            console.error(`[NavDataService - searchNavigationPoints] Search failed for ${layerName}`, error);
+            // Only log error if online - offline errors are expected
+            if (navigator.onLine) {
+                console.error(`[NavDataService - searchNavigationPoints] Search failed for ${layerName}`, error);
+            }
         }
     };
 
