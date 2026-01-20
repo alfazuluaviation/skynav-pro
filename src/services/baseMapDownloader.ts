@@ -27,9 +27,11 @@ function latLngToTile(lat: number, lng: number, zoom: number): { x: number; y: n
 
 /**
  * Generate tile URL for base map
+ * Always uses first subdomain for consistent caching
  */
 function buildBaseMapTileUrl(baseUrl: string, subdomains: readonly string[], x: number, y: number, zoom: number): string {
-  const subdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
+  // Always use first subdomain ('a') for consistent cache keys
+  const subdomain = subdomains[0];
   return baseUrl
     .replace('{s}', subdomain)
     .replace('{z}', zoom.toString())
