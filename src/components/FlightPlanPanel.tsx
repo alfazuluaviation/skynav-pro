@@ -152,12 +152,16 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
     setAircraftQuery(aircraftModel.label);
   }, [aircraftModel]);
 
-  // Filter user's saved aircraft
-  const filteredAircraft = userAircraft.filter(ac => 
-    ac.label.toLowerCase().includes(aircraftQuery.toLowerCase()) || 
-    ac.registration.toLowerCase().includes(aircraftQuery.toLowerCase()) ||
-    ac.id.toLowerCase().includes(aircraftQuery.toLowerCase())
-  );
+  // Filter user's saved aircraft - show all when query is empty or matches default
+  const filteredAircraft = userAircraft.filter(ac => {
+    // If query is empty or matches the current default, show all user aircraft
+    if (!aircraftQuery.trim() || aircraftQuery === aircraftModel.label) {
+      return true;
+    }
+    return ac.label.toLowerCase().includes(aircraftQuery.toLowerCase()) || 
+      ac.registration.toLowerCase().includes(aircraftQuery.toLowerCase()) ||
+      ac.id.toLowerCase().includes(aircraftQuery.toLowerCase());
+  });
 
   const handleSaveSubmit = (e: React.FormEvent) => {
     e.preventDefault();
