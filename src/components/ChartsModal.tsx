@@ -308,15 +308,18 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
 
   if (!isOpen) return null;
 
-  // Calculate modal style for viewer mode
+  // Calculate modal style for viewer mode - use fixed positioning
   const modalStyle = viewingChart && !isMaximized ? {
-    top: `${viewerTop}%`,
-    height: `${viewerHeight}%`,
+    position: 'fixed' as const,
+    top: `${viewerTop}vh`,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    height: `${viewerHeight}vh`,
     maxHeight: 'none',
   } : {};
 
   return (
-    <div className="fixed inset-0 z-[3000] flex items-end md:items-center justify-center">
+    <div className="fixed inset-0 z-[3000]">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
@@ -325,7 +328,7 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
 
       {/* Modal */}
       <div 
-        className={`relative w-full ${isMaximized ? 'md:max-w-[98vw] h-[98vh]' : viewingChart ? 'md:max-w-4xl' : 'md:max-w-2xl max-h-[90vh] md:max-h-[85vh]'} bg-slate-900/95 backdrop-blur-xl border-t md:border border-slate-700/50 rounded-t-3xl md:rounded-2xl shadow-2xl overflow-hidden md:mx-4 transition-all duration-300 flex flex-col animate-slide-up md:animate-in`}
+        className={`${viewingChart && !isMaximized ? '' : 'absolute bottom-0 md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2'} w-full ${isMaximized ? 'md:max-w-[98vw] h-[98vh] md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 absolute' : viewingChart ? 'md:max-w-4xl' : 'md:max-w-2xl max-h-[90vh] md:max-h-[85vh]'} bg-slate-900/95 backdrop-blur-xl border-t md:border border-slate-700/50 rounded-t-3xl md:rounded-2xl shadow-2xl overflow-hidden md:mx-auto flex flex-col animate-slide-up md:animate-in`}
         style={viewingChart && !isMaximized ? modalStyle : {}}
       >
         {/* Top resize handle - only in viewer mode */}
@@ -422,16 +425,24 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
                   touchAction: 'none'
                 }}
               />
-              <iframe
-                src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewingChart.link)}&embedded=true`}
-                className="w-full h-full border-none bg-white origin-center"
-                title={viewingChart.nome}
+              {/* Use native PDF embed for faster loading */}
+              <object
+                data={viewingChart.link}
+                type="application/pdf"
+                className="w-full h-full bg-white origin-center"
                 style={{
                   transform: `scale(${zoom}) translate(${panPosition.x / zoom}px, ${panPosition.y / zoom}px)`,
                   transformOrigin: 'center center',
                   pointerEvents: zoom > 1 ? 'none' : 'auto',
                 }}
-              />
+              >
+                {/* Fallback to Google Viewer if native PDF doesn't work */}
+                <iframe
+                  src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewingChart.link)}&embedded=true`}
+                  className="w-full h-full border-none bg-white"
+                  title={viewingChart.nome}
+                />
+              </object>
             </div>
 
             {/* Zoom controls */}
