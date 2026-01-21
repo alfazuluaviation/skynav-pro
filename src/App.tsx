@@ -793,7 +793,7 @@ const App: React.FC = () => {
             planViewMode={planViewMode}
             onSearchQueryChange={setSearchQuery}
             onSearch={handleSearch}
-            onClearWaypoints={() => setWaypoints([])}
+            onClearWaypoints={() => { setWaypoints([]); setAircraftModel(null); }}
             onRemoveWaypoint={(id) => setWaypoints(waypoints.filter(w => w.id !== id))}
             onMoveWaypoint={handleMoveWaypoint}
             onPlanViewModeChange={setPlanViewMode}
