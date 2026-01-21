@@ -152,19 +152,10 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
     if (useCache) {
       // Try to load from cache first
       getCachedTile(tileUrl).then(blob => {
-        if (blob && blob.size > 0) {
+        // Validate blob: must be an image with reasonable size (> 1KB)
+        // Tiles smaller than 1KB are typically errors or empty responses
+        if (blob && blob.size > 1000 && blob.type.startsWith('image/')) {
           console.log(`[CACHE HIT] ${layerId} tile loaded from cache, size: ${blob.size} bytes, type: ${blob.type}`);
-          
-          // Validate blob type is an image
-          if (!blob.type.startsWith('image/')) {
-            console.warn(`[CACHE INVALID] ${layerId} - cached blob is not an image: ${blob.type}`);
-            if (navigator.onLine) {
-              loadFromNetwork();
-            } else {
-              done(null, tile);
-            }
-            return;
-          }
           
           // Create object URL from cached blob
           const objectUrl = URL.createObjectURL(blob);
