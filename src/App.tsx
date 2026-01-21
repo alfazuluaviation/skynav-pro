@@ -19,6 +19,7 @@ import { TopLeftMenu } from './components/TopLeftMenu';
 import { ChartsModal } from './components/ChartsModal';
 import { AerodromeModal } from './components/AerodromeModal';
 import { DownloadModal } from './components/DownloadModal';
+import { AircraftModal } from './components/AircraftModal';
 import { FlightPlanDownloadModal } from './components/FlightPlanDownloadModal';
 import { BaseMapType } from './components/LayersMenu';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
@@ -218,6 +219,7 @@ const App: React.FC = () => {
   const [showAerodromeModal, setShowAerodromeModal] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [showFlightPlanDownloadModal, setShowFlightPlanDownloadModal] = useState(false);
+  const [showAircraftModal, setShowAircraftModal] = useState(false);
   const [chartsModalIcao, setChartsModalIcao] = useState<string | null>(null);
   const [isSidebarMenuOpen, setIsSidebarMenuOpen] = useState(false);
 
@@ -728,7 +730,7 @@ const App: React.FC = () => {
 
   const handleOpenAircraft = () => {
     console.log("Opening aircraft menu");
-    // TODO: Implement aircraft modal
+    setShowAircraftModal(true);
   };
 
   if (loadingSession) { // Render a loading spinner or null while session is being checked
@@ -1082,6 +1084,17 @@ const App: React.FC = () => {
         onDownloadLayer={handleChartDownload}
         onToggleLayer={handleToggleLayer}
         onClearLayerCache={handleClearLayerCache}
+      />
+
+      {/* Aircraft Modal */}
+      <AircraftModal
+        isOpen={showAircraftModal}
+        onClose={() => setShowAircraftModal(false)}
+        selectedAircraft={aircraftModel}
+        onSelectAircraft={(aircraft) => {
+          setAircraftModel(aircraft);
+          setPlannedSpeed(aircraft.speed);
+        }}
       />
 
       {/* Flight Plan Download Modal */}
