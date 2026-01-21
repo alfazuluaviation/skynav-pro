@@ -83,7 +83,7 @@ export const AircraftListModal: React.FC<AircraftListModalProps> = ({
           </div>
 
           {/* User Aircraft List */}
-          <div className="max-h-[50vh] overflow-y-auto p-2">
+          <div className="h-[320px] overflow-y-auto p-2">
             {userAircraft.length === 0 ? (
               <div className="py-8 text-center text-gray-400">
                 <Plane className="w-10 h-10 mx-auto mb-2 opacity-50" />
