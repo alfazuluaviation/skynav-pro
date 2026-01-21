@@ -726,6 +726,11 @@ const App: React.FC = () => {
     setShowDownloadModal(true);
   };
 
+  const handleOpenAircraft = () => {
+    console.log("Opening aircraft menu");
+    // TODO: Implement aircraft modal
+  };
+
   if (loadingSession) { // Render a loading spinner or null while session is being checked
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0d1117]">
@@ -744,6 +749,7 @@ const App: React.FC = () => {
       <TopLeftMenu
         onOpenCharts={handleOpenCharts}
         onOpenAerodromes={handleOpenAerodromes}
+        onOpenAircraft={handleOpenAircraft}
         onOpenDownload={handleOpenDownload}
       />
 
