@@ -96,11 +96,11 @@ function getTilesForZoom(zoom: number): Array<{ x: number; y: number }> {
 /**
  * Download a single tile with retry
  */
-async function downloadTile(url: string, layerId: string, retries: number = 2): Promise<boolean> {
+async function downloadTile(url: string, layerId: string, retries: number = 3): Promise<boolean> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      const timeout = setTimeout(() => controller.abort(), 20000); // 20s timeout (increased)
       
       const response = await fetch(url, {
         mode: 'cors',
@@ -114,28 +114,41 @@ async function downloadTile(url: string, layerId: string, retries: number = 2): 
       clearTimeout(timeout);
 
       if (!response.ok) {
+        console.warn(`[ChartDownloader] HTTP ${response.status} for tile, attempt ${attempt + 1}/${retries + 1}`);
         if (attempt < retries) {
-          await new Promise(r => setTimeout(r, 500));
+          // Exponential backoff: 500ms, 1s, 2s
+          await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
           continue;
         }
         return false;
       }
 
       const blob = await response.blob();
+      const contentType = response.headers.get('content-type') || blob.type;
       
-      // Only cache if we got actual image data
-      if (blob.size > 0 && blob.type.startsWith('image/')) {
+      // Validate: must be an image with reasonable size (at least 1KB for a valid tile)
+      // Empty tiles from WMS are typically very small (< 1KB) or not images
+      const isValidImage = contentType.startsWith('image/') && blob.size > 1000;
+      
+      if (isValidImage) {
         await cacheTile(url, blob, layerId);
         return true;
+      } else {
+        // Log but don't cache invalid responses
+        if (blob.size < 1000) {
+          console.debug(`[ChartDownloader] Skipping empty/small tile (${blob.size} bytes)`);
+        } else {
+          console.warn(`[ChartDownloader] Invalid content-type: ${contentType}`);
+        }
+        return true; // Count as processed but don't cache (empty tile is valid WMS response)
       }
-      
-      return false;
     } catch (error) {
       if (attempt < retries) {
-        await new Promise(r => setTimeout(r, 500));
+        // Exponential backoff
+        await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
         continue;
       }
-      console.warn('Failed to download tile after retries:', error);
+      console.warn('[ChartDownloader] Failed to download tile after retries:', (error as Error).message);
       return false;
     }
   }
@@ -190,11 +203,13 @@ export async function downloadChartLayer(
   });
 
   // Detect iOS/iPad - use smaller batch size to avoid connection issues
+  // Also reduce batch size generally to avoid overwhelming the proxy/GeoServer
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const batchSize = isIOS ? 3 : 10;
+  // Reduced batch sizes: iOS=2, Desktop=5 (was 3 and 10)
+  const batchSize = isIOS ? 2 : 5;
   
-  console.log(`[ChartDownloader] Using batchSize=${batchSize}, isIOS=${isIOS}`);
+  console.log(`[ChartDownloader] Using batchSize=${batchSize}, isIOS=${isIOS}, totalTiles=${totalTiles}`);
   
   for (let i = 0; i < allTiles.length; i += batchSize) {
     const batch = allTiles.slice(i, i + batchSize);
@@ -214,8 +229,8 @@ export async function downloadChartLayer(
       })
     );
 
-    // Smaller delay between batches
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Delay between batches to avoid rate limiting (100ms)
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
 
   console.log(`Download complete for ${layerId}: ${downloadedTiles}/${totalTiles} tiles cached`);
