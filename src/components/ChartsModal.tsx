@@ -240,18 +240,35 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent | TouchEvent) => {
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      e.preventDefault();
+      const clientY = 'touches' in e ? e.touches[0]?.clientY : e.clientY;
+      if (clientY === undefined) return;
+      
       const viewportHeight = window.innerHeight;
       const percentY = (clientY / viewportHeight) * 100;
+      const minHeight = 30; // minimum 30% height
+      const minTop = 2; // minimum 2% from top
+      const maxBottom = 98; // maximum 98% from top
 
       if (isResizingTop) {
-        const newTop = Math.max(2, Math.min(percentY, viewerTop + viewerHeight - 20));
-        const heightDiff = viewerTop - newTop;
-        setViewerTop(newTop);
-        setViewerHeight(prev => prev + heightDiff);
+        // Clamp newTop: cannot go above minTop or below (currentBottom - minHeight)
+        const currentBottom = viewerTop + viewerHeight;
+        const newTop = Math.max(minTop, Math.min(percentY, currentBottom - minHeight));
+        const newHeight = currentBottom - newTop;
+        
+        // Only update if valid
+        if (newHeight >= minHeight && newTop >= minTop) {
+          setViewerTop(newTop);
+          setViewerHeight(newHeight);
+        }
       } else if (isResizingBottom) {
-        const newBottom = Math.max(viewerTop + 20, Math.min(percentY, 98));
-        setViewerHeight(newBottom - viewerTop);
+        // Clamp newBottom: cannot go below viewerTop + minHeight or above maxBottom
+        const newBottom = Math.max(viewerTop + minHeight, Math.min(percentY, maxBottom));
+        const newHeight = newBottom - viewerTop;
+        
+        if (newHeight >= minHeight) {
+          setViewerHeight(newHeight);
+        }
       }
     };
 
@@ -261,9 +278,9 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
     };
 
     if (isResizingTop || isResizingBottom) {
-      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mousemove', handleMouseMove, { passive: false });
       document.addEventListener('mouseup', handleMouseUp);
-      document.addEventListener('touchmove', handleMouseMove);
+      document.addEventListener('touchmove', handleMouseMove, { passive: false });
       document.addEventListener('touchend', handleMouseUp);
     }
 
@@ -384,13 +401,21 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
             {/* Chart viewer with zoom */}
             <div 
               ref={viewerContainerRef}
-              className="flex-1 overflow-hidden relative touch-none select-none"
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              onWheel={handleWheel}
+              className="flex-1 overflow-hidden relative select-none"
               style={{ cursor: zoom > 1 ? 'move' : 'default' }}
             >
+              {/* Touch overlay for zoom/pan - sits on top of iframe */}
+              <div 
+                className="absolute inset-0 z-10 touch-none"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onWheel={handleWheel}
+                style={{ 
+                  pointerEvents: 'auto',
+                  touchAction: 'none'
+                }}
+              />
               <iframe
                 src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewingChart.link)}&embedded=true`}
                 className="w-full h-full border-none bg-white origin-center"
@@ -398,6 +423,7 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
                 style={{
                   transform: `scale(${zoom}) translate(${panPosition.x / zoom}px, ${panPosition.y / zoom}px)`,
                   transformOrigin: 'center center',
+                  pointerEvents: zoom > 1 ? 'none' : 'auto',
                 }}
               />
             </div>
