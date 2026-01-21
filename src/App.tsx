@@ -208,7 +208,7 @@ const App: React.FC = () => {
   const [charts, setCharts] = useState<ChartConfig[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [plannedSpeed, setPlannedSpeed] = useState(230);
-  const [aircraftModel, setAircraftModel] = useState({ id: 'C172', label: 'Cessna 172 Skyhawk', speed: 110 });
+  const [aircraftModel, setAircraftModel] = useState<{ id: string; label: string; speed: number; registration?: string } | null>(null);
   const [planViewMode, setPlanViewMode] = useState<'ETAPA' | 'ACUMULADO'>('ETAPA');
   const [mapRef, setMapRef] = useState<L.Map | null>(null);
   const [activeLayers, setActiveLayers] = useState<string[]>([]);
@@ -1090,7 +1090,7 @@ const App: React.FC = () => {
       <AircraftModal
         isOpen={showAircraftModal}
         onClose={() => setShowAircraftModal(false)}
-        selectedAircraft={aircraftModel}
+        selectedAircraft={aircraftModel as any}
         onSelectAircraft={(aircraft) => {
           setAircraftModel(aircraft);
           setPlannedSpeed(aircraft.speed);
