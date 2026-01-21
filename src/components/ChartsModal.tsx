@@ -84,8 +84,6 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
       setAiswebUrl(null);
       setViewingChart(null);
       setIsMaximized(false);
-      setZoom(1);
-      setPanPosition({ x: 0, y: 0 });
     }
   }, [isOpen, initialIcao]);
 
