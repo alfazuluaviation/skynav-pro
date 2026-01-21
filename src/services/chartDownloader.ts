@@ -189,8 +189,12 @@ export async function downloadChartLayer(
     status: 'downloading'
   });
 
-  // Download in larger batches for speed
-  const batchSize = 10;
+  // Detect iOS/iPad - use smaller batch size to avoid connection issues
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const batchSize = isIOS ? 3 : 10;
+  
+  console.log(`[ChartDownloader] Using batchSize=${batchSize}, isIOS=${isIOS}`);
   
   for (let i = 0; i < allTiles.length; i += batchSize) {
     const batch = allTiles.slice(i, i + batchSize);
