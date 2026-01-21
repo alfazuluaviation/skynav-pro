@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Search, FileText, ExternalLink, Plane, Loader2, MapPin, ArrowLeft, Maximize2, Minimize2 } from 'lucide-react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { X, Search, FileText, ExternalLink, Plane, Loader2, MapPin, ArrowLeft, Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ChartInfo {
@@ -52,9 +52,42 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
   const [aiswebUrl, setAiswebUrl] = useState<string | null>(null);
   const [viewingChart, setViewingChart] = useState<ChartInfo | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
+  
+  // Resizable state
+  const [viewerHeight, setViewerHeight] = useState(70); // percentage of viewport height
+  const [viewerTop, setViewerTop] = useState(15); // percentage from top
+  const [isResizingTop, setIsResizingTop] = useState(false);
+  const [isResizingBottom, setIsResizingBottom] = useState(false);
+  
+  // Zoom state for chart viewer
+  const [zoom, setZoom] = useState(1);
+  const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [lastPanPosition, setLastPanPosition] = useState({ x: 0, y: 0 });
+  const [initialPinchDistance, setInitialPinchDistance] = useState<number | null>(null);
+  const [initialZoom, setInitialZoom] = useState(1);
+  
+  const viewerContainerRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  // Reset zoom when changing chart
+  useEffect(() => {
+    if (viewingChart) {
+      setZoom(1);
+      setPanPosition({ x: 0, y: 0 });
+    }
+  }, [viewingChart]);
+
+  // Reset size when closing viewer
+  useEffect(() => {
+    if (!viewingChart) {
+      setViewerHeight(70);
+      setViewerTop(15);
+    }
+  }, [viewingChart]);
 
   // Auto-search if initialIcao is provided
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen && initialIcao) {
       setSearchQuery(initialIcao.toUpperCase());
       handleSearchInternal(initialIcao.toUpperCase());
@@ -66,6 +99,9 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
       setError(null);
       setAiswebUrl(null);
       setViewingChart(null);
+      setIsMaximized(false);
+      setZoom(1);
+      setPanPosition({ x: 0, y: 0 });
     }
   }, [isOpen, initialIcao]);
 
@@ -119,6 +155,126 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
     setViewingChart(null);
   };
 
+  // Zoom handlers
+  const handleZoomIn = () => {
+    setZoom(prev => Math.min(prev * 1.3, 5));
+  };
+
+  const handleZoomOut = () => {
+    setZoom(prev => Math.max(prev / 1.3, 0.5));
+  };
+
+  const handleResetZoom = () => {
+    setZoom(1);
+    setPanPosition({ x: 0, y: 0 });
+  };
+
+  // Touch handlers for pinch-to-zoom
+  const getTouchDistance = (touches: React.TouchList) => {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const getTouchCenter = (touches: React.TouchList) => {
+    if (touches.length < 2) return { x: touches[0].clientX, y: touches[0].clientY };
+    return {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2
+    };
+  };
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const distance = getTouchDistance(e.touches);
+      setInitialPinchDistance(distance);
+      setInitialZoom(zoom);
+    } else if (e.touches.length === 1 && zoom > 1) {
+      setIsPanning(true);
+      setLastPanPosition({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+    }
+  }, [zoom]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && initialPinchDistance !== null) {
+      e.preventDefault();
+      const distance = getTouchDistance(e.touches);
+      const scale = distance / initialPinchDistance;
+      const newZoom = Math.min(Math.max(initialZoom * scale, 0.5), 5);
+      setZoom(newZoom);
+    } else if (e.touches.length === 1 && isPanning && zoom > 1) {
+      const dx = e.touches[0].clientX - lastPanPosition.x;
+      const dy = e.touches[0].clientY - lastPanPosition.y;
+      setPanPosition(prev => ({
+        x: prev.x + dx,
+        y: prev.y + dy
+      }));
+      setLastPanPosition({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+    }
+  }, [initialPinchDistance, initialZoom, isPanning, lastPanPosition, zoom]);
+
+  const handleTouchEnd = useCallback(() => {
+    setInitialPinchDistance(null);
+    setIsPanning(false);
+  }, []);
+
+  // Mouse wheel zoom
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setZoom(prev => Math.min(Math.max(prev * delta, 0.5), 5));
+  }, []);
+
+  // Resize handlers
+  const handleResizeTopStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    setIsResizingTop(true);
+  }, []);
+
+  const handleResizeBottomStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    setIsResizingBottom(true);
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent | TouchEvent) => {
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      const viewportHeight = window.innerHeight;
+      const percentY = (clientY / viewportHeight) * 100;
+
+      if (isResizingTop) {
+        const newTop = Math.max(2, Math.min(percentY, viewerTop + viewerHeight - 20));
+        const heightDiff = viewerTop - newTop;
+        setViewerTop(newTop);
+        setViewerHeight(prev => prev + heightDiff);
+      } else if (isResizingBottom) {
+        const newBottom = Math.max(viewerTop + 20, Math.min(percentY, 98));
+        setViewerHeight(newBottom - viewerTop);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingTop(false);
+      setIsResizingBottom(false);
+    };
+
+    if (isResizingTop || isResizingBottom) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('touchmove', handleMouseMove);
+      document.addEventListener('touchend', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchmove', handleMouseMove);
+      document.removeEventListener('touchend', handleMouseUp);
+    };
+  }, [isResizingTop, isResizingBottom, viewerTop, viewerHeight]);
+
   const groupedCharts = charts.reduce((acc, chart) => {
     if (!acc[chart.tipo]) {
       acc[chart.tipo] = [];
@@ -129,6 +285,13 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
 
   if (!isOpen) return null;
 
+  // Calculate modal style for viewer mode
+  const modalStyle = viewingChart && !isMaximized ? {
+    top: `${viewerTop}%`,
+    height: `${viewerHeight}%`,
+    maxHeight: 'none',
+  } : {};
+
   return (
     <div className="fixed inset-0 z-[3000] flex items-end md:items-center justify-center">
       {/* Backdrop */}
@@ -138,9 +301,23 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
       />
 
       {/* Modal */}
-      <div className={`relative w-full ${isMaximized ? 'md:max-w-[95vw] h-[95vh]' : 'md:max-w-2xl max-h-[90vh] md:max-h-[85vh]'} bg-slate-900/95 backdrop-blur-xl border-t md:border border-slate-700/50 rounded-t-3xl md:rounded-2xl shadow-2xl overflow-hidden md:mx-4 transition-all duration-300 flex flex-col animate-slide-up md:animate-in`}>
+      <div 
+        className={`relative w-full ${isMaximized ? 'md:max-w-[98vw] h-[98vh]' : viewingChart ? 'md:max-w-4xl' : 'md:max-w-2xl max-h-[90vh] md:max-h-[85vh]'} bg-slate-900/95 backdrop-blur-xl border-t md:border border-slate-700/50 rounded-t-3xl md:rounded-2xl shadow-2xl overflow-hidden md:mx-4 transition-all duration-300 flex flex-col animate-slide-up md:animate-in`}
+        style={viewingChart && !isMaximized ? modalStyle : {}}
+      >
+        {/* Top resize handle - only in viewer mode */}
+        {viewingChart && !isMaximized && (
+          <div
+            className="absolute top-0 left-0 right-0 h-3 cursor-ns-resize z-10 flex items-center justify-center group"
+            onMouseDown={handleResizeTopStart}
+            onTouchStart={handleResizeTopStart}
+          >
+            <div className="w-12 h-1 bg-slate-600 rounded-full group-hover:bg-sky-500 transition-colors" />
+          </div>
+        )}
+
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700/50 flex-shrink-0">
+        <div className="flex items-center justify-between p-3 border-b border-slate-700/50 flex-shrink-0">
           <div className="flex items-center gap-3">
             {viewingChart ? (
               <button
@@ -148,7 +325,7 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
                 className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors flex items-center gap-2"
               >
                 <ArrowLeft className="w-5 h-5" />
-                <span className="text-sm font-medium">Voltar para a lista</span>
+                <span className="text-sm font-medium hidden sm:inline">Voltar para a lista</span>
               </button>
             ) : (
               <>
@@ -183,12 +360,13 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
 
         {viewingChart ? (
           /* PDF Viewer Mode */
-          <div className="flex-1 overflow-hidden relative bg-slate-950 flex flex-col">
-            <div className="p-2 bg-slate-800/50 border-b border-slate-700/50 flex items-center justify-between">
-              <div className="flex items-center gap-3 ml-2">
-                <span className="text-lg">{chartTypeIcons[viewingChart.tipo] || '📄'}</span>
-                <div>
-                  <h3 className="text-sm font-medium text-white">{viewingChart.nome}</h3>
+          <div className="flex-1 overflow-hidden relative bg-slate-950 flex flex-col min-h-0">
+            {/* Chart info bar */}
+            <div className="p-2 bg-slate-800/50 border-b border-slate-700/50 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3 ml-2 min-w-0">
+                <span className="text-lg flex-shrink-0">{chartTypeIcons[viewingChart.tipo] || '📄'}</span>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-medium text-white truncate">{viewingChart.nome}</h3>
                   <p className="text-[10px] text-slate-400">{viewingChart.tipo_descr}</p>
                 </div>
               </div>
@@ -196,17 +374,62 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
                 href={viewingChart.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-sky-400 transition-colors"
+                className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-sky-400 transition-colors flex-shrink-0"
                 title="Abrir em nova aba"
               >
                 <ExternalLink className="w-4 h-4" />
               </a>
             </div>
-            <iframe
-              src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewingChart.link)}&embedded=true`}
-              className="w-full h-full border-none bg-white"
-              title={viewingChart.nome}
-            />
+            
+            {/* Chart viewer with zoom */}
+            <div 
+              ref={viewerContainerRef}
+              className="flex-1 overflow-hidden relative touch-none select-none"
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onWheel={handleWheel}
+              style={{ cursor: zoom > 1 ? 'move' : 'default' }}
+            >
+              <iframe
+                src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewingChart.link)}&embedded=true`}
+                className="w-full h-full border-none bg-white origin-center"
+                title={viewingChart.nome}
+                style={{
+                  transform: `scale(${zoom}) translate(${panPosition.x / zoom}px, ${panPosition.y / zoom}px)`,
+                  transformOrigin: 'center center',
+                }}
+              />
+            </div>
+
+            {/* Zoom controls */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-slate-800/90 backdrop-blur-sm rounded-full px-4 py-2 border border-slate-700/50 shadow-lg">
+              <button
+                onClick={handleZoomOut}
+                className="p-2 rounded-full hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                title="Diminuir zoom"
+              >
+                <ZoomOut className="w-5 h-5" />
+              </button>
+              <span className="text-sm text-slate-300 font-mono min-w-[50px] text-center">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                onClick={handleZoomIn}
+                className="p-2 rounded-full hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                title="Aumentar zoom"
+              >
+                <ZoomIn className="w-5 h-5" />
+              </button>
+              <div className="w-px h-4 bg-slate-600 mx-1" />
+              <button
+                onClick={handleResetZoom}
+                className="p-2 rounded-full hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                title="Resetar zoom"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         ) : (
           /* List Mode */
@@ -320,6 +543,17 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
               </p>
             </div>
           </>
+        )}
+
+        {/* Bottom resize handle - only in viewer mode */}
+        {viewingChart && !isMaximized && (
+          <div
+            className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize z-10 flex items-center justify-center group"
+            onMouseDown={handleResizeBottomStart}
+            onTouchStart={handleResizeBottomStart}
+          >
+            <div className="w-12 h-1 bg-slate-600 rounded-full group-hover:bg-sky-500 transition-colors" />
+          </div>
         )}
       </div>
     </div>
