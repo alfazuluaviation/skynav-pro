@@ -587,17 +587,6 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
             </div>
           </>
         )}
-
-        {/* Bottom resize handle - only in viewer mode */}
-        {viewingChart && !isMaximized && (
-          <div
-            className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize z-10 flex items-center justify-center group"
-            onMouseDown={handleResizeBottomStart}
-            onTouchStart={handleResizeBottomStart}
-          >
-            <div className="w-12 h-1 bg-slate-600 rounded-full group-hover:bg-sky-500 transition-colors" />
-          </div>
-        )}
       </div>
     </div>
   );
