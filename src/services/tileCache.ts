@@ -61,14 +61,17 @@ async function openDatabase(): Promise<IDBDatabase> {
 /**
  * Generate a unique cache key for a tile
  * Normalizes subdomain to 'a' for consistent caching
+ * For WMS tiles, we use the full URL as key since parameters are standardized
  */
 export function getTileCacheKey(url: string): string {
   // Normalize subdomain (a, b, c, d) to 'a' for consistent cache keys
   // This ensures tiles cached with subdomain 'b' can be retrieved when looking up with 'a'
-  return url
+  let normalized = url
     .replace(/https:\/\/[abcd]\.tile\.openstreetmap\.org/, 'https://a.tile.openstreetmap.org')
     .replace(/https:\/\/[abcd]\.basemaps\.cartocdn\.com/, 'https://a.basemaps.cartocdn.com')
     .replace(/https:\/\/[abc]\.tile\.opentopomap\.org/, 'https://a.tile.opentopomap.org');
+  
+  return normalized;
 }
 
 /**
