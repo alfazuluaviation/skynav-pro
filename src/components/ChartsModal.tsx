@@ -297,7 +297,7 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
         </div>
 
         {viewingChart ? (
-          /* PDF Viewer Mode - using flex-1 with absolute iframe to fill entire container */}
+          /* PDF Viewer Mode - using flex-1 with absolute iframe to fill entire container */
           <div className="flex-1 flex flex-col overflow-hidden" style={{ minHeight: 0 }}>
             {/* Chart info bar */}
             <div className="p-2 bg-slate-800/50 border-b border-slate-700/50 flex items-center justify-between flex-shrink-0">
