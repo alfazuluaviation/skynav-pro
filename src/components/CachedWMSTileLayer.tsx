@@ -61,7 +61,8 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
     // WMS 1.1.1 bbox format: minx,miny,maxx,maxy (lon,lat,lon,lat for EPSG:4326)
     const bboxStr = `${minLng},${minLat},${maxLng},${maxLat}`;
     
-    const tileSize = this.options.tileSize || 512;
+    // 256px tiles are significantly lighter (esp. iOS) and match Leaflet defaults.
+    const tileSize = this.options.tileSize || 256;
     
     const params = new URLSearchParams({
       service: 'WMS',
@@ -225,7 +226,7 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
   version = '1.1.1',
   opacity = 1,
   zIndex = 100,
-  tileSize = 512,
+  tileSize = 256,
   detectRetina = false,
   maxZoom = 18,
   layerId,
