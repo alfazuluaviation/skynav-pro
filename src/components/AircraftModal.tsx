@@ -1,46 +1,36 @@
 /**
- * Aircraft Selection Modal
- * Shows user's saved aircraft and allows adding new ones
+ * Aircraft Search Modal (Second Screen)
+ * Allows searching and adding new aircraft models from the master list
  */
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { X, Search, Plane, Check, Plus, Trash2 } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { X, Search, Plane, Check, Plus } from 'lucide-react';
 import { 
   commonAircraft, 
   AircraftType, 
   UserAircraft, 
-  loadUserAircraft, 
-  removeUserAircraft 
+  loadUserAircraft 
 } from '../utils/aircraftData';
 import { AircraftAddModal } from './AircraftAddModal';
 
 interface AircraftModalProps {
   isOpen: boolean;
   onClose: () => void;
-  selectedAircraft: UserAircraft | null;
-  onSelectAircraft: (aircraft: UserAircraft) => void;
+  onAircraftAdded: (aircraft: UserAircraft) => void;
 }
 
 export const AircraftModal: React.FC<AircraftModalProps> = ({
   isOpen,
   onClose,
-  selectedAircraft,
-  onSelectAircraft
+  onAircraftAdded
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [userAircraft, setUserAircraft] = useState<UserAircraft[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedModel, setSelectedModel] = useState<AircraftType | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  // Load user aircraft on mount
-  useEffect(() => {
-    if (isOpen) {
-      setUserAircraft(loadUserAircraft());
-      setSearchTerm('');
-      setShowDropdown(false);
-    }
-  }, [isOpen]);
+  // Get user aircraft to show which are already added
+  const userAircraft = useMemo(() => loadUserAircraft(), [isOpen]);
 
   // Filter aircraft models based on search
   const filteredModels = useMemo(() => {
@@ -62,21 +52,11 @@ export const AircraftModal: React.FC<AircraftModalProps> = ({
   }, []);
 
   const handleAircraftAdded = useCallback((aircraft: UserAircraft) => {
-    setUserAircraft(loadUserAircraft());
     setShowAddModal(false);
     setSelectedModel(null);
-  }, []);
-
-  const handleSelectUserAircraft = useCallback((aircraft: UserAircraft) => {
-    onSelectAircraft(aircraft);
+    onAircraftAdded(aircraft);
     onClose();
-  }, [onSelectAircraft, onClose]);
-
-  const handleRemoveAircraft = useCallback((e: React.MouseEvent, registration: string) => {
-    e.stopPropagation();
-    const updated = removeUserAircraft(registration);
-    setUserAircraft(updated);
-  }, []);
+  }, [onAircraftAdded, onClose]);
 
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -84,30 +64,36 @@ export const AircraftModal: React.FC<AircraftModalProps> = ({
     setShowDropdown(value.length >= 2);
   }, []);
 
+  const handleClose = useCallback(() => {
+    setSearchTerm('');
+    setShowDropdown(false);
+    onClose();
+  }, [onClose]);
+
   if (!isOpen) return null;
 
   return (
     <>
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
         <div className="relative w-full max-w-md bg-gradient-to-b from-[#1a2332] to-[#0d1117] rounded-xl shadow-2xl border border-white/10 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-[#0f4c75] to-[#1a73a7]">
             <div className="flex items-center gap-3">
-              <Plane className="w-5 h-5 text-white" />
-              <h2 className="text-lg font-semibold text-white">Minhas Aeronaves</h2>
+              <Plus className="w-5 h-5 text-white" />
+              <h2 className="text-lg font-semibold text-white">Adicionar Aeronave</h2>
             </div>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-1 rounded-lg hover:bg-white/20 transition-colors"
             >
               <X className="w-5 h-5 text-white" />
             </button>
           </div>
 
-          {/* Search to Add */}
-          <div className="p-4 border-b border-white/10">
+          {/* Search */}
+          <div className="p-4">
             <label className="block text-xs text-gray-400 uppercase tracking-wider mb-2">
-              Adicionar Aeronave
+              Buscar Modelo
             </label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -115,8 +101,9 @@ export const AircraftModal: React.FC<AircraftModalProps> = ({
                 type="text"
                 value={searchTerm}
                 onChange={handleSearchChange}
-                placeholder="Buscar modelo (ex: Cessna, Beechcraft...)"
+                placeholder="Digite o modelo (ex: Cessna, Beechcraft...)"
                 className="w-full pl-10 pr-4 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#1a73a7]/50 focus:border-[#1a73a7] transition-all"
+                autoFocus
               />
               
               {/* Dropdown results */}
@@ -151,72 +138,27 @@ export const AircraftModal: React.FC<AircraftModalProps> = ({
                 </div>
               )}
             </div>
-          </div>
-
-          {/* User Aircraft List */}
-          <div className="max-h-[45vh] overflow-y-auto p-2">
-            {userAircraft.length === 0 ? (
-              <div className="py-8 text-center text-gray-400">
-                <Plane className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                <p>Nenhuma aeronave cadastrada</p>
-                <p className="text-xs mt-1">Busque um modelo acima para adicionar</p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {userAircraft.map((aircraft) => {
-                  const isSelected = selectedAircraft?.registration === aircraft.registration;
-                  
-                  return (
-                    <button
-                      key={aircraft.registration}
-                      onClick={() => handleSelectUserAircraft(aircraft)}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all ${
-                        isSelected
-                          ? 'bg-[#1a73a7]/30 border border-[#1a73a7]'
-                          : 'bg-[#0d1117]/50 border border-transparent hover:bg-[#1a2332] hover:border-white/10'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${isSelected ? 'bg-[#1a73a7]' : 'bg-[#1a2332]'}`}>
-                          <Plane className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-gray-400'}`} />
-                        </div>
-                        <div className="text-left">
-                          <div className={`font-medium ${isSelected ? 'text-white' : 'text-gray-200'}`}>
-                            {aircraft.registration}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {aircraft.label} • {aircraft.speed} kt
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {isSelected && (
-                          <Check className="w-5 h-5 text-[#1a73a7]" />
-                        )}
-                        <button
-                          onClick={(e) => handleRemoveAircraft(e, aircraft.registration)}
-                          className="p-1.5 rounded-lg hover:bg-red-500/20 transition-colors group"
-                        >
-                          <Trash2 className="w-4 h-4 text-gray-500 group-hover:text-red-400" />
-                        </button>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="px-4 py-3 border-t border-white/10 bg-[#0d1117]/50">
-            <p className="text-xs text-gray-500 text-center">
-              {userAircraft.length} aeronave{userAircraft.length !== 1 ? 's' : ''} cadastrada{userAircraft.length !== 1 ? 's' : ''}
+            
+            <p className="mt-3 text-xs text-gray-500 text-center">
+              Digite pelo menos 2 caracteres para buscar
             </p>
+          </div>
+
+          {/* Info */}
+          <div className="px-4 pb-4">
+            <div className="p-3 bg-[#0d1117]/50 rounded-lg border border-white/5">
+              <div className="flex items-start gap-2">
+                <Plane className="w-4 h-4 text-[#1a73a7] mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-gray-400">
+                  Selecione um modelo da lista para cadastrar com matrícula, velocidade e consumo personalizados.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Add Aircraft Modal */}
+      {/* Add Aircraft Details Modal */}
       <AircraftAddModal
         isOpen={showAddModal}
         onClose={() => {

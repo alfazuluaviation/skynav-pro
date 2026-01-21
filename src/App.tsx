@@ -19,7 +19,7 @@ import { TopLeftMenu } from './components/TopLeftMenu';
 import { ChartsModal } from './components/ChartsModal';
 import { AerodromeModal } from './components/AerodromeModal';
 import { DownloadModal } from './components/DownloadModal';
-import { AircraftModal } from './components/AircraftModal';
+import { AircraftListModal } from './components/AircraftListModal';
 import { FlightPlanDownloadModal } from './components/FlightPlanDownloadModal';
 import { BaseMapType } from './components/LayersMenu';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
@@ -1086,8 +1086,8 @@ const App: React.FC = () => {
         onClearLayerCache={handleClearLayerCache}
       />
 
-      {/* Aircraft Modal */}
-      <AircraftModal
+      {/* Aircraft List Modal */}
+      <AircraftListModal
         isOpen={showAircraftModal}
         onClose={() => setShowAircraftModal(false)}
         selectedAircraft={aircraftModel as any}
