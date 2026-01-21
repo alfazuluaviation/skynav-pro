@@ -332,7 +332,6 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
                 allow="autoplay"
               />
             </div>
-          </div>
             
             {/* Bottom resize handle - only in viewer mode */}
             {!isMaximized && (
@@ -344,6 +343,7 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
                 <div className="w-16 h-1.5 bg-slate-500 rounded-full group-hover:bg-sky-400 group-active:bg-sky-400 transition-colors" />
               </div>
             )}
+          </div>
         ) : (
           /* List Mode */
           <>
