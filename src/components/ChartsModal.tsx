@@ -54,8 +54,8 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
   const [isMaximized, setIsMaximized] = useState(false);
   
   // Resizable state
-  const [viewerHeight, setViewerHeight] = useState(70); // percentage of viewport height
-  const [viewerTop, setViewerTop] = useState(15); // percentage from top
+  const [viewerHeight, setViewerHeight] = useState(80); // percentage of viewport height
+  const [viewerTop, setViewerTop] = useState(5); // percentage from top - start higher
   const [isResizingTop, setIsResizingTop] = useState(false);
   const [isResizingBottom, setIsResizingBottom] = useState(false);
   
@@ -65,8 +65,8 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
   // Reset size when closing viewer
   useEffect(() => {
     if (!viewingChart) {
-      setViewerHeight(70);
-      setViewerTop(15);
+      setViewerHeight(80);
+      setViewerTop(5);
     }
   }, [viewingChart]);
 
@@ -240,7 +240,7 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
 
       {/* Modal */}
       <div 
-        className={`${viewingChart && !isMaximized ? '' : 'absolute bottom-0 md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2'} w-full ${isMaximized ? 'md:max-w-[98vw] h-[98vh] md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 absolute' : viewingChart ? 'md:max-w-4xl' : 'md:max-w-2xl max-h-[90vh] md:max-h-[85vh]'} bg-slate-900/95 backdrop-blur-xl border-t md:border border-slate-700/50 rounded-t-3xl md:rounded-2xl shadow-2xl overflow-hidden md:mx-auto flex flex-col animate-slide-up md:animate-in`}
+        className={`${viewingChart && !isMaximized ? '' : 'absolute bottom-0 md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2'} w-full ${isMaximized ? 'md:max-w-[98vw] h-[98vh] md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 absolute' : viewingChart ? 'md:max-w-4xl' : 'md:max-w-2xl max-h-[90vh] md:max-h-[80vh]'} bg-slate-900/95 backdrop-blur-xl border-t md:border border-slate-700/50 rounded-t-3xl md:rounded-2xl shadow-2xl overflow-hidden md:mx-auto flex flex-col animate-slide-up md:animate-in`}
         style={viewingChart && !isMaximized ? modalStyle : {}}
       >
         {/* Top resize handle - only in viewer mode */}
@@ -297,8 +297,8 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
         </div>
 
         {viewingChart ? (
-          /* PDF Viewer Mode */
-          <div className="flex-1 overflow-hidden relative bg-slate-950 flex flex-col" style={{ minHeight: 0 }}>
+          /* PDF Viewer Mode - using flex-1 with absolute iframe to fill entire container */}
+          <div className="flex-1 flex flex-col overflow-hidden" style={{ minHeight: 0 }}>
             {/* Chart info bar */}
             <div className="p-2 bg-slate-800/50 border-b border-slate-700/50 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3 ml-2 min-w-0">
@@ -319,10 +319,10 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
               </a>
             </div>
             
-            {/* Chart viewer - full height iframe */}
+            {/* Chart viewer - iframe fills remaining space */}
             <div 
               ref={viewerContainerRef}
-              className="flex-1 relative bg-white"
+              className="flex-1 relative"
               style={{ minHeight: 0 }}
             >
               <iframe
@@ -336,7 +336,7 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
             {/* Bottom resize handle - only in viewer mode */}
             {!isMaximized && (
               <div
-                className="absolute bottom-0 left-0 right-0 h-4 cursor-ns-resize z-20 flex items-center justify-center group touch-none"
+                className="absolute bottom-0 left-0 right-0 h-4 cursor-ns-resize z-20 flex items-center justify-center group touch-none bg-gradient-to-t from-slate-900/80 to-transparent"
                 onMouseDown={handleResizeStart('bottom')}
                 onTouchStart={handleResizeStart('bottom')}
               >
