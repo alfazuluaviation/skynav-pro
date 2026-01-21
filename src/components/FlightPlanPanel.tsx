@@ -24,7 +24,7 @@ interface FlightPlanPanelProps {
   flightSegments: FlightSegment[];
   plannedSpeed: number;
   onPlannedSpeedChange: (speed: number) => void;
-  aircraftModel: { id: string, label: string, speed: number };
+  aircraftModel: { id: string, label: string, speed: number } | null;
   onAircraftModelChange: (model: { id: string, label: string, speed: number }) => void;
   searchQuery: string;
   planViewMode: 'ETAPA' | 'ACUMULADO';
@@ -69,7 +69,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   const destination = waypoints.find(w => w.role === 'DESTINATION') || null;
   
   const [isAircraftOpen, setIsAircraftOpen] = useState(false);
-  const [aircraftQuery, setAircraftQuery] = useState(aircraftModel.label);
+  const [aircraftQuery, setAircraftQuery] = useState(aircraftModel?.label || '');
   const [userAircraft, setUserAircraft] = useState<UserAircraft[]>([]);
   const [isExpanded, setIsExpandedState] = useState(false);
 
@@ -149,13 +149,13 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   };
 
   useEffect(() => {
-    setAircraftQuery(aircraftModel.label);
+    setAircraftQuery(aircraftModel?.label || '');
   }, [aircraftModel]);
 
-  // Filter user's saved aircraft - show all when query is empty or matches default
+  // Filter user's saved aircraft - show all when query is empty or matches current selection
   const filteredAircraft = userAircraft.filter(ac => {
-    // If query is empty or matches the current default, show all user aircraft
-    if (!aircraftQuery.trim() || aircraftQuery === aircraftModel.label) {
+    // If query is empty or matches the current selection, show all user aircraft
+    if (!aircraftQuery.trim() || aircraftQuery === (aircraftModel?.label || '')) {
       return true;
     }
     return ac.label.toLowerCase().includes(aircraftQuery.toLowerCase()) || 
