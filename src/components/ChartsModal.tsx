@@ -228,41 +228,40 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
   }, []);
 
   // Resize handlers
-  const handleResizeTopStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+  const handleResizeStart = useCallback((edge: 'top' | 'bottom') => (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
-    setIsResizingTop(true);
-  }, []);
-
-  const handleResizeBottomStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    setIsResizingBottom(true);
+    e.stopPropagation();
+    if (edge === 'top') {
+      setIsResizingTop(true);
+    } else {
+      setIsResizingBottom(true);
+    }
   }, []);
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent | TouchEvent) => {
+    if (!isResizingTop && !isResizingBottom) return;
+
+    const handleMove = (e: MouseEvent | TouchEvent) => {
       e.preventDefault();
       const clientY = 'touches' in e ? e.touches[0]?.clientY : e.clientY;
       if (clientY === undefined) return;
       
       const viewportHeight = window.innerHeight;
       const percentY = (clientY / viewportHeight) * 100;
-      const minHeight = 30; // minimum 30% height
-      const minTop = 2; // minimum 2% from top
-      const maxBottom = 98; // maximum 98% from top
+      const minHeight = 30;
+      const minTop = 2;
+      const maxBottom = 98;
 
       if (isResizingTop) {
-        // Clamp newTop: cannot go above minTop or below (currentBottom - minHeight)
         const currentBottom = viewerTop + viewerHeight;
         const newTop = Math.max(minTop, Math.min(percentY, currentBottom - minHeight));
         const newHeight = currentBottom - newTop;
         
-        // Only update if valid
         if (newHeight >= minHeight && newTop >= minTop) {
           setViewerTop(newTop);
           setViewerHeight(newHeight);
         }
       } else if (isResizingBottom) {
-        // Clamp newBottom: cannot go below viewerTop + minHeight or above maxBottom
         const newBottom = Math.max(viewerTop + minHeight, Math.min(percentY, maxBottom));
         const newHeight = newBottom - viewerTop;
         
@@ -272,23 +271,30 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
       }
     };
 
-    const handleMouseUp = () => {
+    const handleEnd = () => {
       setIsResizingTop(false);
       setIsResizingBottom(false);
     };
 
-    if (isResizingTop || isResizingBottom) {
-      document.addEventListener('mousemove', handleMouseMove, { passive: false });
-      document.addEventListener('mouseup', handleMouseUp);
-      document.addEventListener('touchmove', handleMouseMove, { passive: false });
-      document.addEventListener('touchend', handleMouseUp);
-    }
+    // Use capture phase to ensure we get the events
+    window.addEventListener('mousemove', handleMove, { passive: false, capture: true });
+    window.addEventListener('mouseup', handleEnd, { capture: true });
+    window.addEventListener('touchmove', handleMove, { passive: false, capture: true });
+    window.addEventListener('touchend', handleEnd, { capture: true });
+    window.addEventListener('touchcancel', handleEnd, { capture: true });
+    
+    // Prevent text selection during resize
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'ns-resize';
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('touchmove', handleMouseMove);
-      document.removeEventListener('touchend', handleMouseUp);
+      window.removeEventListener('mousemove', handleMove, { capture: true });
+      window.removeEventListener('mouseup', handleEnd, { capture: true });
+      window.removeEventListener('touchmove', handleMove, { capture: true });
+      window.removeEventListener('touchend', handleEnd, { capture: true });
+      window.removeEventListener('touchcancel', handleEnd, { capture: true });
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
     };
   }, [isResizingTop, isResizingBottom, viewerTop, viewerHeight]);
 
@@ -325,11 +331,11 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
         {/* Top resize handle - only in viewer mode */}
         {viewingChart && !isMaximized && (
           <div
-            className="absolute top-0 left-0 right-0 h-3 cursor-ns-resize z-10 flex items-center justify-center group"
-            onMouseDown={handleResizeTopStart}
-            onTouchStart={handleResizeTopStart}
+            className="absolute top-0 left-0 right-0 h-4 cursor-ns-resize z-20 flex items-center justify-center group touch-none"
+            onMouseDown={handleResizeStart('top')}
+            onTouchStart={handleResizeStart('top')}
           >
-            <div className="w-12 h-1 bg-slate-600 rounded-full group-hover:bg-sky-500 transition-colors" />
+            <div className="w-16 h-1.5 bg-slate-500 rounded-full group-hover:bg-sky-400 group-active:bg-sky-400 transition-colors" />
           </div>
         )}
 
@@ -456,6 +462,17 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
                 <RotateCcw className="w-4 h-4" />
               </button>
             </div>
+            
+            {/* Bottom resize handle - only in viewer mode */}
+            {!isMaximized && (
+              <div
+                className="absolute bottom-0 left-0 right-0 h-4 cursor-ns-resize z-20 flex items-center justify-center group touch-none"
+                onMouseDown={handleResizeStart('bottom')}
+                onTouchStart={handleResizeStart('bottom')}
+              >
+                <div className="w-16 h-1.5 bg-slate-500 rounded-full group-hover:bg-sky-400 group-active:bg-sky-400 transition-colors" />
+              </div>
+            )}
           </div>
         ) : (
           /* List Mode */
