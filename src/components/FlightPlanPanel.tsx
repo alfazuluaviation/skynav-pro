@@ -224,8 +224,10 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                     {filteredAircraft.map(ac => (
                       <button
                         key={ac.registration}
+                        type="button"
                         className="w-full text-left px-3 py-3 sm:py-2 text-sm sm:text-xs font-bold text-slate-300 hover:bg-purple-500/20 hover:text-white transition-colors flex flex-col group active:bg-purple-500/30"
-                        onClick={() => {
+                        onMouseDown={(e) => {
+                          e.preventDefault();
                           onAircraftModelChange(ac);
                           onPlannedSpeedChange(ac.speed);
                           setAircraftQuery(`${ac.registration} - ${ac.label}`);
