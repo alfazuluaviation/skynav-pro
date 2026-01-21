@@ -1,10 +1,11 @@
 import React, { useState, memo } from 'react';
 import { IconMenu } from './Icons';
-import { Map, Plane, Download } from 'lucide-react';
+import { Map, Plane, Download, MapPin } from 'lucide-react';
 
 interface TopLeftMenuProps {
   onOpenCharts: () => void;
   onOpenAerodromes: () => void;
+  onOpenAircraft: () => void;
   onOpenDownload: () => void;
 }
 
@@ -39,6 +40,7 @@ MenuItem.displayName = 'MenuItem';
 export const TopLeftMenu: React.FC<TopLeftMenuProps> = memo(({
   onOpenCharts,
   onOpenAerodromes,
+  onOpenAircraft,
   onOpenDownload
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -50,6 +52,11 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = memo(({
 
   const handleOpenAerodromes = () => {
     onOpenAerodromes();
+    setIsOpen(false);
+  };
+
+  const handleOpenAircraft = () => {
+    onOpenAircraft();
     setIsOpen(false);
   };
 
@@ -82,6 +89,13 @@ export const TopLeftMenu: React.FC<TopLeftMenuProps> = memo(({
           <MenuItem 
             onClick={handleOpenAerodromes}
             title="Aeródromos"
+            icon={MapPin}
+            gradientFrom="#0f4c75"
+            gradientTo="#1a73a7"
+          />
+          <MenuItem 
+            onClick={handleOpenAircraft}
+            title="Aeronaves"
             icon={Plane}
             gradientFrom="#0f4c75"
             gradientTo="#1a73a7"
