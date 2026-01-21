@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Waypoint, FlightSegment, SavedPlan } from '../types';
 import { NavPoint } from '../services/NavigationDataService';
 import { AutocompleteInput } from './AutocompleteInput';
-import { commonAircraft } from '../utils/aircraftData';
+import { UserAircraft, loadUserAircraft } from '../utils/aircraftData';
 import { IconPlane, IconTrash, IconSwap, IconArrowUp, IconArrowDown, IconLocation, IconMaximize, IconDisk, IconFolder, IconDownload, IconEdit } from './Icons';
 
 // Format coordinates to DMS format like "12°28.77'S 38°10.66'W"
@@ -70,7 +70,19 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
   
   const [isAircraftOpen, setIsAircraftOpen] = useState(false);
   const [aircraftQuery, setAircraftQuery] = useState(aircraftModel.label);
+  const [userAircraft, setUserAircraft] = useState<UserAircraft[]>([]);
   const [isExpanded, setIsExpandedState] = useState(false);
+
+  // Load user aircraft on mount and when dropdown opens
+  useEffect(() => {
+    setUserAircraft(loadUserAircraft());
+  }, []);
+
+  useEffect(() => {
+    if (isAircraftOpen) {
+      setUserAircraft(loadUserAircraft());
+    }
+  }, [isAircraftOpen]);
   
   // Expose isExpanded through a callback prop if needed for parent
   const setIsExpanded = (val: boolean) => {
@@ -140,8 +152,10 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
     setAircraftQuery(aircraftModel.label);
   }, [aircraftModel]);
 
-  const filteredAircraft = commonAircraft.filter(ac => 
+  // Filter user's saved aircraft
+  const filteredAircraft = userAircraft.filter(ac => 
     ac.label.toLowerCase().includes(aircraftQuery.toLowerCase()) || 
+    ac.registration.toLowerCase().includes(aircraftQuery.toLowerCase()) ||
     ac.id.toLowerCase().includes(aircraftQuery.toLowerCase())
   );
 
@@ -191,7 +205,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                 <input
                   type="text"
                   className="w-full bg-slate-800/50 border border-slate-700 text-slate-200 text-sm sm:text-xs font-bold rounded-lg pl-9 pr-3 py-3 sm:py-2 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-all uppercase placeholder-slate-600"
-                  placeholder="Selecionar Aeronave..."
+                  placeholder={userAircraft.length > 0 ? "Selecionar Aeronave..." : ""}
                   value={aircraftQuery}
                   onChange={(e) => {
                     setAircraftQuery(e.target.value);
@@ -199,22 +213,26 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                   }}
                   onFocus={() => setIsAircraftOpen(true)}
                   onBlur={() => setTimeout(() => setIsAircraftOpen(false), 200)}
+                  readOnly={userAircraft.length === 0}
                 />
                 {isAircraftOpen && filteredAircraft.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-50 max-h-48 overflow-y-auto">
                     {filteredAircraft.map(ac => (
                       <button
-                        key={ac.id}
-                        className="w-full text-left px-3 py-3 sm:py-2 text-sm sm:text-xs font-bold text-slate-300 hover:bg-purple-500/20 hover:text-white transition-colors flex justify-between group active:bg-purple-500/30"
+                        key={ac.registration}
+                        className="w-full text-left px-3 py-3 sm:py-2 text-sm sm:text-xs font-bold text-slate-300 hover:bg-purple-500/20 hover:text-white transition-colors flex flex-col group active:bg-purple-500/30"
                         onClick={() => {
                           onAircraftModelChange(ac);
                           onPlannedSpeedChange(ac.speed);
-                          setAircraftQuery(ac.label);
+                          setAircraftQuery(`${ac.registration} - ${ac.label}`);
                           setIsAircraftOpen(false);
                         }}
                       >
-                        <span>{ac.label}</span>
-                        <span className="text-slate-500 group-hover:text-purple-300">{ac.speed} KT</span>
+                        <div className="flex justify-between w-full">
+                          <span className="text-white">{ac.registration}</span>
+                          <span className="text-slate-500 group-hover:text-purple-300">{ac.speed} KT</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500">{ac.label}</span>
                       </button>
                     ))}
                   </div>
