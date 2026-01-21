@@ -152,15 +152,28 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
       // Try to load from cache first
       getCachedTile(tileUrl).then(blob => {
         if (blob && blob.size > 0) {
-          console.log(`[CACHE HIT] ${layerId} tile loaded from cache, size: ${blob.size} bytes`);
+          console.log(`[CACHE HIT] ${layerId} tile loaded from cache, size: ${blob.size} bytes, type: ${blob.type}`);
+          
+          // Validate blob type is an image
+          if (!blob.type.startsWith('image/')) {
+            console.warn(`[CACHE INVALID] ${layerId} - cached blob is not an image: ${blob.type}`);
+            if (navigator.onLine) {
+              loadFromNetwork();
+            } else {
+              done(null, tile);
+            }
+            return;
+          }
+          
           // Create object URL from cached blob
           const objectUrl = URL.createObjectURL(blob);
           tile.onload = () => {
+            console.debug(`[CACHE RENDER OK] ${layerId} tile rendered successfully`);
             URL.revokeObjectURL(objectUrl);
             done(null, tile);
           };
-          tile.onerror = () => {
-            console.warn(`[CACHE ERROR] Failed to render cached tile for ${layerId}, falling back to network`);
+          tile.onerror = (err) => {
+            console.warn(`[CACHE ERROR] Failed to render cached tile for ${layerId}:`, err);
             URL.revokeObjectURL(objectUrl);
             // Fallback to network only if online
             if (navigator.onLine) {
@@ -174,6 +187,7 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
           // No cache - only load from network if online
           if (navigator.onLine) {
             console.debug(`[CACHE MISS] ${layerId} - loading from network`);
+            console.debug(`[MISS URL] ${tileUrl.substring(0, 150)}...`);
             loadFromNetwork();
           } else {
             console.debug(`[WMS OFFLINE] ${layerId} - not cached, returning empty tile`);
@@ -252,11 +266,19 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       keepBuffer: 4
     });
 
+    // Set zIndex after creation
+    if (typeof zIndex === 'number') {
+      (wmsLayer as any).setZIndex(zIndex);
+    }
+
+    console.log(`[CachedWMSTileLayer] Adding layer ${layerId} to map with zIndex=${zIndex}, useCache=${useCache}, tileSize=${tileSize}`);
+
     wmsLayer.addTo(map);
     layerRef.current = wmsLayer;
 
     return () => {
       if (layerRef.current) {
+        console.log(`[CachedWMSTileLayer] Removing layer ${layerId} from map`);
         map.removeLayer(layerRef.current);
         layerRef.current = null;
       }
