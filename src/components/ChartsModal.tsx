@@ -238,7 +238,7 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
 
       {/* Modal */}
       <div 
-        className={`${viewingChart && !isMaximized ? '' : 'absolute bottom-0 md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2'} w-full ${isMaximized ? 'md:max-w-[98vw] h-[98vh] md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 absolute' : viewingChart ? 'md:max-w-4xl' : 'md:max-w-2xl max-h-[90vh] md:max-h-[80vh]'} bg-slate-900/95 backdrop-blur-xl border-t md:border border-slate-700/50 rounded-t-3xl md:rounded-2xl shadow-2xl overflow-hidden md:mx-auto flex flex-col animate-slide-up md:animate-in`}
+        className={`${viewingChart && !isMaximized ? '' : 'absolute top-4 bottom-4 md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2'} w-full ${isMaximized ? 'md:max-w-[98vw] h-[98vh] md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 absolute' : viewingChart ? 'md:max-w-4xl' : 'md:max-w-2xl md:h-[92vh] md:max-h-[92vh]'} bg-slate-900/95 backdrop-blur-xl border-t md:border border-slate-700/50 rounded-t-3xl md:rounded-2xl shadow-2xl overflow-hidden md:mx-auto flex flex-col animate-slide-up md:animate-in`}
         style={viewingChart && !isMaximized ? modalStyle : {}}
       >
         {/* Top resize handle - only in viewer mode */}
@@ -317,15 +317,16 @@ export const ChartsModal: React.FC<ChartsModalProps> = ({ isOpen, onClose, initi
               </a>
             </div>
             
-            {/* Chart viewer - iframe fills remaining space */}
+            {/* Chart viewer - iframe fills remaining space with touch-action for pinch zoom */}
             <div 
               ref={viewerContainerRef}
               className="flex-1 relative"
-              style={{ minHeight: 0 }}
+              style={{ minHeight: 0, touchAction: 'pinch-zoom' }}
             >
               <iframe
                 src={`https://docs.google.com/viewer?url=${encodeURIComponent(viewingChart.link)}&embedded=true`}
                 className="absolute inset-0 w-full h-full border-none bg-white"
+                style={{ touchAction: 'manipulation' }}
                 title={viewingChart.nome}
                 allow="autoplay"
               />
