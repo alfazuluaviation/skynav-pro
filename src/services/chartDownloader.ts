@@ -142,6 +142,7 @@ async function downloadTile(url: string, layerId: string, retries: number = 3): 
           console.warn(`[ChartDownloader] Invalid content-type: ${contentType}`);
         }
         return true; // Count as processed but don't cache
+      }
     } catch (error) {
       if (attempt < retries) {
         // Exponential backoff
