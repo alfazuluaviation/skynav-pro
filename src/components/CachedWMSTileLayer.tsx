@@ -152,20 +152,24 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
     if (useCache) {
       // Try to load from cache first
       getCachedTile(tileUrl).then(blob => {
-        // Validate blob: must be an image with reasonable size (> 1KB)
-        // Tiles smaller than 1KB are typically errors or empty responses
-        if (blob && blob.size > 1000 && blob.type.startsWith('image/')) {
-          console.log(`[CACHE HIT] ${layerId} tile loaded from cache, size: ${blob.size} bytes, type: ${blob.type}`);
+        // Validate blob: must be an actual image with reasonable size
+        // Real WMS tiles at 512x512 are typically 2KB+ (even empty areas have some data)
+        // Error responses cached incorrectly would be smaller or wrong type
+        const isValidCachedTile = blob && 
+          blob.size > 2000 && // Minimum 2KB for valid tile
+          blob.type.startsWith('image/');
+        
+        if (isValidCachedTile) {
+          console.log(`[CACHE HIT] ${layerId} tile loaded from cache, size: ${blob.size} bytes`);
           
           // Create object URL from cached blob
           const objectUrl = URL.createObjectURL(blob);
           tile.onload = () => {
-            console.debug(`[CACHE RENDER OK] ${layerId} tile rendered successfully`);
             URL.revokeObjectURL(objectUrl);
             done(null, tile);
           };
           tile.onerror = (err) => {
-            console.warn(`[CACHE ERROR] Failed to render cached tile for ${layerId}:`, err);
+            console.warn(`[CACHE ERROR] Failed to render ${layerId}:`, err);
             URL.revokeObjectURL(objectUrl);
             // Fallback to network only if online
             if (navigator.onLine) {
@@ -176,12 +180,16 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
           };
           tile.src = objectUrl;
         } else {
-          // No cache - only load from network if online
+          // Cache miss or invalid cache entry - load from network if online
           if (navigator.onLine) {
-            console.debug(`[CACHE MISS] ${layerId} - loading from network`);
-            console.debug(`[MISS URL] ${tileUrl.substring(0, 150)}...`);
+            if (blob) {
+              console.debug(`[CACHE INVALID] ${layerId} - size: ${blob.size}, type: ${blob.type}, reloading`);
+            } else {
+              console.debug(`[CACHE MISS] ${layerId} - loading from network`);
+            }
             loadFromNetwork();
           } else {
+            // Offline with no valid cache - return empty tile
             console.debug(`[WMS OFFLINE] ${layerId} - not cached, returning empty tile`);
             done(null, tile);
           }

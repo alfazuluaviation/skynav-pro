@@ -126,22 +126,22 @@ async function downloadTile(url: string, layerId: string, retries: number = 3): 
       const blob = await response.blob();
       const contentType = response.headers.get('content-type') || blob.type;
       
-      // Validate: must be an image with reasonable size (at least 1KB for a valid tile)
-      // Empty tiles from WMS are typically very small (< 1KB) or not images
-      const isValidImage = contentType.startsWith('image/') && blob.size > 1000;
+      // Validate: must be an image with reasonable size (at least 2KB for a valid 512x512 tile)
+      // Empty/error tiles from WMS are typically very small (< 2KB) or not images
+      const isValidImage = contentType.startsWith('image/') && blob.size > 2000;
       
       if (isValidImage) {
         await cacheTile(url, blob, layerId);
         return true;
       } else {
-        // Log but don't cache invalid responses
-        if (blob.size < 1000) {
-          console.debug(`[ChartDownloader] Skipping empty/small tile (${blob.size} bytes)`);
+        // Don't cache small/invalid responses - they might be errors
+        // Just skip without caching - the tile will load from network next time
+        if (blob.size < 2000) {
+          console.debug(`[ChartDownloader] Skipping small tile (${blob.size} bytes) - likely empty area`);
         } else {
           console.warn(`[ChartDownloader] Invalid content-type: ${contentType}`);
         }
-        return true; // Count as processed but don't cache (empty tile is valid WMS response)
-      }
+        return true; // Count as processed but don't cache
     } catch (error) {
       if (attempt < retries) {
         // Exponential backoff
