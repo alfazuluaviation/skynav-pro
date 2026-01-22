@@ -42,37 +42,29 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
 
   // Override getTileUrl to use proxy with correct EPSG:4326 coordinates
   // MUST match the URL format used in chartDownloader.ts for cache to work
+  // Uses standard 256px tile size for simplicity and cache consistency
   getTileUrl: function (coords: L.Coords) {
-    // Convert tile coordinates to bounding box using same logic as chartDownloader.
-    // IMPORTANT: Leaflet tile coords depend on tileSize. When tileSize=512,
-    // the tile grid is HALF the size compared to 256px tiles.
     const zoom = coords.z;
     const x = coords.x;
     const y = coords.y;
     
-    // Use tileSize from options (512px for better quality on aeronautical charts)
-    const tileSize = this.options.tileSize || 512;
-
-    // Grid size must match Leaflet's internal grid for the configured tileSize.
-    // baseTileSize=256 is Leaflet's default.
-    const baseTileSize = 256;
-    const n = Math.max(1, Math.round(Math.pow(2, zoom) * (baseTileSize / tileSize)));
-
-    // Normalize X for world wrap (Leaflet can request x outside 0..n-1)
-    const xNorm = ((x % n) + n) % n;
-    const yClamped = Math.max(0, Math.min(y, n - 1));
-
-    const minLng = (xNorm / n) * 360 - 180;
-    const maxLng = ((xNorm + 1) / n) * 360 - 180;
+    // Standard tile calculation (256px tiles)
+    const n = Math.pow(2, zoom);
     
-    const minLatRad = Math.atan(Math.sinh(Math.PI * (1 - (2 * (yClamped + 1)) / n)));
-    const maxLatRad = Math.atan(Math.sinh(Math.PI * (1 - (2 * yClamped) / n)));
+    const minLng = x / n * 360 - 180;
+    const maxLng = (x + 1) / n * 360 - 180;
+    
+    const minLatRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 1) / n)));
+    const maxLatRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n)));
     
     const minLat = minLatRad * 180 / Math.PI;
     const maxLat = maxLatRad * 180 / Math.PI;
     
     // WMS 1.1.1 bbox format: minx,miny,maxx,maxy (lon,lat,lon,lat for EPSG:4326)
     const bboxStr = `${minLng},${minLat},${maxLng},${maxLat}`;
+    
+    // Fixed 256px tile size for consistency with cache
+    const tileSize = 256;
     
     const params = new URLSearchParams({
       service: 'WMS',

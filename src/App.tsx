@@ -945,7 +945,6 @@ const App: React.FC = () => {
                 version="1.1.1"
                 opacity={0.85}
                 zIndex={100}
-                tileSize={512}
                 maxZoom={18}
                 layerId="HIGH"
                 useCache={downloadedLayers.includes('HIGH')}
@@ -962,7 +961,6 @@ const App: React.FC = () => {
                 version="1.1.1"
                 opacity={0.85}
                 zIndex={100}
-                tileSize={512}
                 maxZoom={18}
                 layerId="LOW"
                 useCache={downloadedLayers.includes('LOW')}
@@ -979,7 +977,6 @@ const App: React.FC = () => {
                 version="1.1.1"
                 opacity={0.85}
                 zIndex={114}
-                tileSize={512}
                 maxZoom={18}
                 layerId="WAC"
                 useCache={downloadedLayers.includes('WAC')}
@@ -996,7 +993,6 @@ const App: React.FC = () => {
                 version="1.1.1"
                 opacity={0.9}
                 zIndex={116}
-                tileSize={512}
                 maxZoom={18}
                 layerId="REA"
                 useCache={downloadedLayers.includes('REA')}
@@ -1013,7 +1009,6 @@ const App: React.FC = () => {
                 version="1.1.1"
                 opacity={0.9}
                 zIndex={119}
-                tileSize={512}
                 maxZoom={18}
                 layerId="REUL"
                 useCache={downloadedLayers.includes('REUL')}
@@ -1030,10 +1025,25 @@ const App: React.FC = () => {
                 version="1.1.1"
                 opacity={0.9}
                 zIndex={120}
-                tileSize={512}
                 maxZoom={18}
                 layerId="REH"
                 useCache={downloadedLayers.includes('REH')}
+                useProxy={true}
+              />
+            )}
+
+            {activeLayers.includes('ARC') && (
+              <CachedWMSTileLayer
+                url={CHART_LAYERS.ARC.url}
+                layers={CHART_LAYERS.ARC.layers}
+                format="image/png"
+                transparent={true}
+                version="1.1.1"
+                opacity={0.9}
+                zIndex={115}
+                maxZoom={18}
+                layerId="ARC"
+                useCache={downloadedLayers.includes('ARC')}
                 useProxy={true}
               />
             )}
