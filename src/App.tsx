@@ -831,30 +831,37 @@ const App: React.FC = () => {
 
             {/* Base Map Layer with offline caching support */}
             {/* Uses CachedBaseTileLayer for OSM/DARK, regular for terrain/satellite (complex to cache) */}
-            {activeBaseMap === 'satellite' ? (
+            {activeBaseMap === 'satellite' && (
               <TileLayer
+                key="satellite-layer"
                 url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                 maxZoom={19}
                 attribution='Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
               />
-            ) : activeBaseMap === 'terrain' ? (
+            )}
+            {activeBaseMap === 'terrain' && (
               <TileLayer
+                key="terrain-layer"
                 url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
                 maxZoom={17}
                 attribution='Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)'
               />
-            ) : isNightMode ? (
+            )}
+            {activeBaseMap === 'roadmap' && isNightMode && (
               // Roadmap Dark (Night Mode ON) with caching
               <CachedBaseTileLayer
+                key="dark-layer"
                 url="https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
                 layerId="BASEMAP_DARK"
                 useCache={downloadedLayers.includes('BASEMAP_DARK')}
                 maxZoom={19}
                 attribution='© OpenStreetMap contributors, © CARTO'
               />
-            ) : (
+            )}
+            {activeBaseMap === 'roadmap' && !isNightMode && (
               // Roadmap Light (Night Mode OFF) with caching
               <CachedBaseTileLayer
+                key="osm-layer"
                 url="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 layerId="BASEMAP_OSM"
                 useCache={downloadedLayers.includes('BASEMAP_OSM')}
