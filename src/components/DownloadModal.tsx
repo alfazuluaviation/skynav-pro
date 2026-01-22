@@ -238,6 +238,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     { id: 'REUL', label: 'REUL' },
     { id: 'REH', label: 'REH' },
     { id: 'WAC', label: 'WAC' },
+    { id: 'ARC', label: 'ARC' },
   ];
 
   // Base map options for offline
@@ -378,11 +379,11 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
               </svg>
               Cartas Aeronáuticas
             </h3>
-            <div className="grid grid-cols-3 gap-3">
-              {chartOptions.slice(0, 3).map(renderChartButton)}
+            <div className="grid grid-cols-4 gap-3">
+              {chartOptions.slice(0, 4).map(renderChartButton)}
             </div>
             <div className="grid grid-cols-3 gap-3">
-              {chartOptions.slice(3, 6).map(renderChartButton)}
+              {chartOptions.slice(4, 7).map(renderChartButton)}
             </div>
           </div>
 
