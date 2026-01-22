@@ -430,13 +430,11 @@ const App: React.FC = () => {
           return combined;
         });
         
-        // Also clean up activeLayers - remove any that aren't downloaded
-        setActiveLayers(prev => {
-          const validated = prev.filter(id => cachedIds.includes(id));
-          console.log('[CACHE SYNC] Validated activeLayers:', validated);
-          localStorage.setItem('sky_nav_active_layers', JSON.stringify(validated));
-          return validated;
-        });
+        // NOTE: Do NOT remove activeLayers based on cache status!
+        // Charts can load online without being downloaded for offline use.
+        // Just log current active layers for debugging
+        const savedActiveLayers = JSON.parse(localStorage.getItem('sky_nav_active_layers') || '[]');
+        console.log('[CACHE SYNC] Active layers (preserved):', savedActiveLayers);
       } catch (error) {
         console.error('[CACHE SYNC] Failed to sync cached layers:', error);
         // In case of IndexedDB error (e.g., in iframe), clear both states
@@ -832,25 +830,38 @@ const App: React.FC = () => {
             />
 
             {/* Base Map Layer with offline caching support */}
-            {/* Uses CachedBaseTileLayer for OSM/DARK, regular for terrain (complex to cache) */}
-            {activeBaseMap === 'terrain' ? (
+            {/* Uses CachedBaseTileLayer for OSM/DARK, regular for terrain/satellite (complex to cache) */}
+            {activeBaseMap === 'satellite' && (
               <TileLayer
+                key="satellite-layer"
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                maxZoom={19}
+                attribution='Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+              />
+            )}
+            {activeBaseMap === 'terrain' && (
+              <TileLayer
+                key="terrain-layer"
                 url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
                 maxZoom={17}
                 attribution='Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)'
               />
-            ) : isNightMode ? (
+            )}
+            {activeBaseMap === 'roadmap' && isNightMode && (
               // Roadmap Dark (Night Mode ON) with caching
               <CachedBaseTileLayer
+                key="dark-layer"
                 url="https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
                 layerId="BASEMAP_DARK"
                 useCache={downloadedLayers.includes('BASEMAP_DARK')}
                 maxZoom={19}
                 attribution='© OpenStreetMap contributors, © CARTO'
               />
-            ) : (
+            )}
+            {activeBaseMap === 'roadmap' && !isNightMode && (
               // Roadmap Light (Night Mode OFF) with caching
               <CachedBaseTileLayer
+                key="osm-layer"
                 url="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 layerId="BASEMAP_OSM"
                 useCache={downloadedLayers.includes('BASEMAP_OSM')}
@@ -947,7 +958,6 @@ const App: React.FC = () => {
                 version="1.1.1"
                 opacity={0.85}
                 zIndex={100}
-                tileSize={512}
                 maxZoom={18}
                 layerId="HIGH"
                 useCache={downloadedLayers.includes('HIGH')}
@@ -964,7 +974,6 @@ const App: React.FC = () => {
                 version="1.1.1"
                 opacity={0.85}
                 zIndex={100}
-                tileSize={512}
                 maxZoom={18}
                 layerId="LOW"
                 useCache={downloadedLayers.includes('LOW')}
@@ -981,7 +990,6 @@ const App: React.FC = () => {
                 version="1.1.1"
                 opacity={0.85}
                 zIndex={114}
-                tileSize={512}
                 maxZoom={18}
                 layerId="WAC"
                 useCache={downloadedLayers.includes('WAC')}
@@ -998,7 +1006,6 @@ const App: React.FC = () => {
                 version="1.1.1"
                 opacity={0.9}
                 zIndex={116}
-                tileSize={512}
                 maxZoom={18}
                 layerId="REA"
                 useCache={downloadedLayers.includes('REA')}
@@ -1015,7 +1022,6 @@ const App: React.FC = () => {
                 version="1.1.1"
                 opacity={0.9}
                 zIndex={119}
-                tileSize={512}
                 maxZoom={18}
                 layerId="REUL"
                 useCache={downloadedLayers.includes('REUL')}
@@ -1032,10 +1038,25 @@ const App: React.FC = () => {
                 version="1.1.1"
                 opacity={0.9}
                 zIndex={120}
-                tileSize={512}
                 maxZoom={18}
                 layerId="REH"
                 useCache={downloadedLayers.includes('REH')}
+                useProxy={true}
+              />
+            )}
+
+            {activeLayers.includes('ARC') && (
+              <CachedWMSTileLayer
+                url={CHART_LAYERS.ARC.url}
+                layers={CHART_LAYERS.ARC.layers}
+                format="image/png"
+                transparent={true}
+                version="1.1.1"
+                opacity={0.9}
+                zIndex={115}
+                maxZoom={18}
+                layerId="ARC"
+                useCache={downloadedLayers.includes('ARC')}
                 useProxy={true}
               />
             )}

@@ -42,13 +42,15 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
 
   // Override getTileUrl to use proxy with correct EPSG:4326 coordinates
   // MUST match the URL format used in chartDownloader.ts for cache to work
+  // Uses standard 256px tile size for simplicity and cache consistency
   getTileUrl: function (coords: L.Coords) {
-    // Convert tile coordinates to bounding box using same logic as chartDownloader
     const zoom = coords.z;
     const x = coords.x;
     const y = coords.y;
     
+    // Standard tile calculation (256px tiles)
     const n = Math.pow(2, zoom);
+    
     const minLng = x / n * 360 - 180;
     const maxLng = (x + 1) / n * 360 - 180;
     
@@ -61,7 +63,8 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
     // WMS 1.1.1 bbox format: minx,miny,maxx,maxy (lon,lat,lon,lat for EPSG:4326)
     const bboxStr = `${minLng},${minLat},${maxLng},${maxLat}`;
     
-    const tileSize = this.options.tileSize || 512;
+    // Fixed 256px tile size for consistency with cache
+    const tileSize = 256;
     
     const params = new URLSearchParams({
       service: 'WMS',
@@ -114,14 +117,28 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
         credentials: 'omit',
         signal: controller.signal 
       })
-        .then(res => {
+        .then(async res => {
           clearTimeout(timeoutId);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          return res.blob();
+          
+          const contentType = res.headers.get('Content-Type') || '';
+          
+          // If server returned XML (error), handle gracefully
+          if (contentType.includes('xml') || contentType.includes('text/')) {
+            const text = await res.text();
+            if (text.includes('ServiceException')) {
+              console.warn(`[WMS ERROR] ${layerId} - GeoServer error`);
+            }
+            throw new Error('Server returned XML error');
+          }
+          
+          const blob = await res.blob();
+          console.debug(`[WMS LOAD] ${layerId} - received ${blob.size} bytes, type: ${blob.type || contentType}`);
+          return blob;
         })
         .then(blob => {
-          // Cache the blob
-          if (useCache) {
+          // Cache valid image blobs (any size is fine for transparent tiles)
+          if (useCache && blob.type.startsWith('image/')) {
             cacheTile(tileUrl, blob, layerId);
           }
           // Create object URL and load into tile
@@ -151,29 +168,20 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
     if (useCache) {
       // Try to load from cache first
       getCachedTile(tileUrl).then(blob => {
-        if (blob && blob.size > 0) {
-          console.log(`[CACHE HIT] ${layerId} tile loaded from cache, size: ${blob.size} bytes, type: ${blob.type}`);
-          
-          // Validate blob type is an image
-          if (!blob.type.startsWith('image/')) {
-            console.warn(`[CACHE INVALID] ${layerId} - cached blob is not an image: ${blob.type}`);
-            if (navigator.onLine) {
-              loadFromNetwork();
-            } else {
-              done(null, tile);
-            }
-            return;
-          }
+        // Validate blob: must be an image type (any size is valid - transparent tiles can be small)
+        const isValidCachedTile = blob && blob.type.startsWith('image/');
+        
+        if (isValidCachedTile) {
+          console.debug(`[CACHE HIT] ${layerId} tile loaded from cache, size: ${blob.size} bytes`);
           
           // Create object URL from cached blob
           const objectUrl = URL.createObjectURL(blob);
           tile.onload = () => {
-            console.debug(`[CACHE RENDER OK] ${layerId} tile rendered successfully`);
             URL.revokeObjectURL(objectUrl);
             done(null, tile);
           };
           tile.onerror = (err) => {
-            console.warn(`[CACHE ERROR] Failed to render cached tile for ${layerId}:`, err);
+            console.warn(`[CACHE ERROR] Failed to render ${layerId}:`, err);
             URL.revokeObjectURL(objectUrl);
             // Fallback to network only if online
             if (navigator.onLine) {
@@ -184,12 +192,16 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
           };
           tile.src = objectUrl;
         } else {
-          // No cache - only load from network if online
+          // Cache miss or invalid cache entry - load from network if online
           if (navigator.onLine) {
-            console.debug(`[CACHE MISS] ${layerId} - loading from network`);
-            console.debug(`[MISS URL] ${tileUrl.substring(0, 150)}...`);
+            if (blob) {
+              console.debug(`[CACHE INVALID] ${layerId} - type: ${blob.type}, reloading`);
+            } else {
+              console.debug(`[CACHE MISS] ${layerId} - loading from network`);
+            }
             loadFromNetwork();
           } else {
+            // Offline with no valid cache - return empty tile
             console.debug(`[WMS OFFLINE] ${layerId} - not cached, returning empty tile`);
             done(null, tile);
           }
@@ -225,7 +237,7 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
   version = '1.1.1',
   opacity = 1,
   zIndex = 100,
-  tileSize = 512,
+  tileSize = 256,
   detectRetina = false,
   maxZoom = 18,
   layerId,
