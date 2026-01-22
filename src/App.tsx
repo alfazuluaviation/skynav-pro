@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { MapContainer, Polyline, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Waypoint, FlightStats, ChartConfig, AiracCycle, FlightSegment, SavedPlan, NavPoint } from '../types';
@@ -183,7 +183,7 @@ function MapUIControls({ showPlanPanel }: { showPlanPanel: boolean }) {
   return null;
 }
 
-const App: React.FC = () => {
+const App = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [showPlanPanel, setShowPlanPanel] = useState(false);
