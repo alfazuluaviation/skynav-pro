@@ -287,11 +287,11 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
             <div className="w-full mt-1 relative z-10">
               <div className="h-1 w-full bg-slate-700 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-sky-500 transition-all duration-300"
+                  className="h-full bg-emerald-500 transition-all duration-300"
                   style={{ width: `${progress}%` }}
                 ></div>
               </div>
-              <div className="text-[10px] text-sky-400 mt-1 font-bold">{progress}%</div>
+              <div className="text-[10px] text-emerald-400 mt-1 font-bold">{progress}%</div>
             </div>
           ) : isActive && !isBaseMap ? (
             <div className="flex items-center gap-1 text-xs text-purple-300 relative z-10">
