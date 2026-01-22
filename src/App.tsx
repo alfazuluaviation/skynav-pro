@@ -830,8 +830,14 @@ const App: React.FC = () => {
             />
 
             {/* Base Map Layer with offline caching support */}
-            {/* Uses CachedBaseTileLayer for OSM/DARK, regular for terrain (complex to cache) */}
-            {activeBaseMap === 'terrain' ? (
+            {/* Uses CachedBaseTileLayer for OSM/DARK, regular for terrain/satellite (complex to cache) */}
+            {activeBaseMap === 'satellite' ? (
+              <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                maxZoom={19}
+                attribution='Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+              />
+            ) : activeBaseMap === 'terrain' ? (
               <TileLayer
                 url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
                 maxZoom={17}
