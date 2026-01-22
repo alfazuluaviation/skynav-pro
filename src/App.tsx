@@ -8,8 +8,9 @@ import { syncAeronauticalData, searchAerodrome } from './services/geminiService'
 import { Sidebar } from './components/Sidebar';
 import { FlightPlanPanel } from './components/FlightPlanPanel';
 import { MapControls } from './components/MapControls';
-import { Auth } from './components/Auth';
+import { AuthModal } from './components/AuthModal';
 import { supabase } from './services/supabaseClient';
+import { useAuthGuard } from './hooks/useAuthGuard';
 import { Session } from '@supabase/supabase-js';
 import { getAiracCycleInfo } from './services/airacService';
 import { ENRC_SEGMENTS } from '../config/chartConfig';
@@ -710,15 +711,27 @@ const App: React.FC = () => {
     localStorage.setItem(KEY_SAVED_PLANS, JSON.stringify(nextList));
   };
 
-  // Handlers for the new menu
+  // Auth guard hook for protected resources
+  const { 
+    showAuthModal, 
+    setShowAuthModal, 
+    requireAuth, 
+    executePendingAction 
+  } = useAuthGuard(session);
+
+  // Handlers for the new menu (protected resources)
   const handleOpenCharts = (icao: string | null = null) => {
-    setChartsModalIcao(icao);
-    setShowChartsModal(true);
+    requireAuth(() => {
+      setChartsModalIcao(icao);
+      setShowChartsModal(true);
+    });
   };
 
   const handleOpenAerodromes = () => {
-    console.log("Opening aerodromes menu");
-    setShowAerodromeModal(true);
+    requireAuth(() => {
+      console.log("Opening aerodromes menu");
+      setShowAerodromeModal(true);
+    });
   };
 
   const handleOpenDownload = () => {
@@ -727,11 +740,24 @@ const App: React.FC = () => {
   };
 
   const handleOpenAircraft = () => {
-    console.log("Opening aircraft menu");
-    setShowAircraftModal(true);
+    requireAuth(() => {
+      console.log("Opening aircraft menu");
+      setShowAircraftModal(true);
+    });
   };
 
-  if (loadingSession) { // Render a loading spinner or null while session is being checked
+  // Protected toggle for flight plan panel
+  const handleTogglePlanPanel = () => {
+    if (showPlanPanel) {
+      // Always allow closing
+      setShowPlanPanel(false);
+    } else {
+      // Require auth to open
+      requireAuth(() => setShowPlanPanel(true));
+    }
+  };
+
+  if (loadingSession) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0d1117]">
         <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
@@ -739,12 +765,17 @@ const App: React.FC = () => {
     );
   }
 
-  if (!session) {
-    return <Auth />;
-  }
+  // No longer blocking - app loads without session, auth modal shows when needed
 
   return (
     <div className="flex h-screen w-screen bg-[#0d1117] text-slate-100 overflow-hidden font-sans select-none">
+      {/* AUTH MODAL (shows when protected resource accessed without login) */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={executePendingAction}
+      />
+
       {/* TOP LEFT MENU */}
       <TopLeftMenu
         onOpenCharts={handleOpenCharts}
@@ -755,10 +786,10 @@ const App: React.FC = () => {
 
       {/* SIDEBAR */}
       <Sidebar
-        userName={session.user.user_metadata?.full_name}
-        userEmail={session.user.email}
+        userName={session?.user?.user_metadata?.full_name}
+        userEmail={session?.user?.email}
         showPlanPanel={showPlanPanel}
-        onTogglePlanPanel={() => setShowPlanPanel(!showPlanPanel)}
+        onTogglePlanPanel={handleTogglePlanPanel}
         isNightMode={isNightMode}
         onToggleNightMode={() => {
           const newValue = !isNightMode;
@@ -774,6 +805,8 @@ const App: React.FC = () => {
         activeBaseMap={activeBaseMap}
         onBaseMapChange={setActiveBaseMap}
         onMenuStateChange={setIsSidebarMenuOpen}
+        isLoggedIn={!!session}
+        onLogin={() => setShowAuthModal(true)}
       />
 
       {/* MAIN CONTENT AREA */}

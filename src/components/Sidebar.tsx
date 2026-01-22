@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import {
     IconMenu, IconPlane, IconMap, IconRoute,
-    IconStar, IconFile, IconStore, IconSettings, IconMinus, IconLayers
+    IconStar, IconFile, IconStore, IconSettings, IconMinus, IconLayers, IconUser
 } from './Icons';
 import { IconButton } from './IconButton';
 import { SettingsPopover } from './SettingsPopover';
@@ -28,6 +28,8 @@ interface SidebarProps {
     activeBaseMap: BaseMapType;
     onBaseMapChange: (baseMap: BaseMapType) => void;
     onMenuStateChange?: (isMenuOpen: boolean) => void;
+    isLoggedIn?: boolean;
+    onLogin?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -46,6 +48,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     activeBaseMap,
     onBaseMapChange,
     onMenuStateChange,
+    isLoggedIn = false,
+    onLogin,
 }) => {
     const [showSettings, setShowSettings] = useState(false);
     const [showLayersMenu, setShowLayersMenu] = useState(false);
@@ -97,11 +101,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         )}
                     </div>
 
-                    <IconButton
-                        icon={<IconMinus />}
-                        onClick={onSignOut}
-                        title="Sair"
-                    />
+                    {isLoggedIn ? (
+                        <IconButton
+                            icon={<IconMinus />}
+                            onClick={onSignOut}
+                            title="Sair"
+                        />
+                    ) : (
+                        <IconButton
+                            icon={<IconUser />}
+                            onClick={onLogin}
+                            title="Entrar"
+                            activeColor="teal"
+                        />
+                    )}
 
                     {showSettings && (
                         <SettingsPopover
@@ -170,11 +183,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         )}
                     </div>
 
-                    <IconButton
-                        icon={<IconMinus />}
-                        onClick={onSignOut}
-                        title="Sair"
-                    />
+                    {isLoggedIn ? (
+                        <IconButton
+                            icon={<IconMinus />}
+                            onClick={onSignOut}
+                            title="Sair"
+                        />
+                    ) : (
+                        <IconButton
+                            icon={<IconUser />}
+                            onClick={onLogin}
+                            title="Entrar"
+                            activeColor="teal"
+                        />
+                    )}
                 </div>
             </nav>
 
