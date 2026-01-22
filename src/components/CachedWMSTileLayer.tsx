@@ -237,7 +237,7 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
   version = '1.1.1',
   opacity = 1,
   zIndex = 100,
-  tileSize = 512,
+  tileSize = 256,
   detectRetina = false,
   maxZoom = 18,
   layerId,
