@@ -1,9 +1,9 @@
 
 import React from 'react';
-import { IconMap, IconPlane, IconMountain } from './Icons';
+import { IconMap, IconPlane, IconMountain, IconSatellite } from './Icons';
 
-// Simplified to just 'roadmap' and 'terrain' - roadmap respects isNightMode for light/dark
-export type BaseMapType = 'roadmap' | 'terrain';
+// Base map types: roadmap respects isNightMode for light/dark, terrain shows elevation, satellite shows imagery
+export type BaseMapType = 'roadmap' | 'terrain' | 'satellite';
 
 interface LayersMenuProps {
     onClose: () => void;
@@ -41,11 +41,12 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
         { id: 'LOW', name: 'ENRC LOW' }
     ];
     
-    // Simplified to just 2 options - roadmap respects night mode toggle in settings
+    // 3 base map options - roadmap respects night mode toggle in settings
     // Terrain has max zoom limitation (levels 15-17 depending on region)
-    const mapTypes: { id: BaseMapType; name: string; icon: 'plane' | 'mountain'; description: string }[] = [
+    const mapTypes: { id: BaseMapType; name: string; icon: 'plane' | 'mountain' | 'satellite'; description: string }[] = [
         { id: 'roadmap', name: 'Rodoviário', icon: 'plane', description: 'Navegação urbana' },
-        { id: 'terrain', name: 'Terreno', icon: 'mountain', description: 'Relevo e elevação' }
+        { id: 'terrain', name: 'Terreno', icon: 'mountain', description: 'Relevo e elevação' },
+        { id: 'satellite', name: 'Satélite', icon: 'satellite', description: 'Imagem de satélite' }
     ];
 
     // Mobile content - without wrapper
@@ -69,17 +70,13 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                     <div className="grid grid-cols-4 gap-2">
                         {chartTypesGroup1.map((chart) => {
                             const isActive = activeLayers.includes(chart.id);
-                            const isEnrc = chart.id === 'HIGH' || chart.id === 'LOW' || chart.id === 'REA';
-                            const isDownloaded = !isEnrc || downloadedLayers.includes(chart.id);
+                            const isDownloaded = downloadedLayers.includes(chart.id);
 
                             return (
                                 <button
                                     key={chart.id}
-                                    onClick={() => {
-                                        if (isDownloaded) onToggleLayer(chart.id);
-                                    }}
-                                    disabled={!isDownloaded}
-                                    className={`flex flex-col items-center gap-1 transition-opacity ${!isDownloaded ? 'opacity-30' : 'opacity-100'}`}
+                                    onClick={() => onToggleLayer(chart.id)}
+                                    className="flex flex-col items-center gap-1 transition-opacity opacity-100"
                                 >
                                     <div
                                         className={`w-12 h-12 rounded-xl border-2 transition-all flex items-center justify-center relative ${isActive ? 'border-purple-400 shadow-lg' : 'border-slate-800'
@@ -90,7 +87,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                     >
                                         <IconMap className={isActive ? 'text-white' : 'text-slate-400'} />
                                         {isActive && (
-                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-purple-500 rounded-full border-2 border-slate-900"></div>
+                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-slate-900"></div>
                                         )}
                                     </div>
                                     <span className={`text-[8px] font-black uppercase text-center leading-tight ${isActive ? 'text-white' : 'text-slate-400'
@@ -108,17 +105,13 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                     <div className="grid grid-cols-3 gap-2">
                         {chartTypesGroup2.map((chart) => {
                             const isActive = activeLayers.includes(chart.id);
-                            const isEnrc = chart.id === 'HIGH' || chart.id === 'LOW' || chart.id === 'REA';
-                            const isDownloaded = !isEnrc || downloadedLayers.includes(chart.id);
+                            const isDownloaded = downloadedLayers.includes(chart.id);
 
                             return (
                                 <button
                                     key={chart.id}
-                                    onClick={() => {
-                                        if (isDownloaded) onToggleLayer(chart.id);
-                                    }}
-                                    disabled={!isDownloaded}
-                                    className={`flex flex-col items-center gap-1 transition-opacity ${!isDownloaded ? 'opacity-30' : 'opacity-100'}`}
+                                    onClick={() => onToggleLayer(chart.id)}
+                                    className="flex flex-col items-center gap-1 transition-opacity opacity-100"
                                 >
                                     <div
                                         className={`w-12 h-12 rounded-xl border-2 transition-all flex items-center justify-center relative ${isActive ? 'border-purple-400 shadow-lg' : 'border-slate-800'
@@ -129,7 +122,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                     >
                                         <IconMap className={isActive ? 'text-white' : 'text-slate-400'} />
                                         {isActive && (
-                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-purple-500 rounded-full border-2 border-slate-900"></div>
+                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-slate-900"></div>
                                         )}
                                     </div>
                                     <span className={`text-[8px] font-black uppercase text-center leading-tight ${isActive ? 'text-white' : 'text-slate-400'
@@ -143,7 +136,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
 
                     <div className="h-px bg-slate-800 w-full opacity-30"></div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
                         {mapTypes.map((mapType) => {
                             const isActive = activeBaseMap === mapType.id;
                             return (
@@ -162,11 +155,13 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                     }}>
                                         {mapType.icon === 'mountain' ? (
                                             <IconMountain className={isActive ? "text-white w-6 h-6" : "text-slate-400 w-6 h-6"} />
+                                        ) : mapType.icon === 'satellite' ? (
+                                            <IconSatellite className={isActive ? "text-white w-6 h-6" : "text-slate-400 w-6 h-6"} />
                                         ) : (
                                             <IconPlane className={isActive ? "text-white w-6 h-6" : "text-slate-400 w-6 h-6"} />
                                         )}
                                         {isActive && (
-                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-purple-500 rounded-full border-2 border-slate-900"></div>
+                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-slate-900"></div>
                                         )}
                                     </div>
                                     <span className={`text-[9px] font-black uppercase text-center leading-tight ${
@@ -203,15 +198,13 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                 <div className="grid grid-cols-4 gap-3">
                     {chartTypesGroup1.map((chart) => {
                         const isActive = activeLayers.includes(chart.id);
-                        const isEnrc = chart.id === 'HIGH' || chart.id === 'LOW' || chart.id === 'REA';
-                        const isDownloaded = !isEnrc || downloadedLayers.includes(chart.id);
+                        const isDownloaded = downloadedLayers.includes(chart.id);
 
                         return (
                             <button
                                 key={chart.id}
-                                onClick={() => isDownloaded && onToggleLayer(chart.id)}
-                                disabled={!isDownloaded}
-                                className={`flex flex-col items-center gap-1.5 group transition-opacity ${!isDownloaded ? 'opacity-30 cursor-not-allowed' : 'opacity-100'}`}
+                                onClick={() => onToggleLayer(chart.id)}
+                                className="flex flex-col items-center gap-1.5 group transition-opacity opacity-100"
                             >
                                 <div
                                     className={`w-14 h-14 rounded-2xl border-2 transition-all flex items-center justify-center relative ${isActive ? 'border-purple-400 shadow-lg' : 'border-slate-800'
@@ -222,7 +215,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                 >
                                     <IconMap className={isActive ? 'text-white' : 'text-slate-400'} />
                                     {isActive && (
-                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full border-2 border-[#0d1117]"></div>
+                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0d1117]"></div>
                                     )}
                                 </div>
                                 <span className={`text-[9px] font-black uppercase text-center leading-tight transition-colors ${isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'
@@ -240,15 +233,13 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                 <div className="grid grid-cols-3 gap-3">
                     {chartTypesGroup2.map((chart) => {
                         const isActive = activeLayers.includes(chart.id);
-                        const isEnrc = chart.id === 'HIGH' || chart.id === 'LOW' || chart.id === 'REA';
-                        const isDownloaded = !isEnrc || downloadedLayers.includes(chart.id);
+                        const isDownloaded = downloadedLayers.includes(chart.id);
 
                         return (
                             <button
                                 key={chart.id}
-                                onClick={() => isDownloaded && onToggleLayer(chart.id)}
-                                disabled={!isDownloaded}
-                                className={`flex flex-col items-center gap-1.5 group transition-opacity ${!isDownloaded ? 'opacity-30 cursor-not-allowed' : 'opacity-100'}`}
+                                onClick={() => onToggleLayer(chart.id)}
+                                className="flex flex-col items-center gap-1.5 group transition-opacity opacity-100"
                             >
                                 <div
                                     className={`w-14 h-14 rounded-2xl border-2 transition-all flex items-center justify-center relative ${isActive ? 'border-purple-400 shadow-lg' : 'border-slate-800'
@@ -259,7 +250,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                 >
                                     <IconMap className={isActive ? 'text-white' : 'text-slate-400'} />
                                     {isActive && (
-                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full border-2 border-[#0d1117]"></div>
+                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0d1117]"></div>
                                     )}
                                 </div>
                                 <span className={`text-[9px] font-black uppercase text-center leading-tight transition-colors ${isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'
@@ -273,7 +264,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
 
                 <div className="h-px bg-slate-800 w-full opacity-30"></div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                     {mapTypes.map((mapType) => {
                         const isActive = activeBaseMap === mapType.id;
                         return (
@@ -292,11 +283,13 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                 }}>
                                     {mapType.icon === 'mountain' ? (
                                         <IconMountain className={isActive ? "text-white w-7 h-7" : "text-slate-400 group-hover:text-white w-7 h-7"} />
+                                    ) : mapType.icon === 'satellite' ? (
+                                        <IconSatellite className={isActive ? "text-white w-7 h-7" : "text-slate-400 group-hover:text-white w-7 h-7"} />
                                     ) : (
                                         <IconPlane className={isActive ? "text-white w-7 h-7" : "text-slate-400 group-hover:text-white w-7 h-7"} />
                                     )}
                                     {isActive && (
-                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full border-2 border-[#0d1117]"></div>
+                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0d1117]"></div>
                                     )}
                                 </div>
                                 <span className={`text-[10px] font-black uppercase text-center leading-tight ${

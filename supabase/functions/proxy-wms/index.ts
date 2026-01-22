@@ -98,19 +98,59 @@ serve(async (req) => {
 
     const wmsUrl = `${BASE_WMS_URL}?${wmsParams.toString()}`;
     
-    const response = await fetch(wmsUrl, {
-      headers: {
-        "Accept": "image/png, image/jpeg, image/*",
-        "User-Agent": "Mozilla/5.0 (compatible; SkyFPL/1.0)",
-      },
-    });
+    // Add timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
+    
+    let response: Response;
+    try {
+      response = await fetch(wmsUrl, {
+        headers: {
+          "Accept": "image/png, image/jpeg, image/*",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+        signal: controller.signal,
+      });
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      console.error(`[proxy-wms] Fetch error:`, fetchError);
+      // Return transparent 1x1 PNG on fetch error (connection issues)
+      const transparentPng = new Uint8Array([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
+        0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
+      ]);
+      return new Response(transparentPng, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "image/png",
+          "Cache-Control": "no-cache", // Don't cache errors
+        },
+      });
+    }
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       console.error(`[proxy-wms] GeoServer error: ${response.status}`);
-      return new Response(
-        `GeoServer returned ${response.status}`,
-        { status: response.status, headers: corsHeaders }
-      );
+      // Return transparent 1x1 PNG instead of error (prevents CORS issues)
+      const transparentPng = new Uint8Array([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
+        0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
+      ]);
+      return new Response(transparentPng, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "image/png",
+          "Cache-Control": "no-cache",
+        },
+      });
     }
 
     // Get the image data
