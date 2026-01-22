@@ -430,13 +430,11 @@ const App: React.FC = () => {
           return combined;
         });
         
-        // Also clean up activeLayers - remove any that aren't downloaded
-        setActiveLayers(prev => {
-          const validated = prev.filter(id => cachedIds.includes(id));
-          console.log('[CACHE SYNC] Validated activeLayers:', validated);
-          localStorage.setItem('sky_nav_active_layers', JSON.stringify(validated));
-          return validated;
-        });
+        // NOTE: Do NOT remove activeLayers based on cache status!
+        // Charts can load online without being downloaded for offline use.
+        // Just log current active layers for debugging
+        const savedActiveLayers = JSON.parse(localStorage.getItem('sky_nav_active_layers') || '[]');
+        console.log('[CACHE SYNC] Active layers (preserved):', savedActiveLayers);
       } catch (error) {
         console.error('[CACHE SYNC] Failed to sync cached layers:', error);
         // In case of IndexedDB error (e.g., in iframe), clear both states
