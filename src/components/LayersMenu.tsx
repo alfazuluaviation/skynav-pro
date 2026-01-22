@@ -69,17 +69,13 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                     <div className="grid grid-cols-4 gap-2">
                         {chartTypesGroup1.map((chart) => {
                             const isActive = activeLayers.includes(chart.id);
-                            const isEnrc = chart.id === 'HIGH' || chart.id === 'LOW' || chart.id === 'REA';
-                            const isDownloaded = !isEnrc || downloadedLayers.includes(chart.id);
+                            const isDownloaded = downloadedLayers.includes(chart.id);
 
                             return (
                                 <button
                                     key={chart.id}
-                                    onClick={() => {
-                                        if (isDownloaded) onToggleLayer(chart.id);
-                                    }}
-                                    disabled={!isDownloaded}
-                                    className={`flex flex-col items-center gap-1 transition-opacity ${!isDownloaded ? 'opacity-30' : 'opacity-100'}`}
+                                    onClick={() => onToggleLayer(chart.id)}
+                                    className="flex flex-col items-center gap-1 transition-opacity opacity-100"
                                 >
                                     <div
                                         className={`w-12 h-12 rounded-xl border-2 transition-all flex items-center justify-center relative ${isActive ? 'border-purple-400 shadow-lg' : 'border-slate-800'
@@ -108,17 +104,13 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                     <div className="grid grid-cols-3 gap-2">
                         {chartTypesGroup2.map((chart) => {
                             const isActive = activeLayers.includes(chart.id);
-                            const isEnrc = chart.id === 'HIGH' || chart.id === 'LOW' || chart.id === 'REA';
-                            const isDownloaded = !isEnrc || downloadedLayers.includes(chart.id);
+                            const isDownloaded = downloadedLayers.includes(chart.id);
 
                             return (
                                 <button
                                     key={chart.id}
-                                    onClick={() => {
-                                        if (isDownloaded) onToggleLayer(chart.id);
-                                    }}
-                                    disabled={!isDownloaded}
-                                    className={`flex flex-col items-center gap-1 transition-opacity ${!isDownloaded ? 'opacity-30' : 'opacity-100'}`}
+                                    onClick={() => onToggleLayer(chart.id)}
+                                    className="flex flex-col items-center gap-1 transition-opacity opacity-100"
                                 >
                                     <div
                                         className={`w-12 h-12 rounded-xl border-2 transition-all flex items-center justify-center relative ${isActive ? 'border-purple-400 shadow-lg' : 'border-slate-800'
@@ -203,15 +195,13 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                 <div className="grid grid-cols-4 gap-3">
                     {chartTypesGroup1.map((chart) => {
                         const isActive = activeLayers.includes(chart.id);
-                        const isEnrc = chart.id === 'HIGH' || chart.id === 'LOW' || chart.id === 'REA';
-                        const isDownloaded = !isEnrc || downloadedLayers.includes(chart.id);
+                        const isDownloaded = downloadedLayers.includes(chart.id);
 
                         return (
                             <button
                                 key={chart.id}
-                                onClick={() => isDownloaded && onToggleLayer(chart.id)}
-                                disabled={!isDownloaded}
-                                className={`flex flex-col items-center gap-1.5 group transition-opacity ${!isDownloaded ? 'opacity-30 cursor-not-allowed' : 'opacity-100'}`}
+                                onClick={() => onToggleLayer(chart.id)}
+                                className="flex flex-col items-center gap-1.5 group transition-opacity opacity-100"
                             >
                                 <div
                                     className={`w-14 h-14 rounded-2xl border-2 transition-all flex items-center justify-center relative ${isActive ? 'border-purple-400 shadow-lg' : 'border-slate-800'
@@ -240,15 +230,13 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                 <div className="grid grid-cols-3 gap-3">
                     {chartTypesGroup2.map((chart) => {
                         const isActive = activeLayers.includes(chart.id);
-                        const isEnrc = chart.id === 'HIGH' || chart.id === 'LOW' || chart.id === 'REA';
-                        const isDownloaded = !isEnrc || downloadedLayers.includes(chart.id);
+                        const isDownloaded = downloadedLayers.includes(chart.id);
 
                         return (
                             <button
                                 key={chart.id}
-                                onClick={() => isDownloaded && onToggleLayer(chart.id)}
-                                disabled={!isDownloaded}
-                                className={`flex flex-col items-center gap-1.5 group transition-opacity ${!isDownloaded ? 'opacity-30 cursor-not-allowed' : 'opacity-100'}`}
+                                onClick={() => onToggleLayer(chart.id)}
+                                className="flex flex-col items-center gap-1.5 group transition-opacity opacity-100"
                             >
                                 <div
                                     className={`w-14 h-14 rounded-2xl border-2 transition-all flex items-center justify-center relative ${isActive ? 'border-purple-400 shadow-lg' : 'border-slate-800'
