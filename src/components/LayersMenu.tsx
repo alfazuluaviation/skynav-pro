@@ -1,9 +1,9 @@
 
 import React from 'react';
-import { IconMap, IconPlane, IconMountain } from './Icons';
+import { IconMap, IconPlane, IconMountain, IconSatellite } from './Icons';
 
-// Simplified to just 'roadmap' and 'terrain' - roadmap respects isNightMode for light/dark
-export type BaseMapType = 'roadmap' | 'terrain';
+// Base map types: roadmap respects isNightMode for light/dark, terrain shows elevation, satellite shows imagery
+export type BaseMapType = 'roadmap' | 'terrain' | 'satellite';
 
 interface LayersMenuProps {
     onClose: () => void;
@@ -41,11 +41,12 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
         { id: 'LOW', name: 'ENRC LOW' }
     ];
     
-    // Simplified to just 2 options - roadmap respects night mode toggle in settings
+    // 3 base map options - roadmap respects night mode toggle in settings
     // Terrain has max zoom limitation (levels 15-17 depending on region)
-    const mapTypes: { id: BaseMapType; name: string; icon: 'plane' | 'mountain'; description: string }[] = [
+    const mapTypes: { id: BaseMapType; name: string; icon: 'plane' | 'mountain' | 'satellite'; description: string }[] = [
         { id: 'roadmap', name: 'Rodoviário', icon: 'plane', description: 'Navegação urbana' },
-        { id: 'terrain', name: 'Terreno', icon: 'mountain', description: 'Relevo e elevação' }
+        { id: 'terrain', name: 'Terreno', icon: 'mountain', description: 'Relevo e elevação' },
+        { id: 'satellite', name: 'Satélite', icon: 'satellite', description: 'Imagem de satélite' }
     ];
 
     // Mobile content - without wrapper
@@ -135,7 +136,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
 
                     <div className="h-px bg-slate-800 w-full opacity-30"></div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
                         {mapTypes.map((mapType) => {
                             const isActive = activeBaseMap === mapType.id;
                             return (
@@ -154,6 +155,8 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                     }}>
                                         {mapType.icon === 'mountain' ? (
                                             <IconMountain className={isActive ? "text-white w-6 h-6" : "text-slate-400 w-6 h-6"} />
+                                        ) : mapType.icon === 'satellite' ? (
+                                            <IconSatellite className={isActive ? "text-white w-6 h-6" : "text-slate-400 w-6 h-6"} />
                                         ) : (
                                             <IconPlane className={isActive ? "text-white w-6 h-6" : "text-slate-400 w-6 h-6"} />
                                         )}
@@ -261,7 +264,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
 
                 <div className="h-px bg-slate-800 w-full opacity-30"></div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                     {mapTypes.map((mapType) => {
                         const isActive = activeBaseMap === mapType.id;
                         return (
@@ -280,6 +283,8 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                 }}>
                                     {mapType.icon === 'mountain' ? (
                                         <IconMountain className={isActive ? "text-white w-7 h-7" : "text-slate-400 group-hover:text-white w-7 h-7"} />
+                                    ) : mapType.icon === 'satellite' ? (
+                                        <IconSatellite className={isActive ? "text-white w-7 h-7" : "text-slate-400 group-hover:text-white w-7 h-7"} />
                                     ) : (
                                         <IconPlane className={isActive ? "text-white w-7 h-7" : "text-slate-400 group-hover:text-white w-7 h-7"} />
                                     )}
