@@ -30,8 +30,16 @@ function latLngToTile(lat: number, lng: number, zoom: number): { x: number; y: n
  * Always uses first subdomain for consistent caching
  */
 function buildBaseMapTileUrl(baseUrl: string, subdomains: readonly string[], x: number, y: number, zoom: number): string {
+  // Esri uses different format: {z}/{y}/{x}
+  if (baseUrl.includes('arcgisonline.com')) {
+    return baseUrl
+      .replace('{z}', zoom.toString())
+      .replace('{y}', y.toString())
+      .replace('{x}', x.toString());
+  }
+  
   // Always use first subdomain ('a') for consistent cache keys
-  const subdomain = subdomains[0];
+  const subdomain = subdomains[0] || '';
   return baseUrl
     .replace('{s}', subdomain)
     .replace('{z}', zoom.toString())

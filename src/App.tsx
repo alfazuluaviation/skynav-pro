@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
+import { MapContainer, Polyline, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Waypoint, FlightStats, ChartConfig, AiracCycle, FlightSegment, SavedPlan, NavPoint } from '../types';
 import { calculateDistance, calculateBearing, formatTime, applyMagneticVariation, getMagneticDeclination } from './utils/geoUtils';
@@ -24,6 +24,7 @@ import { AircraftListModal } from './components/AircraftListModal';
 import { FlightPlanDownloadModal } from './components/FlightPlanDownloadModal';
 import { BaseMapType } from './components/LayersMenu';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { getAerodromeIconHTML, getIconSize } from './components/AerodromeIcons';
 import { CachedWMSTileLayer } from './components/CachedWMSTileLayer';
 import { CachedBaseTileLayer } from './components/CachedBaseTileLayer';
@@ -809,6 +810,9 @@ const App: React.FC = () => {
         onLogin={() => setShowAuthModal(true)}
       />
 
+      {/* Offline indicator */}
+      <OfflineIndicator />
+
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* FLIGHT PLAN PANEL */}
@@ -865,17 +869,21 @@ const App: React.FC = () => {
             {/* Base Map Layer with offline caching support */}
             {/* Uses CachedBaseTileLayer for OSM/DARK, regular for terrain/satellite (complex to cache) */}
             {activeBaseMap === 'satellite' && (
-              <TileLayer
+              <CachedBaseTileLayer
                 key="satellite-layer"
                 url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                layerId="BASEMAP_SATELLITE"
+                useCache={downloadedLayers.includes('BASEMAP_SATELLITE')}
                 maxZoom={19}
                 attribution='Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
               />
             )}
             {activeBaseMap === 'terrain' && (
-              <TileLayer
+              <CachedBaseTileLayer
                 key="terrain-layer"
-                url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+                url="https://a.tile.opentopomap.org/{z}/{x}/{y}.png"
+                layerId="BASEMAP_TOPO"
+                useCache={downloadedLayers.includes('BASEMAP_TOPO')}
                 maxZoom={17}
                 attribution='Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)'
               />

@@ -243,8 +243,10 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
 
   // Base map options for offline
   const baseMapOptions = [
-    { id: 'BASEMAP_OSM', label: 'Mapa Base (Dia)' },
-    { id: 'BASEMAP_DARK', label: 'Mapa Base (Noite)' },
+    { id: 'BASEMAP_OSM', label: 'Mapa (Dia)' },
+    { id: 'BASEMAP_DARK', label: 'Mapa (Noite)' },
+    { id: 'BASEMAP_TOPO', label: 'Terreno' },
+    { id: 'BASEMAP_SATELLITE', label: 'Satélite' },
   ];
 
   const renderChartButton = (chart: { id: string; label: string }) => {

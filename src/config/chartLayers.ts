@@ -68,6 +68,12 @@ export const BASE_MAP_LAYERS = {
     subdomains: ['a', 'b', 'c'],
     zoomLevels: [4, 5, 6, 7, 8, 9, 10],
     label: 'Terreno'
+  },
+  SATELLITE: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    subdomains: [''],
+    zoomLevels: [4, 5, 6, 7, 8, 9, 10],
+    label: 'Satélite'
   }
 } as const;
 
