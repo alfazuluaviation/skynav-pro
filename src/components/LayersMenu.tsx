@@ -86,7 +86,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                     >
                                         <IconMap className={isActive ? 'text-white' : 'text-slate-400'} />
                                         {isActive && (
-                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-purple-500 rounded-full border-2 border-slate-900"></div>
+                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-slate-900"></div>
                                         )}
                                     </div>
                                     <span className={`text-[8px] font-black uppercase text-center leading-tight ${isActive ? 'text-white' : 'text-slate-400'
@@ -121,7 +121,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                     >
                                         <IconMap className={isActive ? 'text-white' : 'text-slate-400'} />
                                         {isActive && (
-                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-purple-500 rounded-full border-2 border-slate-900"></div>
+                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-slate-900"></div>
                                         )}
                                     </div>
                                     <span className={`text-[8px] font-black uppercase text-center leading-tight ${isActive ? 'text-white' : 'text-slate-400'
@@ -158,7 +158,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                             <IconPlane className={isActive ? "text-white w-6 h-6" : "text-slate-400 w-6 h-6"} />
                                         )}
                                         {isActive && (
-                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-purple-500 rounded-full border-2 border-slate-900"></div>
+                                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-slate-900"></div>
                                         )}
                                     </div>
                                     <span className={`text-[9px] font-black uppercase text-center leading-tight ${
@@ -212,7 +212,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                 >
                                     <IconMap className={isActive ? 'text-white' : 'text-slate-400'} />
                                     {isActive && (
-                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full border-2 border-[#0d1117]"></div>
+                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0d1117]"></div>
                                     )}
                                 </div>
                                 <span className={`text-[9px] font-black uppercase text-center leading-tight transition-colors ${isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'
@@ -247,7 +247,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                 >
                                     <IconMap className={isActive ? 'text-white' : 'text-slate-400'} />
                                     {isActive && (
-                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full border-2 border-[#0d1117]"></div>
+                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0d1117]"></div>
                                     )}
                                 </div>
                                 <span className={`text-[9px] font-black uppercase text-center leading-tight transition-colors ${isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'
@@ -284,7 +284,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                                         <IconPlane className={isActive ? "text-white w-7 h-7" : "text-slate-400 group-hover:text-white w-7 h-7"} />
                                     )}
                                     {isActive && (
-                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full border-2 border-[#0d1117]"></div>
+                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0d1117]"></div>
                                     )}
                                 </div>
                                 <span className={`text-[10px] font-black uppercase text-center leading-tight ${
