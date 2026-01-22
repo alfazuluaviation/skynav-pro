@@ -64,10 +64,12 @@ const CachedTileLayerClass = L.TileLayer.extend({
 
     if (useCache) {
       // Normalize URL for cache lookup (subdomains a/b/c/d -> a)
+      // Esri URLs don't need normalization (single endpoint)
       const normalizedUrl = tileUrl
         .replace(/https:\/\/[abcd]\.tile\.openstreetmap\.org/, 'https://a.tile.openstreetmap.org')
         .replace(/https:\/\/[abcd]\.basemaps\.cartocdn\.com/, 'https://a.basemaps.cartocdn.com')
         .replace(/https:\/\/[abc]\.tile\.opentopomap\.org/, 'https://a.tile.opentopomap.org');
+      // Note: Esri (arcgisonline.com) URLs are already normalized (no subdomains)
       
       // Try to load from cache first
       getCachedTile(normalizedUrl).then(blob => {
