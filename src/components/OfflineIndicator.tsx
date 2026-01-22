@@ -4,10 +4,10 @@
  * Helps pilots know they're using cached data.
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { WifiOff } from 'lucide-react';
 
-export const OfflineIndicator: React.FC = () => {
+export const OfflineIndicator = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
