@@ -99,12 +99,14 @@ function getTilesForZoom(zoom: number): Array<{ x: number; y: number }> {
 
 /**
  * Download a single tile with retry
+ * More aggressive timeout and retry strategy for mobile
  */
-async function downloadTile(url: string, layerId: string, retries: number = 3): Promise<boolean> {
+async function downloadTile(url: string, layerId: string, retries: number = 2): Promise<boolean> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20000); // 20s timeout (increased)
+      // Shorter timeout (15s) to fail fast and retry
+      const timeout = setTimeout(() => controller.abort(), 15000);
       
       const response = await fetch(url, {
         mode: 'cors',
@@ -118,10 +120,8 @@ async function downloadTile(url: string, layerId: string, retries: number = 3): 
       clearTimeout(timeout);
 
       if (!response.ok) {
-        console.warn(`[ChartDownloader] HTTP ${response.status} for tile, attempt ${attempt + 1}/${retries + 1}`);
         if (attempt < retries) {
-          // Exponential backoff: 500ms, 1s, 2s
-          await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
+          await new Promise(r => setTimeout(r, 300 * Math.pow(2, attempt)));
           continue;
         }
         return false;
@@ -130,30 +130,23 @@ async function downloadTile(url: string, layerId: string, retries: number = 3): 
       const blob = await response.blob();
       const contentType = response.headers.get('content-type') || blob.type;
       
-      // Validate: must be an image with reasonable size (at least 2KB for a valid 512x512 tile)
-      // Empty/error tiles from WMS are typically very small (< 2KB) or not images
-      const isValidImage = contentType.startsWith('image/') && blob.size > 2000;
+      // Validate: must be an image with reasonable size
+      // Reduce threshold to 500 bytes since some tiles are naturally small
+      const isValidImage = contentType.startsWith('image/') && blob.size > 500;
       
       if (isValidImage) {
         await cacheTile(url, blob, layerId);
         return true;
       } else {
-        // Don't cache small/invalid responses - they might be errors
-        // Just skip without caching - the tile will load from network next time
-        if (blob.size < 2000) {
-          console.debug(`[ChartDownloader] Skipping small tile (${blob.size} bytes) - likely empty area`);
-        } else {
-          console.warn(`[ChartDownloader] Invalid content-type: ${contentType}`);
-        }
+        // Skip empty/error tiles without caching
         return true; // Count as processed but don't cache
       }
     } catch (error) {
       if (attempt < retries) {
-        // Exponential backoff
-        await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
+        await new Promise(r => setTimeout(r, 300 * Math.pow(2, attempt)));
         continue;
       }
-      console.warn('[ChartDownloader] Failed to download tile after retries:', (error as Error).message);
+      // Silent fail - don't spam console on mobile
       return false;
     }
   }
@@ -162,6 +155,7 @@ async function downloadTile(url: string, layerId: string, retries: number = 3): 
 
 /**
  * Download all tiles for a chart layer
+ * OPTIMIZED: Better batching and progress reporting for mobile
  */
 export async function downloadChartLayer(
   layerId: string,
@@ -169,14 +163,14 @@ export async function downloadChartLayer(
 ): Promise<boolean> {
   const config = CHART_LAYERS[layerId as ChartLayerId];
   if (!config) {
-    console.error('Unknown layer:', layerId);
+    console.error('[ChartDownloader] Unknown layer:', layerId);
     return false;
   }
 
   const zoomLevels = config.zoomLevels;
-  const layersString = config.layers; // Already a string, ready to use
+  const layersString = config.layers;
 
-  // Calculate total tiles (using 256px tiles for consistency)
+  // Calculate total tiles
   let allTiles: Array<{ url: string; zoom: number; x: number; y: number }> = [];
   
   for (const zoom of zoomLevels) {
@@ -190,11 +184,11 @@ export async function downloadChartLayer(
   const totalTiles = allTiles.length;
   let processedTiles = 0;
   let downloadedTiles = 0;
+  let lastReportedProgress = -1;
 
-  console.log(`Starting download of ${layerId}: ${totalTiles} tiles across zoom levels ${zoomLevels.join(', ')}`);
-  console.log(`Using layers: ${layersString}`);
+  console.log(`[ChartDownloader] Starting ${layerId}: ${totalTiles} tiles, zooms ${zoomLevels.join(',')}`);
 
-  // Report initial progress immediately
+  // Report initial progress
   onProgress?.(0);
 
   // Update metadata to downloading
@@ -206,14 +200,14 @@ export async function downloadChartLayer(
     status: 'downloading'
   });
 
-  // Detect iOS/iPad - use smaller batch size to avoid connection issues
-  // Also reduce batch size generally to avoid overwhelming the proxy/GeoServer
+  // Detect iOS/iPad for batch size
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  // Reduced batch sizes: iOS=2, Desktop=5 (was 3 and 10)
-  const batchSize = isIOS ? 2 : 5;
   
-  console.log(`[ChartDownloader] Using batchSize=${batchSize}, isIOS=${isIOS}, totalTiles=${totalTiles}`);
+  // Increased batch sizes since we reduced total tile count
+  const batchSize = isIOS ? 4 : 10;
+  
+  console.log(`[ChartDownloader] Device: ${isIOS ? 'iOS' : 'Desktop'}, batchSize=${batchSize}`);
   
   for (let i = 0; i < allTiles.length; i += batchSize) {
     const batch = allTiles.slice(i, i + batchSize);
@@ -226,18 +220,25 @@ export async function downloadChartLayer(
         }
         processedTiles++;
         
-        // Report progress based on processed tiles (not just successful)
-        // This ensures progress always moves forward
+        // Report progress (throttled to avoid too many updates)
         const progress = Math.round((processedTiles / totalTiles) * 100);
-        onProgress?.(progress);
+        if (progress !== lastReportedProgress && progress % 2 === 0) {
+          lastReportedProgress = progress;
+          onProgress?.(progress);
+        }
       })
     );
 
-    // Delay between batches to avoid rate limiting (100ms)
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Short delay between batches
+    if (i + batchSize < allTiles.length) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
   }
 
-  console.log(`Download complete for ${layerId}: ${downloadedTiles}/${totalTiles} tiles cached`);
+  // Final progress update
+  onProgress?.(100);
+
+  console.log(`[ChartDownloader] Complete ${layerId}: ${downloadedTiles}/${totalTiles} tiles cached`);
 
   // Update metadata to complete
   await updateLayerMetadata({
