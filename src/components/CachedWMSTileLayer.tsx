@@ -38,6 +38,8 @@ interface CachedWMSTileLayerProps {
   tileSize?: number;
   detectRetina?: boolean;
   maxZoom?: number;
+  maxNativeZoom?: number;  // Highest zoom level with actual tiles
+  minNativeZoom?: number;  // Lowest zoom level with actual tiles
   layerId: string;
   useCache?: boolean;
   useProxy?: boolean;
@@ -282,6 +284,8 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
   tileSize = 256,
   detectRetina = false,
   maxZoom = 18,
+  maxNativeZoom = 8,   // Default: tiles available up to zoom 8
+  minNativeZoom = 8,   // Default: tiles available from zoom 8
   layerId,
   useCache = true,
   useProxy = true,
@@ -305,6 +309,9 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       tileSize,
       detectRetina,
       maxZoom,
+      // OVERZOOMING: Scale zoom 8 tiles for all zoom levels
+      maxNativeZoom,  // Tiles only exist up to this zoom
+      minNativeZoom,  // Tiles only exist from this zoom
       layerId,
       useCache,
       useProxy: false,
