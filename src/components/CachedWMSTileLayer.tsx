@@ -10,9 +10,9 @@ import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { getCachedTile, cacheTile } from '../services/tileCache';
 
-// Supabase edge function URL for WMS proxy
-const SUPABASE_URL = "https://gongoqjjpwphhttumdjm.supabase.co";
-const WMS_PROXY_URL = `${SUPABASE_URL}/functions/v1/proxy-wms`;
+// GeoServer direct URL (CORS usually works for viewing, download uses proxy fallback)
+const BASE_WMS_URL = "https://geoaisweb.decea.mil.br/geoserver/wms";
+const CORS_PROXY_URL = "https://api.allorigins.win/raw?url=";
 
 interface CachedWMSTileLayerProps {
   url: string;
@@ -31,13 +31,14 @@ interface CachedWMSTileLayerProps {
   attribution?: string;
 }
 
-// Custom TileLayer class with IndexedDB caching and proxy support
+// Custom TileLayer class with IndexedDB caching
+// Uses direct GeoServer access for viewing (with CORS proxy fallback for download)
 const CachedWMSLayer = L.TileLayer.WMS.extend({
   options: {
     layerId: '',
     useCache: true,
-    useProxy: true,
-    proxyUrl: WMS_PROXY_URL
+    useProxy: false, // Disabled - use direct access for viewing
+    baseWmsUrl: BASE_WMS_URL
   },
 
   // Override getTileUrl to use proxy with correct EPSG:4326 coordinates
@@ -80,12 +81,9 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
       bbox: bboxStr
     });
 
-    // Use proxy if enabled, otherwise direct URL
-    if (this.options.useProxy) {
-      return `${this.options.proxyUrl}?${params.toString()}`;
-    }
-    
-    return `${this._url}?${params.toString()}`;
+    // Always use direct URL for cache key consistency
+    // The cache was populated using direct URLs from chartDownloader
+    return `${this.options.baseWmsUrl}?${params.toString()}`;
   },
 
   createTile: function (coords: L.Coords, done: L.DoneCallback) {
@@ -265,8 +263,8 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       maxZoom,
       layerId,
       useCache,
-      useProxy,
-      proxyUrl: WMS_PROXY_URL,
+      useProxy: false, // Use direct access, cache handles offline
+      baseWmsUrl: BASE_WMS_URL,
       attribution,
       // Use simple Mercator CRS for tile coordinate system
       // but we convert to EPSG:4326 bbox in getTileUrl
