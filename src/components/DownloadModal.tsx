@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Waypoint, FlightSegment } from '../types';
 import { useDownloadManager } from '../hooks/useDownloadManager';
-import { Wifi, WifiOff, AlertTriangle, Loader2 } from 'lucide-react';
+import { Wifi, WifiOff, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { getCachedTileCount } from '../services/tileCache';
+import { DownloadStats } from '../services/chartDownloader';
 
 interface DownloadModalProps {
   isOpen: boolean;
@@ -31,7 +33,28 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
 }) => {
   const [downloadFormat, setDownloadFormat] = useState<'txt' | 'csv' | 'json'>('txt');
   const [confirmClearLayer, setConfirmClearLayer] = useState<string | null>(null);
+  const [tileCounts, setTileCounts] = useState<Record<string, number>>({});
   const { syncingLayers, isOnline, getError } = useDownloadManager();
+
+  // Fetch tile counts for downloaded layers
+  useEffect(() => {
+    const fetchTileCounts = async () => {
+      const counts: Record<string, number> = {};
+      for (const layerId of downloadedLayers) {
+        try {
+          const count = await getCachedTileCount(layerId);
+          counts[layerId] = count;
+        } catch (e) {
+          counts[layerId] = 0;
+        }
+      }
+      setTileCounts(counts);
+    };
+    
+    if (downloadedLayersReady && downloadedLayers.length > 0) {
+      fetchTileCounts();
+    }
+  }, [downloadedLayers, downloadedLayersReady]);
 
   if (!isOpen) return null;
 
@@ -298,9 +321,16 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
               <div className="text-[10px] text-emerald-400 mt-1 font-bold">{progress}%</div>
             </div>
           ) : isDownloaded ? (
-            <div className="flex items-center gap-1 text-xs text-emerald-400 relative z-10">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              OFFLINE ✓
+            <div className="flex flex-col items-center relative z-10">
+              <div className="flex items-center gap-1 text-xs text-emerald-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                OFFLINE ✓
+              </div>
+              {tileCounts[chart.id] > 0 && (
+                <div className="text-[9px] text-slate-500 mt-0.5">
+                  {tileCounts[chart.id]} tiles
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-xs text-slate-500 relative z-10 font-bold">BAIXAR</div>

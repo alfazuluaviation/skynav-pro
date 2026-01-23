@@ -3,17 +3,25 @@
  * Pre-downloads WMS tiles for offline use by fetching tiles for key zoom levels
  * and geographic areas of Brazil.
  * Uses a proxy to avoid CORS issues with DECEA GeoServer.
+ * 
+ * OPTIMIZED v2: 
+ * - Robust tile validation (500+ bytes, image Content-Type)
+ * - Automatic retry for failed tiles
+ * - Detailed download statistics
  */
 
 import { cacheTile, updateLayerMetadata, getCachedTileCount, isLayerCached } from './tileCache';
 import { CHART_LAYERS, ChartLayerId } from '../config/chartLayers';
 
 // WMS URL - Access GeoServer directly (CORS enabled for most requests)
-// Fallback to public proxy if direct access fails
 const BASE_WMS_URL = "https://geoaisweb.decea.mil.br/geoserver/wms";
 
-// Simple CORS proxy fallback - only used if direct request fails
-const CORS_PROXY_URL = "https://api.allorigins.win/raw?url=";
+// Multiple CORS proxies for redundancy
+const CORS_PROXIES = [
+  "https://api.allorigins.win/raw?url=",
+  "https://corsproxy.io/?",
+  "https://api.codetabs.com/v1/proxy?quest="
+];
 
 // Brazil bounding box (approximate)
 const BRAZIL_BOUNDS = {
@@ -22,6 +30,16 @@ const BRAZIL_BOUNDS = {
   minLng: -74.0,
   maxLng: -34.0
 };
+
+// Minimum valid tile size (bytes) - rejects XML errors and empty responses
+const MIN_VALID_TILE_SIZE = 500;
+
+export interface DownloadStats {
+  totalTiles: number;
+  downloadedTiles: number;
+  failedTiles: number;
+  retriedTiles: number;
+}
 
 /**
  * Convert lat/lng to tile coordinates
@@ -109,59 +127,80 @@ function getTilesForZoom(zoom: number): Array<{ x: number; y: number }> {
   return tiles;
 }
 
+interface TileInfo {
+  directUrl: string;
+  cacheKey: string;
+  zoom: number;
+  x: number;
+  y: number;
+}
+
 /**
  * Download a single tile with retry and CORS proxy fallback
- * Tries direct access first, falls back to public CORS proxy
+ * IMPROVED: Better validation and proxy rotation
  * @param directUrl - Direct GeoServer URL
  * @param cacheKey - URL to use as cache key (for consistency with CachedWMSTileLayer)
  * @param layerId - Layer ID for logging
- * @param retries - Number of retries per method
+ * @param proxyStartIndex - Which proxy to try first (for rotation)
  */
-async function downloadTile(directUrl: string, cacheKey: string, layerId: string, retries: number = 2): Promise<boolean> {
-  // Try direct access first (some browsers/GeoServer configs allow it)
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
-      
-      const response = await fetch(directUrl, {
-        mode: 'cors',
-        credentials: 'omit',
-        signal: controller.signal,
-        headers: {
-          'Accept': 'image/png,image/*'
-        }
-      });
-      
-      clearTimeout(timeout);
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const contentType = response.headers.get('content-type') || blob.type;
-        
-        // Validate: must be an image with reasonable size
-        if (contentType.startsWith('image/') && blob.size > 100) {
-          // Use cacheKey for storage (matches what CachedWMSTileLayer will look up)
-          await cacheTile(cacheKey, blob, layerId);
-          return true;
-        }
-        // Empty or error tile - count as processed
-        return true;
-      }
-    } catch (error) {
-      // CORS or network error - try fallback
-      if (attempt === retries) break;
-      await new Promise(r => setTimeout(r, 200 * Math.pow(2, attempt)));
+async function downloadTile(
+  directUrl: string, 
+  cacheKey: string, 
+  layerId: string, 
+  proxyStartIndex: number = 0
+): Promise<{ success: boolean; fromProxy: number }> {
+  
+  // Helper to validate response
+  const validateResponse = async (response: Response): Promise<Blob | null> => {
+    if (!response.ok) return null;
+    
+    const contentType = response.headers.get('content-type') || '';
+    
+    // Reject XML/text responses (GeoServer errors)
+    if (contentType.includes('xml') || contentType.includes('text/html')) {
+      return null;
     }
+    
+    const blob = await response.blob();
+    
+    // Validate: must be an image with reasonable size
+    if (!blob.type.startsWith('image/')) return null;
+    if (blob.size < MIN_VALID_TILE_SIZE) return null;
+    
+    return blob;
+  };
+
+  // Try direct access first
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    
+    const response = await fetch(directUrl, {
+      mode: 'cors',
+      credentials: 'omit',
+      signal: controller.signal,
+      headers: { 'Accept': 'image/png,image/*' }
+    });
+    
+    clearTimeout(timeout);
+    
+    const blob = await validateResponse(response);
+    if (blob) {
+      await cacheTile(cacheKey, blob, layerId);
+      return { success: true, fromProxy: -1 };
+    }
+  } catch (error) {
+    // CORS or network error - try proxies
   }
 
-  // Fallback: Try CORS proxy
-  const proxyUrl = `${CORS_PROXY_URL}${encodeURIComponent(directUrl)}`;
-  
-  for (let attempt = 0; attempt <= 1; attempt++) {
+  // Try proxies in rotation order
+  for (let i = 0; i < CORS_PROXIES.length; i++) {
+    const proxyIndex = (proxyStartIndex + i) % CORS_PROXIES.length;
+    const proxyUrl = `${CORS_PROXIES[proxyIndex]}${encodeURIComponent(directUrl)}`;
+    
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), 10000);
       
       const response = await fetch(proxyUrl, {
         mode: 'cors',
@@ -170,33 +209,27 @@ async function downloadTile(directUrl: string, cacheKey: string, layerId: string
       });
       
       clearTimeout(timeout);
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const contentType = response.headers.get('content-type') || blob.type;
-        
-        if (contentType.startsWith('image/') && blob.size > 100) {
-          await cacheTile(cacheKey, blob, layerId);
-          return true;
-        }
-        return true;
+      
+      const blob = await validateResponse(response);
+      if (blob) {
+        await cacheTile(cacheKey, blob, layerId);
+        return { success: true, fromProxy: proxyIndex };
       }
     } catch (error) {
-      if (attempt === 1) return false;
-      await new Promise(r => setTimeout(r, 500));
+      // Continue to next proxy
     }
   }
 
-  return false;
+  return { success: false, fromProxy: -1 };
 }
 
 /**
- * Download all tiles for a chart layer
- * OPTIMIZED: Better batching and progress reporting for mobile
+ * Download all tiles for a chart layer with retry support
+ * OPTIMIZED: Better batching, progress reporting, and retry logic
  */
 export async function downloadChartLayer(
   layerId: string,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number, stats?: DownloadStats) => void
 ): Promise<boolean> {
   const config = CHART_LAYERS[layerId as ChartLayerId];
   if (!config) {
@@ -208,7 +241,7 @@ export async function downloadChartLayer(
   const layersString = config.layers;
 
   // Calculate total tiles
-  let allTiles: Array<{ directUrl: string; cacheKey: string; zoom: number; x: number; y: number }> = [];
+  let allTiles: TileInfo[] = [];
   
   for (const zoom of zoomLevels) {
     const tiles = getTilesForZoom(zoom);
@@ -222,12 +255,14 @@ export async function downloadChartLayer(
   const totalTiles = allTiles.length;
   let processedTiles = 0;
   let downloadedTiles = 0;
+  let failedTiles: TileInfo[] = [];
   let lastReportedProgress = -1;
+  let preferredProxy = 0;
 
   console.log(`[ChartDownloader] Starting ${layerId}: ${totalTiles} tiles, zooms ${zoomLevels.join(',')}`);
 
   // Report initial progress
-  onProgress?.(0);
+  onProgress?.(0, { totalTiles, downloadedTiles: 0, failedTiles: 0, retriedTiles: 0 });
 
   // Update metadata to downloading
   await updateLayerMetadata({
@@ -242,52 +277,128 @@ export async function downloadChartLayer(
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   
-  // Increased batch sizes since we reduced total tile count
-  const batchSize = isIOS ? 4 : 10;
+  // Batch sizes optimized for stability
+  const batchSize = isIOS ? 4 : 8;
   
   console.log(`[ChartDownloader] Device: ${isIOS ? 'iOS' : 'Desktop'}, batchSize=${batchSize}`);
   
+  // First pass: download all tiles
   for (let i = 0; i < allTiles.length; i += batchSize) {
     const batch = allTiles.slice(i, i + batchSize);
     
     await Promise.all(
       batch.map(async (tile) => {
-        const success = await downloadTile(tile.directUrl, tile.cacheKey, layerId);
-        if (success) {
+        const result = await downloadTile(tile.directUrl, tile.cacheKey, layerId, preferredProxy);
+        
+        if (result.success) {
           downloadedTiles++;
+          // Update preferred proxy if one worked
+          if (result.fromProxy >= 0) {
+            preferredProxy = result.fromProxy;
+          }
+        } else {
+          failedTiles.push(tile);
         }
         processedTiles++;
         
-        // Report progress (throttled to avoid too many updates)
+        // Report progress (throttled)
         const progress = Math.round((processedTiles / totalTiles) * 100);
         if (progress !== lastReportedProgress && progress % 2 === 0) {
           lastReportedProgress = progress;
-          onProgress?.(progress);
+          onProgress?.(progress, { 
+            totalTiles, 
+            downloadedTiles, 
+            failedTiles: failedTiles.length,
+            retriedTiles: 0 
+          });
         }
       })
     );
 
     // Short delay between batches
     if (i + batchSize < allTiles.length) {
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 30));
+    }
+  }
+
+  // Retry pass: try failed tiles again (max 2 retries)
+  let retriedTiles = 0;
+  if (failedTiles.length > 0 && failedTiles.length < totalTiles * 0.5) {
+    console.log(`[ChartDownloader] Retrying ${failedTiles.length} failed tiles...`);
+    
+    const retryBatchSize = Math.max(2, Math.floor(batchSize / 2));
+    let stillFailed: TileInfo[] = [];
+    
+    for (let retry = 0; retry < 2; retry++) {
+      if (failedTiles.length === 0) break;
+      
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, retry)));
+      
+      const tilesToRetry = [...failedTiles];
+      failedTiles = [];
+      
+      for (let i = 0; i < tilesToRetry.length; i += retryBatchSize) {
+        const batch = tilesToRetry.slice(i, i + retryBatchSize);
+        
+        await Promise.all(
+          batch.map(async (tile) => {
+            // Try different proxy on retry
+            const result = await downloadTile(
+              tile.directUrl, 
+              tile.cacheKey, 
+              layerId, 
+              (preferredProxy + retry + 1) % CORS_PROXIES.length
+            );
+            
+            if (result.success) {
+              downloadedTiles++;
+              retriedTiles++;
+              if (result.fromProxy >= 0) {
+                preferredProxy = result.fromProxy;
+              }
+            } else {
+              failedTiles.push(tile);
+            }
+          })
+        );
+        
+        // Update progress during retry
+        const progress = Math.min(99, 90 + Math.round((i / tilesToRetry.length) * 10));
+        onProgress?.(progress, { 
+          totalTiles, 
+          downloadedTiles, 
+          failedTiles: failedTiles.length,
+          retriedTiles 
+        });
+        
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
     }
   }
 
   // Final progress update
-  onProgress?.(100);
+  onProgress?.(100, { 
+    totalTiles, 
+    downloadedTiles, 
+    failedTiles: failedTiles.length,
+    retriedTiles 
+  });
 
-  console.log(`[ChartDownloader] Complete ${layerId}: ${downloadedTiles}/${totalTiles} tiles cached`);
+  const successRate = ((downloadedTiles / totalTiles) * 100).toFixed(1);
+  console.log(`[ChartDownloader] Complete ${layerId}: ${downloadedTiles}/${totalTiles} tiles (${successRate}%), ${failedTiles.length} failed, ${retriedTiles} retried`);
 
-  // Update metadata to complete
+  // Update metadata - mark as complete if success rate > 90%
+  const isComplete = downloadedTiles >= totalTiles * 0.9;
   await updateLayerMetadata({
     layerId,
     totalTiles,
     downloadedTiles,
     lastUpdated: Date.now(),
-    status: 'complete'
+    status: isComplete ? 'complete' : 'error'
   });
 
-  return true;
+  return isComplete;
 }
 
 /**
