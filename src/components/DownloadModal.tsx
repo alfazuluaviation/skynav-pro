@@ -37,6 +37,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   const { syncingLayers, isOnline, getError } = useDownloadManager();
 
   // Fetch tile counts for downloaded layers
+  // Also clears counts for layers that were removed (cache cleared)
   useEffect(() => {
     const fetchTileCounts = async () => {
       const counts: Record<string, number> = {};
@@ -48,10 +49,12 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           counts[layerId] = 0;
         }
       }
+      // This replaces the entire state, removing counts for cleared layers
       setTileCounts(counts);
     };
     
-    if (downloadedLayersReady && downloadedLayers.length > 0) {
+    if (downloadedLayersReady) {
+      // Always fetch, even if downloadedLayers is empty (to clear old counts)
       fetchTileCounts();
     }
   }, [downloadedLayers, downloadedLayersReady]);
@@ -385,6 +388,14 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           <p className="text-xs text-slate-400 text-center">
             Baixe cartas e mapas para uso <strong>offline</strong>. Use o menu "CARTAS E MAPAS" para ativar/desativar no mapa.
           </p>
+          
+          {/* Offline zoom limit warning */}
+          <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+            <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+            <span className="text-[11px] text-amber-300">
+              O modo offline funciona até zoom ~8 (visão regional). Para detalhes maiores, é necessário conexão com internet.
+            </span>
+          </div>
 
           {/* Base Map Options */}
           <div className="space-y-2">
