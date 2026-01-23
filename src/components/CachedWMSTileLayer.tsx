@@ -12,7 +12,13 @@ import { getCachedTile, cacheTile } from '../services/tileCache';
 
 // GeoServer direct URL (CORS usually works for viewing, download uses proxy fallback)
 const BASE_WMS_URL = "https://geoaisweb.decea.mil.br/geoserver/wms";
-const CORS_PROXY_URL = "https://api.allorigins.win/raw?url=";
+
+// Multiple CORS proxies for redundancy (allorigins can be overloaded)
+const CORS_PROXIES = [
+  "https://api.allorigins.win/raw?url=",
+  "https://corsproxy.io/?",
+  "https://api.codetabs.com/v1/proxy?quest="
+];
 
 interface CachedWMSTileLayerProps {
   url: string;
@@ -106,10 +112,10 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
         return;
       }
 
-      // Helper function to load tile from a URL
-      const attemptLoad = (url: string, isProxy: boolean = false): Promise<Blob> => {
+      // Helper function to load tile from a URL with timeout
+      const attemptLoad = (url: string, timeout: number = 15000): Promise<Blob> => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
 
         return fetch(url, { 
           mode: 'cors', 
@@ -132,11 +138,6 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
             }
             
             const blob = await res.blob();
-            if (isProxy) {
-              console.debug(`[WMS PROXY] ${layerId} - received ${blob.size} bytes`);
-            } else {
-              console.debug(`[WMS DIRECT] ${layerId} - received ${blob.size} bytes`);
-            }
             return blob;
           })
           .catch(err => {
@@ -145,13 +146,31 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
           });
       };
 
-      // Try direct access first, then fallback to CORS proxy
+      // Try proxies sequentially until one works
+      const tryProxies = async (proxyIndex: number = 0): Promise<Blob> => {
+        if (proxyIndex >= CORS_PROXIES.length) {
+          throw new Error('All proxies failed');
+        }
+        
+        const proxyUrl = `${CORS_PROXIES[proxyIndex]}${encodeURIComponent(tileUrl)}`;
+        try {
+          const blob = await attemptLoad(proxyUrl, 10000);
+          if (proxyIndex > 0) {
+            console.debug(`[WMS PROXY ${proxyIndex + 1}] ${layerId} - success`);
+          }
+          return blob;
+        } catch (err) {
+          console.debug(`[WMS PROXY ${proxyIndex + 1}] ${layerId} - failed, trying next...`);
+          return tryProxies(proxyIndex + 1);
+        }
+      };
+
+      // Try direct access first, then fallback to CORS proxies
       attemptLoad(tileUrl)
         .catch(err => {
-          // Direct access failed (likely CORS) - try proxy
-          console.debug(`[WMS] Direct access failed for ${layerId}, trying CORS proxy...`);
-          const proxyUrl = `${CORS_PROXY_URL}${encodeURIComponent(tileUrl)}`;
-          return attemptLoad(proxyUrl, true);
+          // Direct access failed (likely CORS) - try proxies
+          console.debug(`[WMS] Direct access failed for ${layerId}, trying proxies...`);
+          return tryProxies(0);
         })
         .then(blob => {
           // Cache valid image blobs (any size is fine for transparent tiles)
@@ -171,7 +190,7 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
           tile.src = objectUrl;
         })
         .catch((err) => {
-          // Both direct and proxy failed
+          // All methods failed
           if (!navigator.onLine || err.name === 'AbortError' || err.message?.includes('Failed to fetch')) {
             console.debug(`[WMS OFFLINE] ${layerId} - network unavailable`);
           } else {
