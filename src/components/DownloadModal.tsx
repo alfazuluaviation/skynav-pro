@@ -248,10 +248,10 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
 
   const renderChartButton = (chart: { id: string; label: string }) => {
     const isDownloaded = downloadedLayers.includes(chart.id);
-    const isActive = activeLayers.includes(chart.id);
+    // Download modal shows ONLY download status - NOT map activation status
+    // activeLayers is intentionally NOT used here to maintain separation of concerns
     const progress = syncingLayers[chart.id];
     const isSyncing = progress !== undefined;
-    const isBaseMap = chart.id.startsWith('BASEMAP_');
     const error = getError(chart.id);
 
     return (
@@ -262,15 +262,13 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           className={`w-full p-4 rounded-xl border-2 transition-all flex flex-col items-center relative overflow-hidden ${
             error
               ? 'border-red-500/50 bg-red-500/10'
-              : isActive && !isBaseMap
-                ? 'border-purple-500 bg-purple-500/20 ring-2 ring-purple-400/50'
-                : isDownloaded
-                  ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-400'
-                  : isSyncing
-                    ? 'border-sky-500/50 bg-sky-500/5'
-                    : !isOnline
-                      ? 'border-slate-700 bg-slate-800/30 opacity-50 cursor-not-allowed'
-                      : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+              : isDownloaded
+                ? 'border-emerald-500/50 bg-emerald-500/10'
+                : isSyncing
+                  ? 'border-sky-500/50 bg-sky-500/5'
+                  : !isOnline
+                    ? 'border-slate-700 bg-slate-800/30 opacity-50 cursor-not-allowed'
+                    : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
           }`}
         >
           <div className="text-sm font-bold text-white mb-1 relative z-10">{chart.label}</div>
@@ -290,26 +288,21 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
               </div>
               <div className="text-[10px] text-emerald-400 mt-1 font-bold">{progress}%</div>
             </div>
-          ) : isActive && !isBaseMap ? (
-            <div className="flex items-center gap-1 text-xs text-purple-300 relative z-10">
-              <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
-              NO MAPA
-            </div>
           ) : isDownloaded ? (
             <div className="flex items-center gap-1 text-xs text-emerald-400 relative z-10">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              {isBaseMap ? 'OFFLINE ✓' : 'ATIVAR'}
+              OFFLINE ✓
             </div>
           ) : (
             <div className="text-xs text-slate-500 relative z-10 font-bold">BAIXAR</div>
           )}
         </button>
-        {/* Clear cache button */}
+        {/* Clear cache button - only clears offline cache, does NOT affect map display */}
         {isDownloaded && !isSyncing && (
           <button
             onClick={(e) => handleClearCacheRequest(e, chart.id)}
             className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-400 rounded-full flex items-center justify-center text-white text-xs shadow-lg transition-colors"
-            title="Limpar cache e rebaixar"
+            title="Limpar cache offline (não afeta exibição no mapa)"
           >
             ×
           </button>
@@ -351,7 +344,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           
           {/* Info text */}
           <p className="text-xs text-slate-400 text-center">
-            Baixe cartas e mapas para uso offline. Clique para baixar ou ativar/desativar no mapa.
+            Baixe cartas e mapas para uso <strong>offline</strong>. Use o menu "CARTAS E MAPAS" para ativar/desativar no mapa.
           </p>
 
           {/* Base Map Options */}
