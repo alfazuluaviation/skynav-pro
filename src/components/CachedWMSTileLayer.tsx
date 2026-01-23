@@ -268,7 +268,9 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
     if (!map) return;
 
     // Create the cached WMS layer
-    // Uses EPSG:4326 for WMS requests (via getTileUrl) to match DECEA GeoServer
+    // IMPORTANT: Keep CRS consistent with Leaflet MapContainer (default EPSG:3857)
+    // Our getTileUrl implementation assumes standard WebMercator tile coordinates (x/y/z)
+    // and then converts to an EPSG:4326 bbox for the WMS request.
     const wmsLayer = new CachedWMSLayer(url, {
       layers,
       format,
@@ -284,8 +286,8 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       useProxy: false, // Use direct access, cache handles offline
       baseWmsUrl: BASE_WMS_URL,
       attribution,
-      // Use EPSG:4326 CRS to match GeoServer configuration
-      crs: L.CRS.EPSG4326,
+      // Keep WebMercator to avoid tile coord mismatches (this fixes charts disappearing on zoom)
+      crs: L.CRS.EPSG3857,
       continuousWorld: true,
       // IMPORTANT: Allow updates during zoom for proper tile refresh
       updateWhenIdle: true,
