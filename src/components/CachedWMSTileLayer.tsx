@@ -20,6 +20,9 @@ const CORS_PROXIES = [
   "https://api.codetabs.com/v1/proxy?quest="
 ];
 
+// Session-level preferred proxy index (remembers which proxy works)
+let preferredProxyIndex = 0;
+
 interface CachedWMSTileLayerProps {
   url: string;
   layers: string;
@@ -113,8 +116,8 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
       }
 
       // Helper function to load tile from a URL with timeout
-      // OPTIMIZED: Reduced timeout for faster fallback to proxies
-      const attemptLoad = (url: string, timeout: number = 4000): Promise<Blob> => {
+      // OPTIMIZED: Short timeout for fast fallback
+      const attemptLoad = (url: string, timeout: number = 3000): Promise<Blob> => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -147,32 +150,37 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
           });
       };
 
-      // Try proxies sequentially until one works - FASTER timeouts
-      const tryProxies = async (proxyIndex: number = 0): Promise<Blob> => {
-        if (proxyIndex >= CORS_PROXIES.length) {
-          throw new Error('All proxies failed');
+      // Try proxies starting from preferred one (learns which works)
+      const tryProxies = async (startIndex: number = preferredProxyIndex): Promise<Blob> => {
+        const proxyOrder = [];
+        // Start from preferred, then try others
+        for (let i = 0; i < CORS_PROXIES.length; i++) {
+          proxyOrder.push((startIndex + i) % CORS_PROXIES.length);
         }
         
-        const proxyUrl = `${CORS_PROXIES[proxyIndex]}${encodeURIComponent(tileUrl)}`;
-        try {
-          // Faster proxy timeout (5s instead of 10s)
-          const blob = await attemptLoad(proxyUrl, 5000);
-          if (proxyIndex > 0) {
-            console.debug(`[WMS PROXY ${proxyIndex + 1}] ${layerId} - success`);
+        for (const proxyIndex of proxyOrder) {
+          const proxyUrl = `${CORS_PROXIES[proxyIndex]}${encodeURIComponent(tileUrl)}`;
+          try {
+            // Fast proxy timeout (3s)
+            const blob = await attemptLoad(proxyUrl, 3000);
+            // Remember this proxy works!
+            if (proxyIndex !== preferredProxyIndex) {
+              preferredProxyIndex = proxyIndex;
+              console.debug(`[WMS] Switched to proxy ${proxyIndex + 1} for ${layerId}`);
+            }
+            return blob;
+          } catch (err) {
+            // Continue to next proxy
           }
-          return blob;
-        } catch (err) {
-          console.debug(`[WMS PROXY ${proxyIndex + 1}] ${layerId} - failed, trying next...`);
-          return tryProxies(proxyIndex + 1);
         }
+        throw new Error('All proxies failed');
       };
 
-      // Try direct access first, then fallback to CORS proxies
-      attemptLoad(tileUrl)
+      // Try direct access first (very short timeout), then proxies
+      attemptLoad(tileUrl, 2000)
         .catch(err => {
-          // Direct access failed (likely CORS) - try proxies
-          console.debug(`[WMS] Direct access failed for ${layerId}, trying proxies...`);
-          return tryProxies(0);
+          // Direct access failed (likely CORS) - try proxies starting from preferred
+          return tryProxies(preferredProxyIndex);
         })
         .then(blob => {
           // Cache valid image blobs (any size is fine for transparent tiles)
@@ -255,7 +263,6 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
     } else {
       // Cache disabled - only load from network if online
       if (navigator.onLine) {
-        console.debug(`[CACHE DISABLED] ${layerId} - loading from network`);
         loadFromNetwork();
       } else {
         done(null, tile);
@@ -284,6 +291,7 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
 }) => {
   const map = useMap();
   const layerRef = useRef<L.TileLayer.WMS | null>(null);
+  const prevUseCacheRef = useRef<boolean>(useCache);
 
   // Create/update layer - OPTIMIZED to not recreate when only useCache changes
   useEffect(() => {
@@ -309,8 +317,9 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       crs: L.CRS.EPSG3857,
       continuousWorld: true,
       updateWhenIdle: true,
-      updateWhenZooming: true,
-      keepBuffer: 2
+      // OPTIMIZED: Don't reload during zoom animation - wait until zoom ends
+      updateWhenZooming: false,
+      keepBuffer: 4
     });
 
     if (typeof zIndex === 'number') {
@@ -321,6 +330,7 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
 
     wmsLayer.addTo(map);
     layerRef.current = wmsLayer;
+    prevUseCacheRef.current = useCache;
 
     return () => {
       if (layerRef.current) {
@@ -341,14 +351,24 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
     }
   }, [opacity]);
 
-  // Update useCache option and redraw WITHOUT recreating the layer
+  // Update useCache option WITHOUT redraw when disabling cache
   // This prevents the layer from disappearing when clearing offline cache
   useEffect(() => {
     if (layerRef.current) {
+      const wasUsingCache = prevUseCacheRef.current;
       (layerRef.current.options as any).useCache = useCache;
-      // Redraw tiles with new cache setting (existing tiles remain visible)
-      layerRef.current.redraw();
-      console.log(`[CachedWMSTileLayer] Updated useCache=${useCache} for ${layerId}, redrawing`);
+      
+      // CRITICAL: Only redraw when ENABLING cache (to start using cached tiles)
+      // When DISABLING cache (clearing offline), keep existing tiles visible
+      // New tiles will load from network on next pan/zoom naturally
+      if (useCache && !wasUsingCache) {
+        layerRef.current.redraw();
+        console.log(`[CachedWMSTileLayer] Enabled cache for ${layerId}, redrawing`);
+      } else if (!useCache && wasUsingCache) {
+        console.log(`[CachedWMSTileLayer] Disabled cache for ${layerId}, keeping tiles visible`);
+      }
+      
+      prevUseCacheRef.current = useCache;
     }
   }, [useCache, layerId]);
 

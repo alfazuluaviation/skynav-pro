@@ -128,6 +128,8 @@ export const CachedBaseTileLayer: React.FC<CachedBaseTileLayerProps> = ({
   const map = useMap();
   const layerRef = useRef<L.TileLayer | null>(null);
 
+  const prevUseCacheRef = useRef<boolean>(useCache);
+
   // Create layer - NOT including useCache in deps to prevent recreation
   useEffect(() => {
     if (!map) return;
@@ -137,11 +139,16 @@ export const CachedBaseTileLayer: React.FC<CachedBaseTileLayerProps> = ({
       useCache,
       maxZoom,
       attribution,
-      crossOrigin: 'anonymous'
+      crossOrigin: 'anonymous',
+      // OPTIMIZED: Don't reload during zoom animation
+      updateWhenZooming: false,
+      updateWhenIdle: true,
+      keepBuffer: 4
     });
 
     tileLayer.addTo(map);
     layerRef.current = tileLayer;
+    prevUseCacheRef.current = useCache;
 
     return () => {
       if (layerRef.current) {
@@ -153,12 +160,23 @@ export const CachedBaseTileLayer: React.FC<CachedBaseTileLayerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, url, layerId, maxZoom, attribution]);
 
-  // Update useCache option and redraw WITHOUT recreating the layer
+  // Update useCache option WITHOUT redraw when disabling cache
+  // This prevents the layer from disappearing when clearing offline cache
   useEffect(() => {
     if (layerRef.current) {
+      const wasUsingCache = prevUseCacheRef.current;
       (layerRef.current.options as any).useCache = useCache;
-      layerRef.current.redraw();
-      console.log(`[CachedBaseTileLayer] Updated useCache=${useCache} for ${layerId}, redrawing`);
+      
+      // CRITICAL: Only redraw when ENABLING cache
+      // When DISABLING, keep tiles visible - new ones load on next pan/zoom
+      if (useCache && !wasUsingCache) {
+        layerRef.current.redraw();
+        console.log(`[CachedBaseTileLayer] Enabled cache for ${layerId}, redrawing`);
+      } else if (!useCache && wasUsingCache) {
+        console.log(`[CachedBaseTileLayer] Disabled cache for ${layerId}, keeping tiles visible`);
+      }
+      
+      prevUseCacheRef.current = useCache;
     }
   }, [useCache, layerId]);
 
