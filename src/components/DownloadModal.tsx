@@ -393,7 +393,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
             <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
             <span className="text-[11px] text-emerald-300">
-              <strong>Modo Offline:</strong> Cartas baixadas funcionam em todos os níveis de zoom. Os tiles de alta resolução são escalados automaticamente.
+              <strong>Estratégia Multi-Nível:</strong> Baixamos 3 níveis de zoom por carta (ex: 9, 7, 5) para máxima nitidez em todas as escalas.
             </span>
           </div>
 

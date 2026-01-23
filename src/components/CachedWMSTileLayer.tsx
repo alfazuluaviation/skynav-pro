@@ -40,6 +40,7 @@ interface CachedWMSTileLayerProps {
   maxZoom?: number;
   maxNativeZoom?: number;  // Highest zoom level with actual tiles
   minNativeZoom?: number;  // Lowest zoom level with actual tiles
+  nativeZoomLevels?: number[];  // Array of native zoom levels available
   layerId: string;
   useCache?: boolean;
   useProxy?: boolean;
@@ -47,27 +48,58 @@ interface CachedWMSTileLayerProps {
 }
 
 // Custom TileLayer class with IndexedDB caching and optimized network loading
+// MULTI-LEVEL STRATEGY: Uses multiple native zoom levels for better quality
 const CachedWMSLayer = L.TileLayer.WMS.extend({
   options: {
     layerId: '',
     useCache: true,
     useProxy: false,
-    baseWmsUrl: BASE_WMS_URL
+    baseWmsUrl: BASE_WMS_URL,
+    // Array of available native zoom levels (downloaded)
+    nativeZoomLevels: [8, 6, 4]
+  },
+
+  // Find the best native zoom level for current display zoom
+  // Returns the highest native zoom that's <= current zoom (for upscaling)
+  // or the lowest native zoom if current is below all (for downscaling)
+  _getBestNativeZoom: function (displayZoom: number): number {
+    const nativeLevels = this.options.nativeZoomLevels || [8];
+    const sorted = [...nativeLevels].sort((a, b) => b - a); // Descending
+    
+    // Find highest native level that's <= display zoom
+    for (const level of sorted) {
+      if (level <= displayZoom) {
+        return level;
+      }
+    }
+    // If display zoom is below all native levels, use the lowest
+    return sorted[sorted.length - 1];
   },
 
   // Generate WMS URL with EPSG:4326 coordinates
+  // Uses the best available native zoom level for quality
   getTileUrl: function (coords: L.Coords) {
-    const zoom = coords.z;
+    const displayZoom = coords.z;
     const x = coords.x;
     const y = coords.y;
     
-    const n = Math.pow(2, zoom);
+    // Use native zoom level for URL generation (cache key consistency)
+    const nativeZoom = this._getBestNativeZoom(displayZoom);
     
-    const minLng = x / n * 360 - 180;
-    const maxLng = (x + 1) / n * 360 - 180;
+    // Calculate scale factor for coordinate transformation
+    const scaleFactor = Math.pow(2, displayZoom - nativeZoom);
     
-    const minLatRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 1) / n)));
-    const maxLatRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n)));
+    // Transform tile coordinates to native zoom level
+    const nativeX = Math.floor(x / scaleFactor);
+    const nativeY = Math.floor(y / scaleFactor);
+    
+    const n = Math.pow(2, nativeZoom);
+    
+    const minLng = nativeX / n * 360 - 180;
+    const maxLng = (nativeX + 1) / n * 360 - 180;
+    
+    const minLatRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (nativeY + 1) / n)));
+    const maxLatRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * nativeY / n)));
     
     const minLat = minLatRad * 180 / Math.PI;
     const maxLat = maxLatRad * 180 / Math.PI;
@@ -284,8 +316,9 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
   tileSize = 256,
   detectRetina = false,
   maxZoom = 18,
-  maxNativeZoom = 8,   // Default: tiles available up to zoom 8
-  minNativeZoom = 8,   // Default: tiles available from zoom 8
+  maxNativeZoom = 9,
+  minNativeZoom = 4,
+  nativeZoomLevels = [9, 7, 5],  // Default multi-level strategy
   layerId,
   useCache = true,
   useProxy = true,
@@ -309,9 +342,10 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       tileSize,
       detectRetina,
       maxZoom,
-      // OVERZOOMING: Scale zoom 8 tiles for all zoom levels
-      maxNativeZoom,  // Tiles only exist up to this zoom
-      minNativeZoom,  // Tiles only exist from this zoom
+      // MULTI-LEVEL: Use array of native zoom levels
+      maxNativeZoom,
+      minNativeZoom,
+      nativeZoomLevels,  // Array of available native zooms
       layerId,
       useCache,
       useProxy: false,
