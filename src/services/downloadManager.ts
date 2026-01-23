@@ -4,9 +4,10 @@
  * - Network connectivity checks before starting
  * - Persistent downloads that continue in background
  * - Progress tracking across page navigation
+ * - Real-time stats with time estimates
  */
 
-import { downloadChartLayer } from './chartDownloader';
+import { downloadChartLayer, DownloadStats } from './chartDownloader';
 import { downloadBaseMapLayer } from './baseMapDownloader';
 import { BaseMapLayerId } from '../config/chartLayers';
 
@@ -18,6 +19,7 @@ export interface DownloadTask {
   error?: string;
   startedAt?: number;
   completedAt?: number;
+  stats?: DownloadStats;
 }
 
 type DownloadListener = (tasks: Record<string, DownloadTask>) => void;
@@ -149,8 +151,8 @@ class DownloadManager {
     this.notifyListeners();
 
     try {
-      const progressCallback = (progress: number) => {
-        this.updateProgress(layerId, progress);
+      const progressCallback = (progress: number, stats?: DownloadStats) => {
+        this.updateProgress(layerId, progress, stats);
       };
 
       let success: boolean;
@@ -180,9 +182,12 @@ class DownloadManager {
   /**
    * Update progress for a download
    */
-  private updateProgress(layerId: string, progress: number) {
+  private updateProgress(layerId: string, progress: number, stats?: DownloadStats) {
     if (this.tasks[layerId]) {
       this.tasks[layerId].progress = progress;
+      if (stats) {
+        this.tasks[layerId].stats = stats;
+      }
       this.saveState();
       this.notifyListeners();
     }
