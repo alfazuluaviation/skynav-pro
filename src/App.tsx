@@ -661,22 +661,18 @@ const App = () => {
   const handleClearLayerCache = async (layer: string) => {
     console.log(`[CACHE CLEAR] Starting clear for layer: ${layer}`);
     
-    // FIRST: Immediately remove from active and downloaded layers to stop rendering
-    setActiveLayers(prev => {
-      const next = prev.filter(l => l !== layer);
-      localStorage.setItem('sky_nav_active_layers', JSON.stringify(next));
-      console.log(`[CACHE CLEAR] Removed ${layer} from activeLayers:`, next);
-      return next;
-    });
+    // IMPORTANT: Clearing offline cache should NOT affect map display!
+    // The layer can still load online even without offline cache.
+    // Only update downloadedLayers (offline status), NOT activeLayers (map display).
     
     setDownloadedLayers(prev => {
       const next = prev.filter(l => l !== layer);
       localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
-      console.log(`[CACHE CLEAR] Removed ${layer} from downloadedLayers:`, next);
+      console.log(`[CACHE CLEAR] Removed ${layer} from downloadedLayers (offline status only):`, next);
       return next;
     });
     
-    // THEN: Clear from IndexedDB cache
+    // Clear from IndexedDB cache
     try {
       await clearLayerCache(layer);
       console.log(`[CACHE CLEAR] IndexedDB cache cleared for layer: ${layer}`);
