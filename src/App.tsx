@@ -421,15 +421,21 @@ const App = () => {
         const cachedIds = await getCachedLayerIds();
         console.log('[CACHE SYNC] IndexedDB cached layers:', cachedIds);
         
-        // Update downloadedLayers to match what's actually in IndexedDB
+        // IMPORTANT:
+        // downloadedLayers must represent ONLY *explicit* offline downloads (via Download modal).
+        // We must NOT auto-add layers just because IndexedDB has metadata/tiles,
+        // otherwise online viewing ends up "linked" to the Download menu.
+        // Here we only *validate* the explicit list against what actually exists in IndexedDB.
         setDownloadedLayers(prev => {
-          // Only keep layers that are actually cached
           const validated = prev.filter(id => cachedIds.includes(id));
-          // Add any cached layers not in prev
-          const combined = [...new Set([...validated, ...cachedIds])];
-          console.log('[CACHE SYNC] Validated downloadedLayers:', combined);
-          localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(combined));
-          return combined;
+          if (validated.length !== prev.length) {
+            console.log('[CACHE SYNC] Removed stale downloadedLayers (not in IndexedDB):', {
+              before: prev,
+              after: validated
+            });
+          }
+          localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(validated));
+          return validated;
         });
         
         // NOTE: Do NOT remove activeLayers based on cache status!
