@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Waypoint, FlightSegment } from '../types';
 import { useDownloadManager } from '../hooks/useDownloadManager';
 import { Wifi, WifiOff, AlertTriangle, Loader2, RefreshCw, CheckCircle } from 'lucide-react';
