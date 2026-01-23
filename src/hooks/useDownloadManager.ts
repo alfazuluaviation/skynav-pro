@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { DownloadTask, getDownloadManager } from '../services/downloadManager';
 import { BaseMapLayerId } from '../config/chartLayers';
+import { DownloadStats } from '../services/chartDownloader';
 
 export function useDownloadManager() {
   const [tasks, setTasks] = useState<Record<string, DownloadTask>>({});
@@ -68,6 +69,14 @@ export function useDownloadManager() {
     return acc;
   }, {} as Record<string, number>);
 
+  // Get download stats for each layer
+  const downloadStats = Object.entries(tasks).reduce((acc, [id, task]) => {
+    if (task.stats) {
+      acc[id] = task.stats;
+    }
+    return acc;
+  }, {} as Record<string, DownloadStats>);
+
   // Get error message for a layer
   const getError = useCallback((layerId: string): string | undefined => {
     return tasks[layerId]?.error;
@@ -76,6 +85,7 @@ export function useDownloadManager() {
   return {
     tasks,
     syncingLayers,
+    downloadStats,
     isOnline,
     downloadChart,
     downloadBaseMap,

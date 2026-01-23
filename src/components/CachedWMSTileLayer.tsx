@@ -3,10 +3,11 @@
  * A WMS tile layer component that uses IndexedDB for offline caching.
  * Tiles are served from cache when available, with network fallback.
  * 
- * OPTIMIZED v2:
- * - Promise.race for parallel proxy attempts (faster loading)
- * - Reduced timeouts for snappier fallback
- * - Larger keepBuffer for smoother panning
+ * OPTIMIZED v3:
+ * - Concurrent fetches with Promise.any() for fastest response
+ * - Aggressive caching with preload buffer
+ * - Reduced timeouts and instant fallback
+ * - Connection pooling via keepalive
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -17,7 +18,7 @@ import { getCachedTile, cacheTile } from '../services/tileCache';
 // GeoServer direct URL
 const BASE_WMS_URL = "https://geoaisweb.decea.mil.br/geoserver/wms";
 
-// Multiple CORS proxies for redundancy
+// Multiple CORS proxies for redundancy - ordered by reliability
 const CORS_PROXIES = [
   "https://api.allorigins.win/raw?url=",
   "https://corsproxy.io/?",
@@ -26,6 +27,7 @@ const CORS_PROXIES = [
 
 // Session-level preferred proxy index (learns which proxy works best)
 let preferredProxyIndex = 0;
+let consecutiveProxySuccesses = 0;
 
 interface CachedWMSTileLayerProps {
   url: string;
@@ -100,106 +102,101 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
     tile.setAttribute('role', 'presentation');
     tile.crossOrigin = 'anonymous';
 
-    // Network loading with Promise.race for faster response
+    // Fast network loading with concurrent requests
     const loadFromNetwork = () => {
       if (!navigator.onLine) {
-        console.debug(`[WMS OFFLINE] ${layerId} - skipping network request`);
         done(null, tile);
         return;
       }
 
-      // Create abort controller for cleanup
-      const masterController = new AbortController();
+      const abortController = new AbortController();
       
-      // Helper to fetch with timeout
-      const fetchWithTimeout = (url: string, timeout: number): Promise<Blob> => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
-        
-        // Link to master controller for cleanup
-        masterController.signal.addEventListener('abort', () => controller.abort());
+      // Helper to fetch with timeout - optimized for speed
+      const fetchWithTimeout = (url: string, timeout: number, source: string): Promise<{ blob: Blob; source: string }> => {
+        return new Promise((resolve, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(new Error('timeout'));
+          }, timeout);
 
-        return fetch(url, { 
-          mode: 'cors', 
-          credentials: 'omit',
-          signal: controller.signal 
-        })
-          .then(async res => {
-            clearTimeout(timeoutId);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            
-            const contentType = res.headers.get('Content-Type') || '';
-            if (contentType.includes('xml') || contentType.includes('text/')) {
-              throw new Error('Server returned XML error');
-            }
-            
-            const blob = await res.blob();
-            if (!blob.type.startsWith('image/')) {
-              throw new Error('Not an image');
-            }
-            return blob;
+          fetch(url, { 
+            mode: 'cors', 
+            credentials: 'omit',
+            signal: abortController.signal,
+            // Keep connection alive for faster subsequent requests
+            keepalive: true
           })
-          .catch(err => {
-            clearTimeout(timeoutId);
-            throw err;
-          });
+            .then(async res => {
+              clearTimeout(timeoutId);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              
+              const contentType = res.headers.get('Content-Type') || '';
+              if (contentType.includes('xml') || contentType.includes('text/')) {
+                throw new Error('XML error response');
+              }
+              
+              const blob = await res.blob();
+              if (!blob.type.startsWith('image/') || blob.size < 100) {
+                throw new Error('Invalid image');
+              }
+              resolve({ blob, source });
+            })
+            .catch(err => {
+              clearTimeout(timeoutId);
+              reject(err);
+            });
+        });
       };
 
-      // Build array of fetch promises: direct + preferred proxy first, then others
-      const attempts: Promise<{ blob: Blob; source: string; proxyIndex: number }>[] = [];
+      // Build concurrent fetch attempts - fire all at once for speed
+      const attempts: Promise<{ blob: Blob; source: string }>[] = [];
       
-      // Direct access (fastest if CORS works)
+      // Direct access - fastest if CORS works (short timeout)
       attempts.push(
-        fetchWithTimeout(tileUrl, 1500)
-          .then(blob => ({ blob, source: 'direct', proxyIndex: -1 }))
+        fetchWithTimeout(tileUrl, 1200, 'direct')
       );
       
-      // Preferred proxy (based on previous success)
+      // Preferred proxy (slightly longer timeout)
       const preferredProxyUrl = `${CORS_PROXIES[preferredProxyIndex]}${encodeURIComponent(tileUrl)}`;
       attempts.push(
-        fetchWithTimeout(preferredProxyUrl, 2500)
-          .then(blob => ({ blob, source: 'proxy', proxyIndex: preferredProxyIndex }))
+        fetchWithTimeout(preferredProxyUrl, 2000, `proxy-${preferredProxyIndex}`)
       );
 
-      // Race direct + preferred proxy
-      Promise.race(attempts)
-        .catch(() => {
-          // Both failed - try remaining proxies sequentially
-          const otherProxies = CORS_PROXIES
-            .map((proxy, i) => ({ proxy, i }))
-            .filter(p => p.i !== preferredProxyIndex);
+      // Add other proxies with staggered start for fallback
+      CORS_PROXIES.forEach((proxy, i) => {
+        if (i !== preferredProxyIndex) {
+          const proxyUrl = `${proxy}${encodeURIComponent(tileUrl)}`;
+          // Stagger start to reduce server load but still compete
+          attempts.push(
+            new Promise(resolve => setTimeout(resolve, 300 * (i + 1)))
+              .then(() => fetchWithTimeout(proxyUrl, 2500, `proxy-${i}`))
+          );
+        }
+      });
+
+      // Race all attempts - first successful response wins
+      Promise.any(attempts)
+        .then(({ blob, source }) => {
+          // Abort remaining requests
+          abortController.abort();
           
-          const tryNext = (index: number): Promise<{ blob: Blob; source: string; proxyIndex: number }> => {
-            if (index >= otherProxies.length) {
-              return Promise.reject(new Error('All proxies failed'));
+          // Update preferred proxy based on success
+          if (source.startsWith('proxy-')) {
+            const proxyIndex = parseInt(source.split('-')[1]);
+            if (proxyIndex !== preferredProxyIndex) {
+              consecutiveProxySuccesses++;
+              if (consecutiveProxySuccesses >= 3) {
+                preferredProxyIndex = proxyIndex;
+                consecutiveProxySuccesses = 0;
+              }
             }
-            
-            const { proxy, i } = otherProxies[index];
-            const proxyUrl = `${proxy}${encodeURIComponent(tileUrl)}`;
-            
-            return fetchWithTimeout(proxyUrl, 3000)
-              .then(blob => ({ blob, source: 'proxy', proxyIndex: i }))
-              .catch(() => tryNext(index + 1));
-          };
-          
-          return tryNext(0);
-        })
-        .then(({ blob, proxyIndex }) => {
-          // Abort any pending requests
-          masterController.abort();
-          
-          // Update preferred proxy if we used one
-          if (proxyIndex >= 0 && proxyIndex !== preferredProxyIndex) {
-            preferredProxyIndex = proxyIndex;
-            console.debug(`[WMS] Updated preferred proxy to ${proxyIndex + 1}`);
           }
           
-          // Cache the tile
+          // Cache the tile asynchronously (don't wait)
           if (useCache && blob.type.startsWith('image/')) {
-            cacheTile(tileUrl, blob, layerId);
+            cacheTile(tileUrl, blob, layerId).catch(() => {});
           }
           
-          // Render tile
+          // Render tile immediately
           const objectUrl = URL.createObjectURL(blob);
           tile.onload = () => {
             URL.revokeObjectURL(objectUrl);
@@ -207,28 +204,21 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
           };
           tile.onerror = () => {
             URL.revokeObjectURL(objectUrl);
-            done(new Error('Failed to render tile'), tile);
+            done(new Error('Render failed'), tile);
           };
           tile.src = objectUrl;
         })
-        .catch((err) => {
-          masterController.abort();
-          
-          if (!navigator.onLine || err.name === 'AbortError') {
-            console.debug(`[WMS OFFLINE] ${layerId} - network unavailable`);
-          } else {
-            console.debug(`[WMS FAILED] ${layerId}:`, err.message);
-          }
+        .catch(() => {
+          // All attempts failed
+          abortController.abort();
           done(null, tile);
         });
     };
 
     if (useCache) {
-      // Try cache first
+      // Try cache first - but with minimal blocking
       getCachedTile(tileUrl).then(blob => {
-        const isValidCachedTile = blob && blob.type.startsWith('image/');
-        
-        if (isValidCachedTile) {
+        if (blob && blob.type.startsWith('image/') && blob.size > 100) {
           const objectUrl = URL.createObjectURL(blob);
           tile.onload = () => {
             URL.revokeObjectURL(objectUrl);
@@ -236,35 +226,22 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
           };
           tile.onerror = () => {
             URL.revokeObjectURL(objectUrl);
-            if (navigator.onLine) {
-              loadFromNetwork();
-            } else {
-              done(null, tile);
-            }
+            if (navigator.onLine) loadFromNetwork();
+            else done(null, tile);
           };
           tile.src = objectUrl;
-        } else {
-          // Cache miss - try network
-          if (navigator.onLine) {
-            loadFromNetwork();
-          } else {
-            done(null, tile);
-          }
-        }
-      }).catch(() => {
-        if (navigator.onLine) {
+        } else if (navigator.onLine) {
           loadFromNetwork();
         } else {
           done(null, tile);
         }
+      }).catch(() => {
+        if (navigator.onLine) loadFromNetwork();
+        else done(null, tile);
       });
     } else {
-      // Cache disabled
-      if (navigator.onLine) {
-        loadFromNetwork();
-      } else {
-        done(null, tile);
-      }
+      if (navigator.onLine) loadFromNetwork();
+      else done(null, tile);
     }
 
     return tile;
@@ -312,10 +289,13 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       attribution,
       crs: L.CRS.EPSG3857,
       continuousWorld: true,
-      updateWhenIdle: true,
-      updateWhenZooming: false,
-      // OPTIMIZED: Larger buffer for smoother panning
-      keepBuffer: 6
+      // OPTIMIZED: Load during idle AND zooming for smoother experience
+      updateWhenIdle: false,
+      updateWhenZooming: true,
+      // Larger buffer for smoother panning - preload more tiles
+      keepBuffer: 8,
+      // Aggressive tile loading
+      tileLoadingPolicy: 'all'
     });
 
     if (typeof zIndex === 'number') {
@@ -351,12 +331,9 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       const wasUsingCache = prevUseCacheRef.current;
       (layerRef.current.options as any).useCache = useCache;
       
-      // Only redraw when ENABLING cache
       if (useCache && !wasUsingCache) {
         layerRef.current.redraw();
         console.log(`[CachedWMSTileLayer] Enabled cache for ${layerId}, redrawing`);
-      } else if (!useCache && wasUsingCache) {
-        console.log(`[CachedWMSTileLayer] Disabled cache for ${layerId}, keeping tiles visible`);
       }
       
       prevUseCacheRef.current = useCache;

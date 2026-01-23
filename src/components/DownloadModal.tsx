@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Waypoint, FlightSegment } from '../types';
 import { useDownloadManager } from '../hooks/useDownloadManager';
-import { Wifi, WifiOff, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { Wifi, WifiOff, AlertTriangle, Loader2, RefreshCw, Clock, Zap } from 'lucide-react';
 import { getCachedTileCount } from '../services/tileCache';
-import { DownloadStats } from '../services/chartDownloader';
+import { DownloadStats, getLayerDownloadStatus } from '../services/chartDownloader';
 
 interface DownloadModalProps {
   isOpen: boolean;
@@ -34,30 +34,57 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   const [downloadFormat, setDownloadFormat] = useState<'txt' | 'csv' | 'json'>('txt');
   const [confirmClearLayer, setConfirmClearLayer] = useState<string | null>(null);
   const [tileCounts, setTileCounts] = useState<Record<string, number>>({});
-  const { syncingLayers, isOnline, getError } = useDownloadManager();
+  const [checkpoints, setCheckpoints] = useState<Record<string, number>>({});
+  const { syncingLayers, downloadStats, isOnline, getError } = useDownloadManager();
 
-  // Fetch tile counts for downloaded layers
-  // Also clears counts for layers that were removed (cache cleared)
+  // Fetch tile counts and checkpoint info for all layers
   useEffect(() => {
-    const fetchTileCounts = async () => {
+    const fetchLayerInfo = async () => {
       const counts: Record<string, number> = {};
-      for (const layerId of downloadedLayers) {
+      const resumeProgress: Record<string, number> = {};
+      
+      const allLayerIds = [...chartOptions, ...baseMapOptions].map(o => o.id);
+      
+      for (const layerId of allLayerIds) {
         try {
-          const count = await getCachedTileCount(layerId);
-          counts[layerId] = count;
+          const status = await getLayerDownloadStatus(layerId);
+          if (status.isDownloaded || status.tileCount > 0) {
+            counts[layerId] = status.tileCount;
+          }
+          if (status.hasCheckpoint && !status.isDownloaded) {
+            resumeProgress[layerId] = status.checkpointProgress;
+          }
         } catch (e) {
-          counts[layerId] = 0;
+          // Ignore errors
         }
       }
-      // This replaces the entire state, removing counts for cleared layers
+      
       setTileCounts(counts);
+      setCheckpoints(resumeProgress);
     };
     
-    if (downloadedLayersReady) {
-      // Always fetch, even if downloadedLayers is empty (to clear old counts)
-      fetchTileCounts();
+    if (downloadedLayersReady && isOpen) {
+      fetchLayerInfo();
     }
-  }, [downloadedLayers, downloadedLayersReady]);
+  }, [downloadedLayers, downloadedLayersReady, isOpen]);
+
+  // Chart and base map options (moved up for useEffect reference)
+  const chartOptions = [
+    { id: 'HIGH', label: 'ENRC HIGH' },
+    { id: 'LOW', label: 'ENRC LOW' },
+    { id: 'REA', label: 'REA' },
+    { id: 'REUL', label: 'REUL' },
+    { id: 'REH', label: 'REH' },
+    { id: 'WAC', label: 'WAC' },
+    { id: 'ARC', label: 'ARC' },
+  ];
+
+  const baseMapOptions = [
+    { id: 'BASEMAP_OSM', label: 'Mapa (Dia)' },
+    { id: 'BASEMAP_DARK', label: 'Mapa (Noite)' },
+    { id: 'BASEMAP_TOPO', label: 'Terreno' },
+    { id: 'BASEMAP_SATELLITE', label: 'Satélite' },
+  ];
 
   if (!isOpen) return null;
 
@@ -261,40 +288,32 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     }
   };
 
-  const chartOptions = [
-    { id: 'HIGH', label: 'ENRC HIGH' },
-    { id: 'LOW', label: 'ENRC LOW' },
-    { id: 'REA', label: 'REA' },
-    { id: 'REUL', label: 'REUL' },
-    { id: 'REH', label: 'REH' },
-    { id: 'WAC', label: 'WAC' },
-    { id: 'ARC', label: 'ARC' },
-  ];
-
-  // Base map options for offline
-  const baseMapOptions = [
-    { id: 'BASEMAP_OSM', label: 'Mapa (Dia)' },
-    { id: 'BASEMAP_DARK', label: 'Mapa (Noite)' },
-    { id: 'BASEMAP_TOPO', label: 'Terreno' },
-    { id: 'BASEMAP_SATELLITE', label: 'Satélite' },
-  ];
+  // Format time remaining
+  const formatTimeRemaining = (seconds: number): string => {
+    if (seconds <= 0 || !isFinite(seconds)) return '';
+    if (seconds < 60) return `~${Math.round(seconds)}s restantes`;
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    return `~${minutes}m ${secs}s restantes`;
+  };
 
   const renderChartButton = (chart: { id: string; label: string }) => {
     // CRITICAL: Only show as downloaded AFTER IndexedDB validation is complete
-    // This prevents false positives from residual tiles or stale localStorage
     const isDownloaded = downloadedLayersReady && downloadedLayers.includes(chart.id);
     const isValidating = !downloadedLayersReady;
     
-    // Download modal shows ONLY download status - NOT map activation status
     const progress = syncingLayers[chart.id];
     const isSyncing = progress !== undefined;
     const error = getError(chart.id);
+    const stats = downloadStats[chart.id];
+    const hasCheckpoint = checkpoints[chart.id] !== undefined;
+    const checkpointProgress = checkpoints[chart.id] || 0;
 
     return (
       <div key={chart.id} className="relative">
         <button
           onClick={() => handleChartClick(chart.id)}
-          disabled={isSyncing || isValidating || (!isOnline && !isDownloaded)}
+          disabled={isSyncing || isValidating || (!isOnline && !isDownloaded && !hasCheckpoint)}
           className={`w-full p-4 rounded-xl border-2 transition-all flex flex-col items-center relative overflow-hidden ${
             error
               ? 'border-red-500/50 bg-red-500/10'
@@ -304,9 +323,11 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                   ? 'border-emerald-500/50 bg-emerald-500/10'
                   : isSyncing
                     ? 'border-sky-500/50 bg-sky-500/5'
-                    : !isOnline
-                      ? 'border-slate-700 bg-slate-800/30 opacity-50 cursor-not-allowed'
-                      : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                    : hasCheckpoint
+                      ? 'border-amber-500/50 bg-amber-500/10'
+                      : !isOnline
+                        ? 'border-slate-700 bg-slate-800/30 opacity-50 cursor-not-allowed'
+                        : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
           }`}
         >
           <div className="text-sm font-bold text-white mb-1 relative z-10">{chart.label}</div>
@@ -325,11 +346,26 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
             <div className="w-full mt-1 relative z-10">
               <div className="h-1 w-full bg-slate-700 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-emerald-500 transition-all duration-300"
+                  className="h-full bg-emerald-500 transition-all duration-150"
                   style={{ width: `${progress}%` }}
                 ></div>
               </div>
-              <div className="text-[10px] text-emerald-400 mt-1 font-bold">{progress}%</div>
+              <div className="flex items-center justify-between mt-1">
+                <div className="flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-emerald-400" />
+                  <span className="text-[10px] text-emerald-400 font-bold">{progress}%</span>
+                </div>
+                {stats?.estimatedSecondsRemaining > 0 && (
+                  <span className="text-[9px] text-slate-400">
+                    {formatTimeRemaining(stats.estimatedSecondsRemaining)}
+                  </span>
+                )}
+              </div>
+              {stats && (
+                <div className="text-[8px] text-slate-500 mt-0.5">
+                  {stats.downloadedTiles}/{stats.totalTiles} tiles
+                </div>
+              )}
             </div>
           ) : isDownloaded ? (
             <div className="flex flex-col items-center relative z-10">
@@ -343,16 +379,26 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                 </div>
               )}
             </div>
+          ) : hasCheckpoint ? (
+            <div className="flex flex-col items-center relative z-10">
+              <div className="flex items-center gap-1 text-xs text-amber-400">
+                <RefreshCw className="w-3 h-3" />
+                Retomar ({checkpointProgress}%)
+              </div>
+              <div className="text-[9px] text-slate-500 mt-0.5">
+                Clique para continuar
+              </div>
+            </div>
           ) : (
             <div className="text-xs text-slate-500 relative z-10 font-bold">BAIXAR</div>
           )}
         </button>
-        {/* Clear cache button - only clears offline cache, does NOT affect map display */}
+        {/* Clear cache button */}
         {isDownloaded && !isSyncing && (
           <button
             onClick={(e) => handleClearCacheRequest(e, chart.id)}
             className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-400 rounded-full flex items-center justify-center text-white text-xs shadow-lg transition-colors"
-            title="Limpar cache offline (não afeta exibição no mapa)"
+            title="Limpar cache offline"
           >
             ×
           </button>
