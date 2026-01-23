@@ -14,8 +14,6 @@ interface CachedBaseTileLayerProps {
   layerId: string;
   useCache?: boolean;
   maxZoom?: number;
-  maxNativeZoom?: number;  // Highest zoom level with actual tiles
-  minNativeZoom?: number;  // Lowest zoom level with actual tiles
   attribution?: string;
 }
 
@@ -125,8 +123,6 @@ export const CachedBaseTileLayer: React.FC<CachedBaseTileLayerProps> = ({
   layerId,
   useCache = true,
   maxZoom = 19,
-  maxNativeZoom = 8,   // Default: tiles available up to zoom 8
-  minNativeZoom = 8,   // Default: tiles available from zoom 8
   attribution
 }) => {
   const map = useMap();
@@ -142,9 +138,6 @@ export const CachedBaseTileLayer: React.FC<CachedBaseTileLayerProps> = ({
       layerId,
       useCache,
       maxZoom,
-      // OVERZOOMING: Scale zoom 8 tiles for all zoom levels
-      maxNativeZoom,  // Tiles only exist up to this zoom
-      minNativeZoom,  // Tiles only exist from this zoom
       attribution,
       crossOrigin: 'anonymous',
       // OPTIMIZED: Don't reload during zoom animation

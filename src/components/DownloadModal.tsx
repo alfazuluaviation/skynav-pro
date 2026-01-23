@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Waypoint, FlightSegment } from '../types';
 import { useDownloadManager } from '../hooks/useDownloadManager';
-import { Wifi, WifiOff, AlertTriangle, Loader2, RefreshCw, CheckCircle } from 'lucide-react';
+import { Wifi, WifiOff, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { getCachedTileCount } from '../services/tileCache';
 import { DownloadStats } from '../services/chartDownloader';
 
@@ -389,11 +389,11 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
             Baixe cartas e mapas para uso <strong>offline</strong>. Use o menu "CARTAS E MAPAS" para ativar/desativar no mapa.
           </p>
           
-          {/* Offline zoom info */}
-          <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-            <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-            <span className="text-[11px] text-emerald-300">
-              <strong>Estratégia Multi-Nível:</strong> Baixamos 3 níveis de zoom por carta (ex: 9, 7, 5) para máxima nitidez em todas as escalas.
+          {/* Offline zoom limit warning */}
+          <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+            <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+            <span className="text-[11px] text-amber-300">
+              O modo offline funciona até zoom ~8 (visão regional). Para detalhes maiores, é necessário conexão com internet.
             </span>
           </div>
 
