@@ -48,43 +48,52 @@ interface CachedWMSTileLayerProps {
 }
 
 // Custom TileLayer class with IndexedDB caching and optimized network loading
-// MULTI-LEVEL STRATEGY: Uses multiple native zoom levels for better quality
+// MULTI-LEVEL STRATEGY v4: Uses Leaflet's native maxNativeZoom/minNativeZoom
+// Leaflet handles the overzooming automatically and consistently
 const CachedWMSLayer = L.TileLayer.WMS.extend({
   options: {
     layerId: '',
     useCache: true,
     useProxy: false,
     baseWmsUrl: BASE_WMS_URL,
-    // Array of available native zoom levels (downloaded)
-    nativeZoomLevels: [8, 6, 4]
+    // Array of available native zoom levels (for reference)
+    nativeZoomLevels: [9, 7, 5]
   },
 
-  // Find the best native zoom level for current display zoom
-  // Returns the highest native zoom that's <= current zoom (for upscaling)
-  // or the lowest native zoom if current is below all (for downscaling)
-  _getBestNativeZoom: function (displayZoom: number): number {
-    const nativeLevels = this.options.nativeZoomLevels || [8];
-    const sorted = [...nativeLevels].sort((a, b) => b - a); // Descending
+  // Initializer: pre-compute zoom level mappings
+  initialize: function(url: string, options: any) {
+    L.TileLayer.WMS.prototype.initialize.call(this, url, options);
     
-    // Find highest native level that's <= display zoom
-    for (const level of sorted) {
-      if (level <= displayZoom) {
-        return level;
+    // Pre-compute which native zoom to use for each display zoom (0-18)
+    const nativeLevels = options.nativeZoomLevels || [8];
+    const sorted = [...nativeLevels].sort((a, b) => b - a); // Descending [9, 7, 5]
+    
+    this._zoomMapping = {};
+    for (let z = 0; z <= 18; z++) {
+      // Find the best native level for this display zoom
+      // Use the highest native level that's <= display zoom
+      let bestLevel = sorted[sorted.length - 1]; // Default to lowest
+      for (const level of sorted) {
+        if (level <= z) {
+          bestLevel = level;
+          break;
+        }
       }
+      this._zoomMapping[z] = bestLevel;
     }
-    // If display zoom is below all native levels, use the lowest
-    return sorted[sorted.length - 1];
+    
+    console.log(`[WMS] Zoom mapping for ${options.layerId}:`, this._zoomMapping);
   },
 
   // Generate WMS URL with EPSG:4326 coordinates
-  // Uses the best available native zoom level for quality
+  // Uses pre-computed zoom mapping for consistency
   getTileUrl: function (coords: L.Coords) {
     const displayZoom = coords.z;
     const x = coords.x;
     const y = coords.y;
     
-    // Use native zoom level for URL generation (cache key consistency)
-    const nativeZoom = this._getBestNativeZoom(displayZoom);
+    // Get the native zoom for this display level from pre-computed mapping
+    const nativeZoom = this._zoomMapping?.[displayZoom] ?? displayZoom;
     
     // Calculate scale factor for coordinate transformation
     const scaleFactor = Math.pow(2, displayZoom - nativeZoom);
@@ -327,6 +336,7 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
   const map = useMap();
   const layerRef = useRef<L.TileLayer.WMS | null>(null);
   const prevUseCacheRef = useRef<boolean>(useCache);
+  const prevNativeZoomRef = useRef<number | null>(null);
 
   // Create/update layer
   useEffect(() => {
@@ -363,13 +373,34 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       (wmsLayer as any).setZIndex(zIndex);
     }
 
-    console.log(`[CachedWMSTileLayer] Adding layer ${layerId} to map`);
+    console.log(`[CachedWMSTileLayer] Adding layer ${layerId} with zoom levels:`, nativeZoomLevels);
 
     wmsLayer.addTo(map);
     layerRef.current = wmsLayer;
     prevUseCacheRef.current = useCache;
+    
+    // Initialize current native zoom
+    const currentZoom = map.getZoom();
+    prevNativeZoomRef.current = (wmsLayer as any)._zoomMapping?.[Math.floor(currentZoom)] ?? null;
+
+    // Handler for zoom changes - redraw when native zoom level changes
+    const onZoomEnd = () => {
+      if (!layerRef.current) return;
+      
+      const newZoom = Math.floor(map.getZoom());
+      const newNativeZoom = (layerRef.current as any)._zoomMapping?.[newZoom];
+      
+      if (newNativeZoom !== prevNativeZoomRef.current) {
+        console.log(`[WMS] Native zoom changed: ${prevNativeZoomRef.current} → ${newNativeZoom} for ${layerId}`);
+        prevNativeZoomRef.current = newNativeZoom;
+        layerRef.current.redraw();
+      }
+    };
+    
+    map.on('zoomend', onZoomEnd);
 
     return () => {
+      map.off('zoomend', onZoomEnd);
       if (layerRef.current) {
         console.log(`[CachedWMSTileLayer] Removing layer ${layerId} from map`);
         map.removeLayer(layerRef.current);
@@ -377,7 +408,7 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, url, layers, format, transparent, version, zIndex, tileSize, detectRetina, maxZoom, layerId, useProxy, attribution]);
+  }, [map, url, layers, format, transparent, version, zIndex, tileSize, detectRetina, maxZoom, layerId, useProxy, attribution, nativeZoomLevels]);
 
   // Update opacity without recreating layer
   useEffect(() => {
