@@ -474,7 +474,7 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
                 <h2 className="text-lg sm:text-2xl font-black text-white flex items-center gap-3">
                   <IconMaximize /> PLANO DE VOO
                 </h2>
-                <p className="text-slate-500 text-xs sm:text-sm mt-1">{aircraftModel.label} @ {plannedSpeed} KT</p>
+                <p className="text-slate-500 text-xs sm:text-sm mt-1">{aircraftModel?.label || 'Aeronave não selecionada'} @ {plannedSpeed} KT</p>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={onOpenDownload} title="Download do Plano de Voo" className="px-3 sm:px-4 py-2 bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 rounded-lg text-white font-bold transition-colors flex items-center gap-2 text-sm">
