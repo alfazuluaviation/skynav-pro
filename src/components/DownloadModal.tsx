@@ -188,18 +188,15 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     if (isSyncing) return;
 
     const isDownloaded = downloadedLayers.includes(chartId);
-    const isBaseMap = chartId.startsWith('BASEMAP_');
     
+    // This modal is ONLY for downloading - not for toggling map layers
+    // If already downloaded, do nothing (user can use "CARTAS E MAPAS" menu to toggle)
     if (isDownloaded) {
-      // Base maps don't toggle - they're always used based on theme
-      if (!isBaseMap) {
-        // Toggle visibility on map
-        onToggleLayer(chartId);
-      }
-    } else {
-      // Download the chart/base map
-      await onDownloadLayer(chartId);
+      return;
     }
+    
+    // Download the chart/base map
+    await onDownloadLayer(chartId);
   };
 
   const handleClearCacheRequest = (e: React.MouseEvent, chartId: string) => {
