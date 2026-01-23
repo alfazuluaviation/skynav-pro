@@ -367,26 +367,10 @@ const App = () => {
     // Check if it's a base map layer
     const isBaseMap = layer.startsWith('BASEMAP_');
 
-    // Helper to activate layer with mutual exclusion logic
-    const activateLayer = (layerId: string) => {
-      // Don't auto-activate base maps (they're automatically used based on theme)
-      if (layerId.startsWith('BASEMAP_')) return;
-      
-      setActiveLayers(prev => {
-        if (prev.includes(layerId)) return prev; // Already active
-        let next = [...prev, layerId];
-        // Mutual exclusion: HIGH, LOW, WAC
-        if (layerId === 'HIGH') next = next.filter(l => l !== 'LOW' && l !== 'WAC');
-        if (layerId === 'LOW') next = next.filter(l => l !== 'HIGH' && l !== 'WAC');
-        if (layerId === 'WAC') next = next.filter(l => l !== 'HIGH' && l !== 'LOW');
-        // Mutual exclusion: REA, REUL, REH
-        if (layerId === 'REA') next = next.filter(l => l !== 'REUL' && l !== 'REH');
-        if (layerId === 'REUL') next = next.filter(l => l !== 'REA' && l !== 'REH');
-        if (layerId === 'REH') next = next.filter(l => l !== 'REA' && l !== 'REUL');
-        localStorage.setItem('sky_nav_active_layers', JSON.stringify(next));
-        return next;
-      });
-    };
+    // REMOVED: Auto-activation of layers after download
+    // Users should manually activate layers via "CARTAS E MAPAS" menu
+    // This prevents confusion where downloading REH would auto-activate it
+    // and cause the mutual exclusion logic to interfere
 
     try {
       // Start download via manager (runs in background)
@@ -399,15 +383,14 @@ const App = () => {
       }
 
       if (success) {
-        // Mark as downloaded
+        // Mark as downloaded (for offline status indicator only)
+        // Do NOT auto-activate on map - user should do this via "CARTAS E MAPAS" menu
         setDownloadedLayers(prev => {
           const next = prev.includes(layer) ? prev : [...prev, layer];
           localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
+          console.log(`[DOWNLOAD] Layer ${layer} marked as downloaded for offline use`);
           return next;
         });
-
-        // Auto-activate the layer on the map after download (not for base maps)
-        activateLayer(layer);
       }
     } catch (error) {
       console.error('Failed to download layer:', layer, error);
