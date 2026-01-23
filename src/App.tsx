@@ -215,6 +215,8 @@ const App = () => {
   const [mapRef, setMapRef] = useState<L.Map | null>(null);
   const [activeLayers, setActiveLayers] = useState<string[]>([]);
   const [downloadedLayers, setDownloadedLayers] = useState<string[]>([]);
+  // Flag to indicate that downloadedLayers has been validated against IndexedDB
+  const [downloadedLayersReady, setDownloadedLayersReady] = useState(false);
   // syncingLayers state removed - now handled by DownloadManager
   const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
   const [showChartsModal, setShowChartsModal] = useState(false);
@@ -413,20 +415,26 @@ const App = () => {
   };
 
   // Load cached layers on mount
-  // Sync downloaded and active layers with actual IndexedDB cache on startup
+  // Sync downloaded layers with actual IndexedDB cache on startup
+  // CRITICAL: Only validate, never auto-add from IndexedDB residual tiles
   useEffect(() => {
     const syncCachedLayers = async () => {
       try {
-        // Get actual cached layer IDs from IndexedDB
+        // Get actual cached layer IDs from IndexedDB (layers with 'complete' status)
         const cachedIds = await getCachedLayerIds();
-        console.log('[CACHE SYNC] IndexedDB cached layers:', cachedIds);
+        console.log('[CACHE SYNC] IndexedDB cached layers (complete status):', cachedIds);
         
         // IMPORTANT:
         // downloadedLayers must represent ONLY *explicit* offline downloads (via Download modal).
         // We must NOT auto-add layers just because IndexedDB has metadata/tiles,
         // otherwise online viewing ends up "linked" to the Download menu.
-        // Here we only *validate* the explicit list against what actually exists in IndexedDB.
+        // 
+        // The cachedIds from getCachedLayerIds() returns layers with status='complete',
+        // which SHOULD only be set after an explicit download via Download modal.
+        // 
+        // Here we ONLY validate the explicit list - intersection of what was saved AND exists in IndexedDB
         setDownloadedLayers(prev => {
+          // Only keep layers that are BOTH in localStorage AND in IndexedDB with complete status
           const validated = prev.filter(id => cachedIds.includes(id));
           if (validated.length !== prev.length) {
             console.log('[CACHE SYNC] Removed stale downloadedLayers (not in IndexedDB):', {
@@ -438,18 +446,20 @@ const App = () => {
           return validated;
         });
         
+        // Mark validation as complete - DownloadModal can now show accurate status
+        setDownloadedLayersReady(true);
+        
         // NOTE: Do NOT remove activeLayers based on cache status!
         // Charts can load online without being downloaded for offline use.
-        // Just log current active layers for debugging
         const savedActiveLayers = JSON.parse(localStorage.getItem('sky_nav_active_layers') || '[]');
         console.log('[CACHE SYNC] Active layers (preserved):', savedActiveLayers);
       } catch (error) {
         console.error('[CACHE SYNC] Failed to sync cached layers:', error);
-        // In case of IndexedDB error (e.g., in iframe), clear both states
+        // In case of IndexedDB error, set empty but mark as ready
         setDownloadedLayers([]);
-        setActiveLayers([]);
         localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify([]));
-        localStorage.setItem('sky_nav_active_layers', JSON.stringify([]));
+        setDownloadedLayersReady(true);
+        // Do NOT clear activeLayers - let online viewing work
       }
     };
     syncCachedLayers();
@@ -1144,9 +1154,8 @@ const App = () => {
         aircraftModel={aircraftModel}
         plannedSpeed={plannedSpeed}
         downloadedLayers={downloadedLayers}
-        activeLayers={activeLayers}
+        downloadedLayersReady={downloadedLayersReady}
         onDownloadLayer={handleChartDownload}
-        onToggleLayer={handleToggleLayer}
         onClearLayerCache={handleClearLayerCache}
       />
 

@@ -128,6 +128,7 @@ export const CachedBaseTileLayer: React.FC<CachedBaseTileLayerProps> = ({
   const map = useMap();
   const layerRef = useRef<L.TileLayer | null>(null);
 
+  // Create layer - NOT including useCache in deps to prevent recreation
   useEffect(() => {
     if (!map) return;
 
@@ -148,7 +149,18 @@ export const CachedBaseTileLayer: React.FC<CachedBaseTileLayerProps> = ({
         layerRef.current = null;
       }
     };
-  }, [map, url, layerId, useCache, maxZoom, attribution]);
+    // NOTE: Intentionally NOT including useCache to prevent layer recreation
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, url, layerId, maxZoom, attribution]);
+
+  // Update useCache option and redraw WITHOUT recreating the layer
+  useEffect(() => {
+    if (layerRef.current) {
+      (layerRef.current.options as any).useCache = useCache;
+      layerRef.current.redraw();
+      console.log(`[CachedBaseTileLayer] Updated useCache=${useCache} for ${layerId}, redrawing`);
+    }
+  }, [useCache, layerId]);
 
   return null;
 };

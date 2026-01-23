@@ -113,7 +113,8 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
       }
 
       // Helper function to load tile from a URL with timeout
-      const attemptLoad = (url: string, timeout: number = 15000): Promise<Blob> => {
+      // OPTIMIZED: Reduced timeout for faster fallback to proxies
+      const attemptLoad = (url: string, timeout: number = 4000): Promise<Blob> => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -146,7 +147,7 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
           });
       };
 
-      // Try proxies sequentially until one works
+      // Try proxies sequentially until one works - FASTER timeouts
       const tryProxies = async (proxyIndex: number = 0): Promise<Blob> => {
         if (proxyIndex >= CORS_PROXIES.length) {
           throw new Error('All proxies failed');
@@ -154,7 +155,8 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
         
         const proxyUrl = `${CORS_PROXIES[proxyIndex]}${encodeURIComponent(tileUrl)}`;
         try {
-          const blob = await attemptLoad(proxyUrl, 10000);
+          // Faster proxy timeout (5s instead of 10s)
+          const blob = await attemptLoad(proxyUrl, 5000);
           if (proxyIndex > 0) {
             console.debug(`[WMS PROXY ${proxyIndex + 1}] ${layerId} - success`);
           }
@@ -283,13 +285,12 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
   const map = useMap();
   const layerRef = useRef<L.TileLayer.WMS | null>(null);
 
+  // Create/update layer - OPTIMIZED to not recreate when only useCache changes
   useEffect(() => {
     if (!map) return;
 
     // Create the cached WMS layer
     // IMPORTANT: Keep CRS consistent with Leaflet MapContainer (default EPSG:3857)
-    // Our getTileUrl implementation assumes standard WebMercator tile coordinates (x/y/z)
-    // and then converts to an EPSG:4326 bbox for the WMS request.
     const wmsLayer = new CachedWMSLayer(url, {
       layers,
       format,
@@ -302,24 +303,21 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       maxZoom,
       layerId,
       useCache,
-      useProxy: false, // Use direct access, cache handles offline
+      useProxy: false,
       baseWmsUrl: BASE_WMS_URL,
       attribution,
-      // Keep WebMercator to avoid tile coord mismatches (this fixes charts disappearing on zoom)
       crs: L.CRS.EPSG3857,
       continuousWorld: true,
-      // IMPORTANT: Allow updates during zoom for proper tile refresh
       updateWhenIdle: true,
       updateWhenZooming: true,
       keepBuffer: 2
     });
 
-    // Set zIndex after creation
     if (typeof zIndex === 'number') {
       (wmsLayer as any).setZIndex(zIndex);
     }
 
-    console.log(`[CachedWMSTileLayer] Adding layer ${layerId} to map with zIndex=${zIndex}, useCache=${useCache}, tileSize=${tileSize}`);
+    console.log(`[CachedWMSTileLayer] Adding layer ${layerId} to map with zIndex=${zIndex}, useCache=${useCache}`);
 
     wmsLayer.addTo(map);
     layerRef.current = wmsLayer;
@@ -331,14 +329,28 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
         layerRef.current = null;
       }
     };
-  }, [map, url, layers, format, transparent, version, opacity, zIndex, tileSize, detectRetina, maxZoom, layerId, useCache, useProxy, attribution]);
+    // NOTE: Intentionally NOT including useCache in deps to prevent layer recreation
+    // useCache changes are handled in a separate effect below
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, url, layers, format, transparent, version, zIndex, tileSize, detectRetina, maxZoom, layerId, useProxy, attribution]);
 
-  // Update opacity if it changes
+  // Update opacity without recreating layer
   useEffect(() => {
     if (layerRef.current) {
       layerRef.current.setOpacity(opacity);
     }
   }, [opacity]);
+
+  // Update useCache option and redraw WITHOUT recreating the layer
+  // This prevents the layer from disappearing when clearing offline cache
+  useEffect(() => {
+    if (layerRef.current) {
+      (layerRef.current.options as any).useCache = useCache;
+      // Redraw tiles with new cache setting (existing tiles remain visible)
+      layerRef.current.redraw();
+      console.log(`[CachedWMSTileLayer] Updated useCache=${useCache} for ${layerId}, redrawing`);
+    }
+  }, [useCache, layerId]);
 
   return null;
 };

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Waypoint, FlightSegment } from '../types';
 import { useDownloadManager } from '../hooks/useDownloadManager';
-import { Wifi, WifiOff, AlertTriangle } from 'lucide-react';
+import { Wifi, WifiOff, AlertTriangle, Loader2 } from 'lucide-react';
 
 interface DownloadModalProps {
   isOpen: boolean;
@@ -11,9 +11,9 @@ interface DownloadModalProps {
   aircraftModel: { id: string; label: string; speed: number };
   plannedSpeed: number;
   downloadedLayers: string[];
-  activeLayers: string[];
+  // Flag indicating IndexedDB validation is complete - prevents showing false "OFFLINE" status
+  downloadedLayersReady: boolean;
   onDownloadLayer: (layer: string) => Promise<void>;
-  onToggleLayer: (layer: string) => void;
   onClearLayerCache: (layer: string) => void;
 }
 
@@ -25,9 +25,8 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   aircraftModel,
   plannedSpeed,
   downloadedLayers,
-  activeLayers,
+  downloadedLayersReady,
   onDownloadLayer,
-  onToggleLayer,
   onClearLayerCache
 }) => {
   const [downloadFormat, setDownloadFormat] = useState<'txt' | 'csv' | 'json'>('txt');
@@ -247,9 +246,12 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   ];
 
   const renderChartButton = (chart: { id: string; label: string }) => {
-    const isDownloaded = downloadedLayers.includes(chart.id);
+    // CRITICAL: Only show as downloaded AFTER IndexedDB validation is complete
+    // This prevents false positives from residual tiles or stale localStorage
+    const isDownloaded = downloadedLayersReady && downloadedLayers.includes(chart.id);
+    const isValidating = !downloadedLayersReady;
+    
     // Download modal shows ONLY download status - NOT map activation status
-    // activeLayers is intentionally NOT used here to maintain separation of concerns
     const progress = syncingLayers[chart.id];
     const isSyncing = progress !== undefined;
     const error = getError(chart.id);
@@ -258,17 +260,19 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
       <div key={chart.id} className="relative">
         <button
           onClick={() => handleChartClick(chart.id)}
-          disabled={isSyncing || (!isOnline && !isDownloaded)}
+          disabled={isSyncing || isValidating || (!isOnline && !isDownloaded)}
           className={`w-full p-4 rounded-xl border-2 transition-all flex flex-col items-center relative overflow-hidden ${
             error
               ? 'border-red-500/50 bg-red-500/10'
-              : isDownloaded
-                ? 'border-emerald-500/50 bg-emerald-500/10'
-                : isSyncing
-                  ? 'border-sky-500/50 bg-sky-500/5'
-                  : !isOnline
-                    ? 'border-slate-700 bg-slate-800/30 opacity-50 cursor-not-allowed'
-                    : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+              : isValidating
+                ? 'border-slate-600 bg-slate-800/30'
+                : isDownloaded
+                  ? 'border-emerald-500/50 bg-emerald-500/10'
+                  : isSyncing
+                    ? 'border-sky-500/50 bg-sky-500/5'
+                    : !isOnline
+                      ? 'border-slate-700 bg-slate-800/30 opacity-50 cursor-not-allowed'
+                      : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
           }`}
         >
           <div className="text-sm font-bold text-white mb-1 relative z-10">{chart.label}</div>
@@ -277,6 +281,11 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
             <div className="flex items-center gap-1 text-xs text-red-400 relative z-10">
               <WifiOff className="w-3 h-3" />
               Sem internet
+            </div>
+          ) : isValidating ? (
+            <div className="flex items-center gap-1 text-xs text-slate-400 relative z-10">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Verificando...
             </div>
           ) : isSyncing ? (
             <div className="w-full mt-1 relative z-10">
