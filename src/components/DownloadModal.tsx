@@ -231,6 +231,14 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
 
   const handleConfirmClearCache = () => {
     if (confirmClearLayer) {
+      // Immediately clear local tile count to reflect UI change
+      setTileCounts(prev => {
+        const next = { ...prev };
+        delete next[confirmClearLayer];
+        return next;
+      });
+      
+      // Call parent handler to clear IndexedDB and update downloadedLayers
       onClearLayerCache(confirmClearLayer);
       setConfirmClearLayer(null);
     }
@@ -393,7 +401,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
             <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
             <span className="text-[11px] text-amber-300">
-              O modo offline funciona até zoom ~8 (visão regional). Para detalhes maiores, é necessário conexão com internet.
+              O modo offline cobre zooms 5-10 (visão regional a detalhada). Para zoom 11+, é necessário conexão.
             </span>
           </div>
 
