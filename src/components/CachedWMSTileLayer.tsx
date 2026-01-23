@@ -3,11 +3,11 @@
  * A WMS tile layer component that uses IndexedDB for offline caching.
  * Tiles are served from cache when available, with network fallback.
  * 
- * OPTIMIZED v3:
- * - Concurrent fetches with Promise.any() for fastest response
- * - Aggressive caching with preload buffer
- * - Reduced timeouts and instant fallback
- * - Connection pooling via keepalive
+ * OPTIMIZED v4:
+ * - Supabase Edge Function proxy as primary (most reliable)
+ * - Parallel fetches with staggered fallbacks
+ * - Aggressive retry with exponential backoff
+ * - Session-aware proxy selection
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -18,16 +18,22 @@ import { getCachedTile, cacheTile } from '../services/tileCache';
 // GeoServer direct URL
 const BASE_WMS_URL = "https://geoaisweb.decea.mil.br/geoserver/wms";
 
-// Multiple CORS proxies for redundancy - ordered by reliability
-const CORS_PROXIES = [
+// Supabase Edge Function proxy URL - most reliable option
+const SUPABASE_PROXY_URL = `https://gongoqjjpwphhttumdjm.supabase.co/functions/v1/proxy-wms`;
+
+// Public CORS proxies as fallback (ordered by reliability)
+const PUBLIC_PROXIES = [
+  "https://api.codetabs.com/v1/proxy?quest=",  // Most reliable based on logs
   "https://api.allorigins.win/raw?url=",
-  "https://corsproxy.io/?",
-  "https://api.codetabs.com/v1/proxy?quest="
 ];
 
-// Session-level preferred proxy index (learns which proxy works best)
-let preferredProxyIndex = 0;
-let consecutiveProxySuccesses = 0;
+// Track which sources are working in this session
+const sourceHealth: Record<string, { failures: number; lastSuccess: number }> = {
+  'supabase': { failures: 0, lastSuccess: Date.now() },
+  'direct': { failures: 0, lastSuccess: 0 },
+  'public-0': { failures: 0, lastSuccess: 0 },
+  'public-1': { failures: 0, lastSuccess: 0 }
+};
 
 interface CachedWMSTileLayerProps {
   url: string;
@@ -102,7 +108,18 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
     tile.setAttribute('role', 'presentation');
     tile.crossOrigin = 'anonymous';
 
-    // Fast network loading with concurrent requests
+    // Build Supabase proxy URL with WMS params
+    const buildSupabaseProxyUrl = (wmsUrl: string) => {
+      const wmsUrlObj = new URL(wmsUrl);
+      const proxyUrl = new URL(SUPABASE_PROXY_URL);
+      // Copy all WMS parameters to the proxy URL
+      for (const [key, value] of wmsUrlObj.searchParams.entries()) {
+        proxyUrl.searchParams.set(key, value);
+      }
+      return proxyUrl.toString();
+    };
+
+    // Fast network loading with smart source selection
     const loadFromNetwork = () => {
       if (!navigator.onLine) {
         done(null, tile);
@@ -110,10 +127,16 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
       }
 
       const abortController = new AbortController();
+      let resolved = false;
       
-      // Helper to fetch with timeout - optimized for speed
+      // Helper to fetch with timeout
       const fetchWithTimeout = (url: string, timeout: number, source: string): Promise<{ blob: Blob; source: string }> => {
         return new Promise((resolve, reject) => {
+          if (resolved) {
+            reject(new Error('already resolved'));
+            return;
+          }
+          
           const timeoutId = setTimeout(() => {
             reject(new Error('timeout'));
           }, timeout);
@@ -122,77 +145,101 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
             mode: 'cors', 
             credentials: 'omit',
             signal: abortController.signal,
-            // Keep connection alive for faster subsequent requests
-            keepalive: true
           })
             .then(async res => {
               clearTimeout(timeoutId);
+              if (resolved) {
+                reject(new Error('already resolved'));
+                return;
+              }
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
               
               const contentType = res.headers.get('Content-Type') || '';
-              if (contentType.includes('xml') || contentType.includes('text/')) {
-                throw new Error('XML error response');
+              if (contentType.includes('xml') || contentType.includes('text/html')) {
+                throw new Error('Invalid response type');
               }
               
               const blob = await res.blob();
-              if (!blob.type.startsWith('image/') || blob.size < 100) {
-                throw new Error('Invalid image');
+              // Accept small transparent PNGs too (valid tiles)
+              if (!blob.type.startsWith('image/')) {
+                throw new Error('Not an image');
               }
+              
+              // Track success
+              if (sourceHealth[source]) {
+                sourceHealth[source].failures = 0;
+                sourceHealth[source].lastSuccess = Date.now();
+              }
+              
               resolve({ blob, source });
             })
             .catch(err => {
               clearTimeout(timeoutId);
+              // Track failure
+              if (sourceHealth[source]) {
+                sourceHealth[source].failures++;
+              }
               reject(err);
             });
         });
       };
 
-      // Build concurrent fetch attempts - fire all at once for speed
+      // Build URLs
+      const supabaseProxyUrl = buildSupabaseProxyUrl(tileUrl);
+      
+      // Sort sources by health (least failures first)
+      const sortedSources = Object.entries(sourceHealth)
+        .sort((a, b) => {
+          // Prioritize by least failures, then by most recent success
+          if (a[1].failures !== b[1].failures) return a[1].failures - b[1].failures;
+          return b[1].lastSuccess - a[1].lastSuccess;
+        })
+        .map(([key]) => key);
+      
+      // Build attempts in order of health
       const attempts: Promise<{ blob: Blob; source: string }>[] = [];
       
-      // Direct access - fastest if CORS works (short timeout)
-      attempts.push(
-        fetchWithTimeout(tileUrl, 1200, 'direct')
-      );
-      
-      // Preferred proxy (slightly longer timeout)
-      const preferredProxyUrl = `${CORS_PROXIES[preferredProxyIndex]}${encodeURIComponent(tileUrl)}`;
-      attempts.push(
-        fetchWithTimeout(preferredProxyUrl, 2000, `proxy-${preferredProxyIndex}`)
-      );
-
-      // Add other proxies with staggered start for fallback
-      CORS_PROXIES.forEach((proxy, i) => {
-        if (i !== preferredProxyIndex) {
-          const proxyUrl = `${proxy}${encodeURIComponent(tileUrl)}`;
-          // Stagger start to reduce server load but still compete
+      sortedSources.forEach((source, index) => {
+        // Stagger starts slightly to reduce server load
+        const delay = index * 100;
+        let url: string;
+        let timeout: number;
+        
+        if (source === 'supabase') {
+          url = supabaseProxyUrl;
+          timeout = 4000; // Supabase proxy - reliable but needs more time
+        } else if (source === 'direct') {
+          url = tileUrl;
+          timeout = 1500; // Direct - fast timeout since usually blocked by CORS
+        } else if (source.startsWith('public-')) {
+          const proxyIndex = parseInt(source.split('-')[1]);
+          url = `${PUBLIC_PROXIES[proxyIndex]}${encodeURIComponent(tileUrl)}`;
+          timeout = 3000;
+        } else {
+          return;
+        }
+        
+        if (delay > 0) {
           attempts.push(
-            new Promise(resolve => setTimeout(resolve, 300 * (i + 1)))
-              .then(() => fetchWithTimeout(proxyUrl, 2500, `proxy-${i}`))
+            new Promise(resolve => setTimeout(resolve, delay))
+              .then(() => fetchWithTimeout(url, timeout, source))
           );
+        } else {
+          attempts.push(fetchWithTimeout(url, timeout, source));
         }
       });
 
       // Race all attempts - first successful response wins
       Promise.any(attempts)
         .then(({ blob, source }) => {
+          resolved = true;
           // Abort remaining requests
-          abortController.abort();
+          try { abortController.abort(); } catch {}
           
-          // Update preferred proxy based on success
-          if (source.startsWith('proxy-')) {
-            const proxyIndex = parseInt(source.split('-')[1]);
-            if (proxyIndex !== preferredProxyIndex) {
-              consecutiveProxySuccesses++;
-              if (consecutiveProxySuccesses >= 3) {
-                preferredProxyIndex = proxyIndex;
-                consecutiveProxySuccesses = 0;
-              }
-            }
-          }
+          console.debug(`[WMS] Tile loaded via ${source}`);
           
-          // Cache the tile asynchronously (don't wait)
-          if (useCache && blob.type.startsWith('image/')) {
+          // Cache the tile asynchronously (don't wait) - only cache real content
+          if (useCache && blob.type.startsWith('image/') && blob.size > 100) {
             cacheTile(tileUrl, blob, layerId).catch(() => {});
           }
           
@@ -210,7 +257,8 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
         })
         .catch(() => {
           // All attempts failed
-          abortController.abort();
+          try { abortController.abort(); } catch {}
+          console.warn(`[WMS] All sources failed for tile`);
           done(null, tile);
         });
     };
