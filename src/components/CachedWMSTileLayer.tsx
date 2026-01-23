@@ -106,38 +106,57 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
         return;
       }
 
-      // Use fetch with AbortController for better offline handling
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      // Helper function to load tile from a URL
+      const attemptLoad = (url: string, isProxy: boolean = false): Promise<Blob> => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-      fetch(tileUrl, { 
-        mode: 'cors', 
-        credentials: 'omit',
-        signal: controller.signal 
-      })
-        .then(async res => {
-          clearTimeout(timeoutId);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          
-          const contentType = res.headers.get('Content-Type') || '';
-          
-          // If server returned XML (error), handle gracefully
-          if (contentType.includes('xml') || contentType.includes('text/')) {
-            const text = await res.text();
-            if (text.includes('ServiceException')) {
-              console.warn(`[WMS ERROR] ${layerId} - GeoServer error`);
+        return fetch(url, { 
+          mode: 'cors', 
+          credentials: 'omit',
+          signal: controller.signal 
+        })
+          .then(async res => {
+            clearTimeout(timeoutId);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            
+            const contentType = res.headers.get('Content-Type') || '';
+            
+            // If server returned XML (error), handle gracefully
+            if (contentType.includes('xml') || contentType.includes('text/')) {
+              const text = await res.text();
+              if (text.includes('ServiceException')) {
+                console.warn(`[WMS ERROR] ${layerId} - GeoServer error`);
+              }
+              throw new Error('Server returned XML error');
             }
-            throw new Error('Server returned XML error');
-          }
-          
-          const blob = await res.blob();
-          console.debug(`[WMS LOAD] ${layerId} - received ${blob.size} bytes, type: ${blob.type || contentType}`);
-          return blob;
+            
+            const blob = await res.blob();
+            if (isProxy) {
+              console.debug(`[WMS PROXY] ${layerId} - received ${blob.size} bytes`);
+            } else {
+              console.debug(`[WMS DIRECT] ${layerId} - received ${blob.size} bytes`);
+            }
+            return blob;
+          })
+          .catch(err => {
+            clearTimeout(timeoutId);
+            throw err;
+          });
+      };
+
+      // Try direct access first, then fallback to CORS proxy
+      attemptLoad(tileUrl)
+        .catch(err => {
+          // Direct access failed (likely CORS) - try proxy
+          console.debug(`[WMS] Direct access failed for ${layerId}, trying CORS proxy...`);
+          const proxyUrl = `${CORS_PROXY_URL}${encodeURIComponent(tileUrl)}`;
+          return attemptLoad(proxyUrl, true);
         })
         .then(blob => {
           // Cache valid image blobs (any size is fine for transparent tiles)
           if (useCache && blob.type.startsWith('image/')) {
-            cacheTile(tileUrl, blob, layerId);
+            cacheTile(tileUrl, blob, layerId); // Always cache with direct URL as key
           }
           // Create object URL and load into tile
           const objectUrl = URL.createObjectURL(blob);
@@ -152,12 +171,11 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
           tile.src = objectUrl;
         })
         .catch((err) => {
-          clearTimeout(timeoutId);
-          // Silently handle network errors when offline
+          // Both direct and proxy failed
           if (!navigator.onLine || err.name === 'AbortError' || err.message?.includes('Failed to fetch')) {
             console.debug(`[WMS OFFLINE] ${layerId} - network unavailable`);
           } else {
-            console.debug('Failed to load tile:', err.message);
+            console.debug(`[WMS FAILED] ${layerId}:`, err.message);
           }
           done(null, tile); // Return empty tile on error
         });
