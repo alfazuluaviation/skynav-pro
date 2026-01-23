@@ -267,8 +267,8 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
   useEffect(() => {
     if (!map) return;
 
-    // Create the cached WMS layer - use simple Mercator for tile coords
-    // but generate EPSG:4326 bbox in getTileUrl to match chartDownloader
+    // Create the cached WMS layer
+    // Uses EPSG:4326 for WMS requests (via getTileUrl) to match DECEA GeoServer
     const wmsLayer = new CachedWMSLayer(url, {
       layers,
       format,
@@ -284,14 +284,13 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       useProxy: false, // Use direct access, cache handles offline
       baseWmsUrl: BASE_WMS_URL,
       attribution,
-      // Use simple Mercator CRS for tile coordinate system
-      // but we convert to EPSG:4326 bbox in getTileUrl
-      crs: L.CRS.EPSG3857,
+      // Use EPSG:4326 CRS to match GeoServer configuration
+      crs: L.CRS.EPSG4326,
       continuousWorld: true,
-      // Optimize loading
-      updateWhenIdle: false,
-      updateWhenZooming: false,
-      keepBuffer: 4
+      // IMPORTANT: Allow updates during zoom for proper tile refresh
+      updateWhenIdle: true,
+      updateWhenZooming: true,
+      keepBuffer: 2
     });
 
     // Set zIndex after creation
