@@ -1,34 +1,32 @@
 /* supabase/functions/download/index.ts
    Secure download proxy with JWT validation and CORS preflight handling */
 
-export async function handler(req: Request): Promise<Response> {
-  try {
-    // --- CORS preflight handling ---
-    if (req.method === 'OPTIONS') {
-      const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN') ?? '*';
-      const headers = new Headers();
-      headers.set('Access-Control-Allow-Origin', allowedOrigin);
-      headers.set('Access-Control-Allow-Methods', 'GET,OPTIONS');
-      headers.set('Access-Control-Allow-Headers', 'Authorization, apikey, Content-Type');
-      headers.set('Access-Control-Max-Age', '600');
-      headers.set('Vary', 'Origin');
-      return new Response(null, { status: 204, headers });
-    }
+const corsHeaders = {
+  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Authorization, apikey, Content-Type, x-client-info',
+  'Access-Control-Max-Age': '600',
+  'Vary': 'Origin',
+};
 
+Deno.serve(async (req: Request): Promise<Response> => {
+  // --- CORS preflight handling ---
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
+  try {
     // Parse request and param
     const url = new URL(req.url);
     const arquivo = url.searchParams.get('arquivo') ?? '';
 
+    // Validate arquivo parameter (UUID format)
     const uuidRegex = /^[0-9a-fA-F\-]{8,}$/;
     if (!arquivo || !uuidRegex.test(arquivo)) {
-      const respHeaders = new Headers({ 'Content-Type': 'application/json' });
-      const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN') ?? (req.headers.get('origin') ?? '*');
-      respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
-      respHeaders.set('Vary', 'Origin');
-      return new Response(JSON.stringify({ success: false, error: 'Parâmetro "arquivo" inválido' }), {
-        status: 400,
-        headers: respHeaders,
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Parâmetro "arquivo" inválido' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // --- Accept token from Authorization header OR cookie sb-<project>-auth-token ---
@@ -42,34 +40,25 @@ export async function handler(req: Request): Promise<Response> {
       if (cookieMatch) token = decodeURIComponent(cookieMatch[1]);
     }
 
-    const reqOrigin = req.headers.get('origin') ?? '*';
-    const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN') ?? reqOrigin;
-
     if (!token) {
-      const headers = new Headers({ 'Content-Type': 'application/json' });
-      headers.set('Access-Control-Allow-Origin', allowedOrigin);
-      headers.set('Vary', 'Origin');
-      return new Response(JSON.stringify({ success: false, error: 'Não autorizado' }), {
-        status: 401,
-        headers,
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Não autorizado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Supabase config (must be defined in function secrets)
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
     const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      console.error('Supabase URL/Anon key not configured');
-      const headers = new Headers({ 'Content-Type': 'application/json' });
-      headers.set('Access-Control-Allow-Origin', allowedOrigin);
-      headers.set('Vary', 'Origin');
-      return new Response(JSON.stringify({ success: false, error: 'Server misconfigured' }), {
-        status: 500,
-        headers,
-      });
+      console.error('[download] Supabase URL/Anon key not configured');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Server misconfigured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Validate token against Supabase /auth/v1/user
+    // Validate token against Supabase /auth/v1/user (JWT validation)
     const userRes = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/auth/v1/user`, {
       method: 'GET',
       headers: {
@@ -78,72 +67,59 @@ export async function handler(req: Request): Promise<Response> {
       },
     });
 
-    // diagnostic snippet (safe): small body snippet and status (DO NOT log token)
-    const userText = await userRes.text().catch(() => '');
-    console.warn('Auth check status', userRes.status, 'bodySnippet:', userText.slice(0, 300));
-
     if (!userRes.ok) {
-      const headers = new Headers({ 'Content-Type': 'application/json' });
-      headers.set('Access-Control-Allow-Origin', allowedOrigin);
-      headers.set('Vary', 'Origin');
-      return new Response(JSON.stringify({ success: false, error: 'Não autorizado' }), {
-        status: 401,
-        headers,
-      });
+      // Log status only, never log tokens
+      console.warn('[download] Auth check failed, status:', userRes.status);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Não autorizado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // AIS credentials
+    // AIS credentials from environment (secrets)
     const AISKEY = Deno.env.get('AISWEB_API_KEY') ?? '';
     const AISPASS = Deno.env.get('AISWEB_API_PASS') ?? '';
     if (!AISKEY || !AISPASS) {
-      console.error('AISWEB credentials missing');
-      const headers = new Headers({ 'Content-Type': 'application/json' });
-      headers.set('Access-Control-Allow-Origin', allowedOrigin);
-      headers.set('Vary', 'Origin');
-      return new Response(JSON.stringify({ success: false, error: 'Server misconfigured' }), {
-        status: 500,
-        headers,
-      });
+      console.error('[download] AISWEB credentials missing');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Server misconfigured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Build AIS URL and proxy the request
+    // Build AIS URL and proxy the request (credentials stay server-side)
     const aisUrl = `https://aisweb.decea.gov.br/download/?arquivo=${encodeURIComponent(
-      arquivo,
+      arquivo
     )}&apikey=${encodeURIComponent(AISKEY)}&apipass=${encodeURIComponent(AISPASS)}`;
 
     const aisRes = await fetch(aisUrl, { method: 'GET' });
 
     if (!aisRes.ok) {
-      const snippet = await aisRes.text().then(t => t.slice(0, 300)).catch(() => '');
-      console.error('AIS responded error', aisRes.status, snippet);
-      const headers = new Headers({ 'Content-Type': 'application/json' });
-      headers.set('Access-Control-Allow-Origin', allowedOrigin);
-      headers.set('Vary', 'Origin');
-      return new Response(JSON.stringify({ success: false, error: 'Erro ao obter arquivo externo' }), {
-        status: 502,
-        headers,
-      });
+      console.error('[download] AIS responded error, status:', aisRes.status);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Erro ao obter arquivo externo' }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Forward stream to client and set CORS
-    const headers = new Headers();
+    // Forward stream to client with proper headers
+    const responseHeaders = new Headers(corsHeaders);
     const contentType = aisRes.headers.get('content-type') || 'application/octet-stream';
-    headers.set('Content-Type', contentType);
-    const cd = aisRes.headers.get('content-disposition');
-    if (cd) headers.set('Content-Disposition', cd);
+    responseHeaders.set('Content-Type', contentType);
+    
+    const contentDisposition = aisRes.headers.get('content-disposition');
+    if (contentDisposition) {
+      responseHeaders.set('Content-Disposition', contentDisposition);
+    }
 
-    headers.set('Access-Control-Allow-Origin', allowedOrigin);
-    headers.set('Vary', 'Origin');
-
-    return new Response(aisRes.body, { status: 200, headers });
+    return new Response(aisRes.body, { status: 200, headers: responseHeaders });
+    
   } catch (err) {
-    console.error('download function error', err);
-    const headers = new Headers({ 'Content-Type': 'application/json' });
-    headers.set('Access-Control-Allow-Origin', Deno.env.get('ALLOWED_ORIGIN') ?? '*');
-    headers.set('Vary', 'Origin');
-    return new Response(JSON.stringify({ success: false, error: 'Internal server error' }), {
-      status: 500,
-      headers,
-    });
+    // Log error without sensitive data
+    console.error('[download] function error:', err instanceof Error ? err.message : 'Unknown error');
+    return new Response(
+      JSON.stringify({ success: false, error: 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
-}
+});
