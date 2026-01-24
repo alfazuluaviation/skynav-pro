@@ -63,22 +63,29 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
     ];
 
     // Toggle items for navigation points visibility
-    const visibilityToggles = [
-        { key: 'waypoints' as keyof PointVisibility, label: 'Fixos / Waypoints', description: 'Pontos de referência FIX' },
-        { key: 'vorNdb' as keyof PointVisibility, label: 'VOR / NDB', description: 'Auxílios rádio-navegação' },
-        { key: 'aerodromes' as keyof PointVisibility, label: 'Aeródromos', description: 'Aeroportos e pistas' },
-        { key: 'heliports' as keyof PointVisibility, label: 'Helipontos', description: 'Pontos de pouso para helicópteros' },
-        { key: 'userFixes' as keyof PointVisibility, label: 'Fixos Usuário', description: 'Pontos criados por você' },
+    const visibilityToggles: Array<{ key: keyof PointVisibility; label: string; description: string }> = [
+        { key: 'vorNdb', label: 'VOR / NDB', description: 'Auxílios rádio-navegação' },
+        { key: 'waypoints', label: 'Fixos / Waypoints', description: 'Pontos de referência FIX' },
+        { key: 'aerodromes', label: 'Aeródromos', description: 'Aeroportos e pistas' },
+        { key: 'heliports', label: 'Helipontos', description: 'Pontos de pouso para helicópteros' },
+        { key: 'userFixes', label: 'Fixos Usuário', description: 'Pontos criados por você' },
     ];
 
     // Render a toggle switch component
-    const renderToggle = (key: keyof PointVisibility, label: string, description: string) => {
-        const isActive = pointVisibility[key];
+    const renderToggle = (toggleKey: keyof PointVisibility, label: string, description: string) => {
+        const isActive = Boolean(pointVisibility[toggleKey]);
+        
+        const handleClick = () => {
+            if (onTogglePointVisibility) {
+                onTogglePointVisibility(toggleKey);
+            }
+        };
+        
         return (
             <div 
-                key={key}
+                key={toggleKey}
                 className="flex items-center justify-between py-2 px-1 cursor-pointer group"
-                onClick={() => onTogglePointVisibility?.(key)}
+                onClick={handleClick}
             >
                 <div className="flex-1 mr-3">
                     <div className={`text-xs font-bold uppercase tracking-wide transition-colors ${isActive ? 'text-white' : 'text-slate-400'}`}>
@@ -87,15 +94,17 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                     <div className="text-[10px] text-slate-500 mt-0.5">{description}</div>
                 </div>
                 <div 
-                    className={`relative w-11 h-6 rounded-full transition-all duration-200 ${
+                    className={`relative w-11 h-6 rounded-full cursor-pointer transition-all duration-200 ${
                         isActive 
-                            ? 'bg-[#9333ea] shadow-lg shadow-purple-600/40' 
+                            ? 'bg-purple-600 shadow-lg shadow-purple-500/50' 
                             : 'bg-slate-700'
                     }`}
                 >
                     <div 
-                        className={`absolute top-1 w-4 h-4 rounded-full shadow-md transition-transform duration-200 ${
-                            isActive ? 'translate-x-6 bg-white' : 'translate-x-1 bg-slate-400'
+                        className={`absolute top-1 w-4 h-4 rounded-full shadow-md transition-all duration-200 ${
+                            isActive 
+                                ? 'translate-x-6 bg-white' 
+                                : 'translate-x-1 bg-slate-400'
                         }`}
                     />
                 </div>
