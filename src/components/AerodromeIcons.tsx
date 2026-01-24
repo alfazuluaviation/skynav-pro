@@ -205,6 +205,22 @@ export const WaypointIcon: React.FC<IconProps> = ({
 );
 
 // ============================================================
+// ZOOM-BASED SCALING SYSTEM
+// ============================================================
+
+// Base reference zoom level where icons have their "natural" size
+const BASE_ZOOM = 10;
+
+// Calculate scale factor based on current zoom level
+// Icons scale proportionally between min and max bounds
+export const getZoomScale = (zoom: number): number => {
+  // Scale factor: 1.0 at zoom 10, grows/shrinks proportionally
+  // Min scale 0.6 (zoom 8), max scale 2.0 (zoom 14+)
+  const scaleFactor = Math.pow(1.18, zoom - BASE_ZOOM);
+  return Math.max(0.6, Math.min(2.0, scaleFactor));
+};
+
+// ============================================================
 // HTML generators for Leaflet divIcon
 // ============================================================
 
@@ -212,27 +228,40 @@ export const WaypointIcon: React.FC<IconProps> = ({
 export const getAerodromeIconHTML = (
   type: 'airport' | 'vor' | 'ndb' | 'fix' | 'heliport' | 'dme',
   kind?: string,
-  isPrincipal?: boolean
+  isPrincipal?: boolean,
+  zoom: number = BASE_ZOOM
 ): string => {
   const color = '#1e40af'; // Azul DECEA
+  const scale = getZoomScale(zoom);
+  
+  // Base sizes that will be scaled
+  const baseVorSize = 18;
+  const baseNdbSize = 18;
+  const baseDmeSize = 16;
+  const baseFixSize = 12;
+  const baseHeliportSize = 20;
+  const basePrincipalSize = 22;
+  const baseOtherAerodromeSize = 18;
   
   // VOR - Hexágono preenchido
   if (type === 'vor') {
+    const size = Math.round(baseVorSize * scale);
     // Verificar se tem DME
     if (kind?.toLowerCase().includes('dme')) {
-      return `<svg width="18" height="18" viewBox="0 0 24 24">
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24">
         <polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="${color}" stroke="${color}" stroke-width="1.5"/>
         <circle cx="12" cy="12" r="3" fill="white"/>
       </svg>`;
     }
-    return `<svg width="18" height="18" viewBox="0 0 24 24">
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24">
       <polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="${color}" stroke="${color}" stroke-width="1.5"/>
     </svg>`;
   }
   
   // NDB - Círculo com pontos radiantes
   if (type === 'ndb') {
-    return `<svg width="18" height="18" viewBox="0 0 24 24">
+    const size = Math.round(baseNdbSize * scale);
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="5" fill="${color}"/>
       <circle cx="12" cy="3" r="1.2" fill="${color}"/>
       <circle cx="12" cy="21" r="1.2" fill="${color}"/>
@@ -255,7 +284,8 @@ export const getAerodromeIconHTML = (
   
   // DME - Quadrado com ponto
   if (type === 'dme') {
-    return `<svg width="16" height="16" viewBox="0 0 24 24">
+    const size = Math.round(baseDmeSize * scale);
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24">
       <rect x="4" y="4" width="16" height="16" fill="white" stroke="${color}" stroke-width="1.5"/>
       <circle cx="12" cy="12" r="2" fill="${color}"/>
     </svg>`;
@@ -263,14 +293,16 @@ export const getAerodromeIconHTML = (
   
   // Fix/Waypoint - Triângulo
   if (type === 'fix') {
-    return `<svg width="12" height="12" viewBox="0 0 24 24">
+    const size = Math.round(baseFixSize * scale);
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24">
       <polygon points="12,3 22,21 2,21" fill="#0f172a" stroke="#0f172a" stroke-width="1"/>
     </svg>`;
   }
   
   // Heliporto - Círculo com H
   if (type === 'heliport') {
-    return `<svg width="20" height="20" viewBox="0 0 24 24">
+    const size = Math.round(baseHeliportSize * scale);
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="9" fill="white" stroke="${color}" stroke-width="2"/>
       <path d="M7 6v12M17 6v12M7 12h10" stroke="${color}" stroke-width="2" stroke-linecap="round" fill="none"/>
     </svg>`;
@@ -280,14 +312,15 @@ export const getAerodromeIconHTML = (
   if (type === 'airport') {
     // Detectar heliporto pelo nome/kind
     if (kind?.toLowerCase().includes('heli') || kind?.toLowerCase().includes('heliport')) {
-      return getAerodromeIconHTML('heliport');
+      return getAerodromeIconHTML('heliport', undefined, undefined, zoom);
     }
     
     // Verificar se é aeródromo principal (prefixo SB = grandes aeroportos)
     // Ou baseado no parâmetro isPrincipal
     if (isPrincipal) {
       // AERÓDROMO PRINCIPAL - Círculo com ticks e linha diagonal
-      return `<svg width="22" height="22" viewBox="0 0 24 24">
+      const size = Math.round(basePrincipalSize * scale);
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="8" fill="white" stroke="${color}" stroke-width="2"/>
         <line x1="12" y1="1" x2="12" y2="4" stroke="${color}" stroke-width="2"/>
         <line x1="12" y1="20" x2="12" y2="23" stroke="${color}" stroke-width="2"/>
@@ -298,39 +331,54 @@ export const getAerodromeIconHTML = (
     }
     
     // OUTRO AERÓDROMO - Círculo com linha diagonal apenas
-    return `<svg width="18" height="18" viewBox="0 0 24 24">
+    const size = Math.round(baseOtherAerodromeSize * scale);
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="8" fill="white" stroke="${color}" stroke-width="2"/>
       <line x1="6" y1="18" x2="18" y2="6" stroke="${color}" stroke-width="2"/>
     </svg>`;
   }
   
   // Default fallback
-  return `<svg width="12" height="12" viewBox="0 0 24 24">
+  const size = Math.round(12 * scale);
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24">
     <circle cx="12" cy="12" r="6" fill="white" stroke="${color}" stroke-width="1.5"/>
   </svg>`;
 };
 
-// Get icon size for centering the divIcon
+// Get icon size for centering the divIcon (also zoom-scaled)
 export const getIconSize = (
   type: 'airport' | 'vor' | 'ndb' | 'fix' | 'heliport' | 'dme',
-  isPrincipal?: boolean
+  isPrincipal?: boolean,
+  zoom: number = BASE_ZOOM
 ): [number, number] => {
+  const scale = getZoomScale(zoom);
+  
+  let baseSize: number;
   switch (type) {
     case 'airport':
-      return isPrincipal ? [22, 22] : [18, 18];
+      baseSize = isPrincipal ? 22 : 18;
+      break;
     case 'heliport':
-      return [20, 20];
+      baseSize = 20;
+      break;
     case 'vor':
-      return [18, 18];
+      baseSize = 18;
+      break;
     case 'ndb':
-      return [18, 18];
+      baseSize = 18;
+      break;
     case 'dme':
-      return [16, 16];
+      baseSize = 16;
+      break;
     case 'fix':
-      return [12, 12];
+      baseSize = 12;
+      break;
     default:
-      return [12, 12];
+      baseSize = 12;
   }
+  
+  const scaledSize = Math.round(baseSize * scale);
+  return [scaledSize, scaledSize];
 };
 
 // Legacy exports for backward compatibility
