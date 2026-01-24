@@ -7,7 +7,8 @@ export type BaseMapType = 'roadmap' | 'terrain' | 'satellite';
 
 // Visibility toggles for navigation points
 export interface PointVisibility {
-    waypoints: boolean;      // Fixos / Waypoints
+    waypoints: boolean;      // Fixos / Waypoints (FIX)
+    vorNdb: boolean;         // VOR / NDB
     aerodromes: boolean;     // Aeródromos
     heliports: boolean;      // Helipontos
     userFixes: boolean;      // Fixos Usuário
@@ -35,7 +36,7 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
     isMobile = false,
     activeBaseMap = 'roadmap',
     onBaseMapChange,
-    pointVisibility = { waypoints: true, aerodromes: true, heliports: true, userFixes: true },
+    pointVisibility = { waypoints: true, vorNdb: true, aerodromes: true, heliports: true, userFixes: true },
     onTogglePointVisibility,
 }) => {
     // Grupo 1: REA, REUL, REH, ARC
@@ -63,7 +64,8 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
 
     // Toggle items for navigation points visibility
     const visibilityToggles = [
-        { key: 'waypoints' as keyof PointVisibility, label: 'Fixos / Waypoints', description: 'VOR, NDB, FIX' },
+        { key: 'waypoints' as keyof PointVisibility, label: 'Fixos / Waypoints', description: 'Pontos de referência FIX' },
+        { key: 'vorNdb' as keyof PointVisibility, label: 'VOR / NDB', description: 'Auxílios rádio-navegação' },
         { key: 'aerodromes' as keyof PointVisibility, label: 'Aeródromos', description: 'Aeroportos e pistas' },
         { key: 'heliports' as keyof PointVisibility, label: 'Helipontos', description: 'Pontos de pouso para helicópteros' },
         { key: 'userFixes' as keyof PointVisibility, label: 'Fixos Usuário', description: 'Pontos criados por você' },
@@ -87,13 +89,13 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                 <div 
                     className={`relative w-11 h-6 rounded-full transition-all duration-200 ${
                         isActive 
-                            ? 'bg-gradient-to-r from-purple-500 to-purple-600 shadow-lg shadow-purple-500/30' 
-                            : 'bg-slate-700'
+                            ? 'bg-purple-500 shadow-lg shadow-purple-500/30' 
+                            : 'bg-slate-600'
                     }`}
                 >
                     <div 
-                        className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
-                            isActive ? 'translate-x-6' : 'translate-x-1'
+                        className={`absolute top-1 w-4 h-4 rounded-full shadow-md transition-transform duration-200 ${
+                            isActive ? 'translate-x-6 bg-slate-900' : 'translate-x-1 bg-slate-400'
                         }`}
                     />
                 </div>
@@ -129,9 +131,6 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                     {/* Enhanced separator */}
                     <div className="relative py-2">
                         <div className="h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent w-full"></div>
-                        <div className="absolute left-1/2 -translate-x-1/2 -top-1 bg-slate-900 px-3">
-                            <span className="text-[8px] font-bold uppercase tracking-widest text-purple-400">Cartas</span>
-                        </div>
                     </div>
                     {/* Grupo 1: REA, REUL, REH, ARC */}
                     <div className="grid grid-cols-4 gap-2">
@@ -248,13 +247,13 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
     // Desktop content - without wrapper (wrapper is in Sidebar)
     return (
         <>
-            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/80">
+            <div className="p-4 border-b border-slate-800 flex justify-center items-center bg-slate-800/80 relative">
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">
                     Cartas e Mapas
                 </span>
                 <button
                     onClick={onClose}
-                    className="text-slate-500 hover:text-white transition-colors text-xl"
+                    className="absolute right-4 text-slate-500 hover:text-white transition-colors text-xl"
                 >
                     &times;
                 </button>
@@ -272,9 +271,6 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                 {/* Enhanced separator */}
                 <div className="relative py-2">
                     <div className="h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent w-full"></div>
-                    <div className="absolute left-1/2 -translate-x-1/2 -top-1 bg-[#0d1117] px-3">
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-purple-400">Cartas Aeronáuticas</span>
-                    </div>
                 </div>
 
                 {/* Grupo 1: REA, REUL, REH, ARC */}
