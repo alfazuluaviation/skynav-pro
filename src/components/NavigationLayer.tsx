@@ -234,8 +234,8 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                                        p.kind !== 'heliport' && 
                                        p.icao?.startsWith('SB');
                     
-                    const iconHTML = getAerodromeIconHTML(iconType as any, p.kind, isPrincipal);
-                    const iconSize = getIconSize(iconType as any, isPrincipal);
+                    const iconHTML = getAerodromeIconHTML(iconType as any, p.kind, isPrincipal, zoom);
+                    const iconSize = getIconSize(iconType as any, isPrincipal, zoom);
                     
                     const customIcon = L.divIcon({
                         className: 'nav-point-icon',
