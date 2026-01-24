@@ -24,7 +24,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     aircraftPosition,
     hideLockButton = false,
     onInsertWaypoint,
-    pointVisibility = { waypoints: true, aerodromes: true, heliports: true, userFixes: true }
+    pointVisibility = { waypoints: true, vorNdb: true, aerodromes: true, heliports: true, userFixes: true }
 }) => {
     const map = useMap();
     const [points, setPoints] = useState<NavPoint[]>([]);
@@ -216,11 +216,13 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     // Filter based on visibility settings
                     const isHeliport = p.kind === 'heliport';
                     const isAerodrome = p.type === 'airport' && !isHeliport;
-                    const isWaypoint = p.type === 'vor' || p.type === 'ndb' || p.type === 'fix';
+                    const isVorNdb = p.type === 'vor' || p.type === 'ndb';
+                    const isWaypoint = p.type === 'fix';
                     
                     // Apply visibility filters
                     if (isHeliport && !pointVisibility.heliports) return null;
                     if (isAerodrome && !pointVisibility.aerodromes) return null;
+                    if (isVorNdb && !pointVisibility.vorNdb) return null;
                     if (isWaypoint && !pointVisibility.waypoints) return null;
                     
                     // Determine the icon type based on point type and kind

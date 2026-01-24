@@ -230,7 +230,7 @@ const App = () => {
   // Point visibility state (persisted)
   const [pointVisibility, setPointVisibility] = useState<PointVisibility>(() => {
     const saved = localStorage.getItem('sky_nav_point_visibility');
-    return saved ? JSON.parse(saved) : { waypoints: true, aerodromes: true, heliports: true, userFixes: true };
+    return saved ? JSON.parse(saved) : { waypoints: true, vorNdb: true, aerodromes: true, heliports: true, userFixes: true };
   });
 
   const handleTogglePointVisibility = (key: keyof PointVisibility) => {
