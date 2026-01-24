@@ -3,10 +3,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useMapEvents, Tooltip, LayerGroup, Polyline, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { fetchNavigationData, NavPoint } from '../services/NavigationDataService';
-import { Waypoint } from '../types';
+import { Waypoint } from '../../types';
 import { DraggableRoute } from './DraggableRoute';
 import { getMagneticDeclination, applyMagneticVariation } from '../utils/geoUtils';
 import { getAerodromeIconHTML, getIconSize } from './AerodromeIcons';
+import { PointVisibility } from './LayersMenu';
+import { VorRadialLine } from './VorRadialLine';
 
 interface NavigationLayerProps {
     onPointSelect?: (point: NavPoint) => void;
@@ -14,6 +16,7 @@ interface NavigationLayerProps {
     aircraftPosition?: [number, number];
     hideLockButton?: boolean;
     onInsertWaypoint?: (waypoint: Waypoint, insertAfterIndex: number) => void;
+    pointVisibility?: PointVisibility;
 }
 
 export const NavigationLayer: React.FC<NavigationLayerProps> = ({ 
@@ -21,11 +24,15 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     waypoints = [],
     aircraftPosition,
     hideLockButton = false,
-    onInsertWaypoint
+    onInsertWaypoint,
+    pointVisibility = { waypoints: true, vorNdb: true, aerodromes: true, heliports: true, userFixes: true }
 }) => {
     const map = useMap();
     const [points, setPoints] = useState<NavPoint[]>([]);
     const [zoom, setZoom] = useState(map.getZoom());
+    
+    // VOR Radial tracking state
+    const [selectedVor, setSelectedVor] = useState<NavPoint | null>(null);
     
     // Map starts UNLOCKED (free to drag) - user can lock to follow aircraft position
     const [isLocked, setIsLocked] = useState(false);
@@ -210,8 +217,20 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
 
                 {/* 3. NAVIGATION DATA POINTS (WFS) - Using DECEA standard symbols */}
                 {zoom >= 8 && points.map(p => {
+                    // Filter based on visibility settings
+                    const isHeliport = p.kind === 'heliport';
+                    const isAerodrome = p.type === 'airport' && !isHeliport;
+                    const isVorNdb = p.type === 'vor' || p.type === 'ndb';
+                    const isWaypoint = p.type === 'fix';
+                    
+                    // Apply visibility filters
+                    if (isHeliport && !pointVisibility.heliports) return null;
+                    if (isAerodrome && !pointVisibility.aerodromes) return null;
+                    if (isVorNdb && !pointVisibility.vorNdb) return null;
+                    if (isWaypoint && !pointVisibility.waypoints) return null;
+                    
                     // Determine the icon type based on point type and kind
-                    const iconType = p.kind === 'heliport' ? 'heliport' : p.type;
+                    const iconType = isHeliport ? 'heliport' : p.type;
                     
                     // Determine if it's a principal aerodrome (SB prefix = major Brazilian airports)
                     // SBGR, SBSP, SBRJ, SBGL, etc. are principal aerodromes
@@ -219,28 +238,53 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                                        p.kind !== 'heliport' && 
                                        p.icao?.startsWith('SB');
                     
-                    const iconHTML = getAerodromeIconHTML(iconType as any, p.kind, isPrincipal);
-                    const iconSize = getIconSize(iconType as any, isPrincipal);
+                    // Check if this VOR is currently selected for radial display
+                    const isVorSelected = selectedVor?.id === p.id && isVorNdb;
+                    
+                    const iconHTML = getAerodromeIconHTML(iconType as any, p.kind, isPrincipal, zoom);
+                    const iconSize = getIconSize(iconType as any, isPrincipal, zoom);
                     
                     const customIcon = L.divIcon({
-                        className: 'nav-point-icon',
-                        html: `<div style="display: flex; align-items: center; justify-content: center;">${iconHTML}</div>`,
+                        className: `nav-point-icon ${isVorSelected ? 'vor-selected' : ''}`,
+                        html: `<div style="
+                            display: flex; 
+                            align-items: center; 
+                            justify-content: center;
+                            ${isVorSelected ? 'filter: drop-shadow(0 0 8px #22c55e) drop-shadow(0 0 16px #22c55e);' : ''}
+                        ">${iconHTML}</div>`,
                         iconSize: iconSize,
                         iconAnchor: [iconSize[0] / 2, iconSize[1] / 2]
                     });
                     
                     // Generate tooltip with type indication
-                    const typeLabel = p.kind === 'heliport' ? 'Heliporto' : 
+                    const typeLabel = isHeliport ? 'Heliporto' : 
                                      isPrincipal ? 'Aeródromo Principal' : 
                                      p.type === 'airport' ? 'Aeródromo' :
                                      p.type === 'vor' ? 'VOR' :
                                      p.type === 'ndb' ? 'NDB' : 'FIX';
+                    
+                    // Handle VOR click for radial tracking
+                    const handleVorClick = () => {
+                        if (isVorNdb) {
+                            // Toggle selection: if same VOR clicked, deselect; otherwise select
+                            if (selectedVor?.id === p.id) {
+                                setSelectedVor(null);
+                                console.log(`[VOR RADIAL] Desativado: ${p.icao || p.name}`);
+                            } else {
+                                setSelectedVor(p);
+                                console.log(`[VOR RADIAL] Ativado: ${p.icao || p.name} (${p.lat.toFixed(4)}, ${p.lng.toFixed(4)})`);
+                            }
+                        }
+                    };
                     
                     return (
                         <Marker 
                             key={`${p.type}-${p.id}`} 
                             position={[p.lat, p.lng]} 
                             icon={customIcon}
+                            eventHandlers={{
+                                click: handleVorClick
+                            }}
                         >
                             <Tooltip 
                                 direction="top" 
@@ -256,12 +300,22 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                                     borderRadius: '3px'
                                 }}>
                                     <div>{p.icao || p.name}</div>
-                                    <div style={{ fontSize: '9px', fontWeight: 'normal', color: '#666' }}>{typeLabel}</div>
+                                    <div style={{ fontSize: '9px', fontWeight: 'normal', color: '#666' }}>
+                                        {typeLabel}
+                                        {isVorNdb && <span style={{ color: '#22c55e' }}> • Clique para radial</span>}
+                                    </div>
                                 </div>
                             </Tooltip>
                         </Marker>
                     );
                 })}
+
+                {/* 4. VOR RADIAL LINE */}
+                <VorRadialLine
+                    selectedVor={selectedVor}
+                    aircraftPosition={aircraftPosition || null}
+                    onClose={() => setSelectedVor(null)}
+                />
             </LayerGroup>
 
             {/* ARMOR CONTROL: MAP LOCK TOGGLE - Hidden when plan panel is open or flight plan is expanded */}

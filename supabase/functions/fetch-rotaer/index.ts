@@ -5,9 +5,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// AISWEB API Credentials (Static for public use discovered via site scripts)
-const AISWEB_API_KEY = "REMOVED_AISWEB_KEY";
-const AISWEB_API_PASS = "REMOVED_AISWEB_PASS";
+/* BEGIN: READ AISWEB CREDENTIALS FROM ENV (DENO - SUPABASE FUNCTIONS) */
+const AISWEB_API_KEY = Deno.env.get('AISWEB_API_KEY') ?? '';
+const AISWEB_API_PASS = Deno.env.get('AISWEB_API_PASS') ?? '';
+if (!AISWEB_API_KEY || !AISWEB_API_PASS) {
+  console.error('AISWEB credentials missing. Set AISWEB_API_KEY and AISWEB_API_PASS in environment.');
+}
+/* END: READ AISWEB CREDENTIALS FROM ENV (DENO - SUPABASE FUNCTIONS) */
 
 interface RotaerData {
   icao: string;

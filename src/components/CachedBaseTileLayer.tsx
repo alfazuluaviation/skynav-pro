@@ -64,10 +64,12 @@ const CachedTileLayerClass = L.TileLayer.extend({
 
     if (useCache) {
       // Normalize URL for cache lookup (subdomains a/b/c/d -> a)
+      // Esri URLs don't need normalization (single endpoint)
       const normalizedUrl = tileUrl
         .replace(/https:\/\/[abcd]\.tile\.openstreetmap\.org/, 'https://a.tile.openstreetmap.org')
         .replace(/https:\/\/[abcd]\.basemaps\.cartocdn\.com/, 'https://a.basemaps.cartocdn.com')
         .replace(/https:\/\/[abc]\.tile\.opentopomap\.org/, 'https://a.tile.opentopomap.org');
+      // Note: Esri (arcgisonline.com) URLs are already normalized (no subdomains)
       
       // Try to load from cache first
       getCachedTile(normalizedUrl).then(blob => {
@@ -126,6 +128,9 @@ export const CachedBaseTileLayer: React.FC<CachedBaseTileLayerProps> = ({
   const map = useMap();
   const layerRef = useRef<L.TileLayer | null>(null);
 
+  const prevUseCacheRef = useRef<boolean>(useCache);
+
+  // Create layer - NOT including useCache in deps to prevent recreation
   useEffect(() => {
     if (!map) return;
 
@@ -134,11 +139,16 @@ export const CachedBaseTileLayer: React.FC<CachedBaseTileLayerProps> = ({
       useCache,
       maxZoom,
       attribution,
-      crossOrigin: 'anonymous'
+      crossOrigin: 'anonymous',
+      // OPTIMIZED: Don't reload during zoom animation
+      updateWhenZooming: false,
+      updateWhenIdle: true,
+      keepBuffer: 4
     });
 
     tileLayer.addTo(map);
     layerRef.current = tileLayer;
+    prevUseCacheRef.current = useCache;
 
     return () => {
       if (layerRef.current) {
@@ -146,7 +156,29 @@ export const CachedBaseTileLayer: React.FC<CachedBaseTileLayerProps> = ({
         layerRef.current = null;
       }
     };
-  }, [map, url, layerId, useCache, maxZoom, attribution]);
+    // NOTE: Intentionally NOT including useCache to prevent layer recreation
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, url, layerId, maxZoom, attribution]);
+
+  // Update useCache option WITHOUT redraw when disabling cache
+  // This prevents the layer from disappearing when clearing offline cache
+  useEffect(() => {
+    if (layerRef.current) {
+      const wasUsingCache = prevUseCacheRef.current;
+      (layerRef.current.options as any).useCache = useCache;
+      
+      // CRITICAL: Only redraw when ENABLING cache
+      // When DISABLING, keep tiles visible - new ones load on next pan/zoom
+      if (useCache && !wasUsingCache) {
+        layerRef.current.redraw();
+        console.log(`[CachedBaseTileLayer] Enabled cache for ${layerId}, redrawing`);
+      } else if (!useCache && wasUsingCache) {
+        console.log(`[CachedBaseTileLayer] Disabled cache for ${layerId}, keeping tiles visible`);
+      }
+      
+      prevUseCacheRef.current = useCache;
+    }
+  }, [useCache, layerId]);
 
   return null;
 };

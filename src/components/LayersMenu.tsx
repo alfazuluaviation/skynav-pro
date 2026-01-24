@@ -5,6 +5,15 @@ import { IconMap, IconPlane, IconMountain, IconSatellite } from './Icons';
 // Base map types: roadmap respects isNightMode for light/dark, terrain shows elevation, satellite shows imagery
 export type BaseMapType = 'roadmap' | 'terrain' | 'satellite';
 
+// Visibility toggles for navigation points
+export interface PointVisibility {
+    waypoints: boolean;      // Fixos / Waypoints (FIX)
+    vorNdb: boolean;         // VOR / NDB
+    aerodromes: boolean;     // Aeródromos
+    heliports: boolean;      // Helipontos
+    userFixes: boolean;      // Fixos Usuário
+}
+
 interface LayersMenuProps {
     onClose: () => void;
     activeLayers: string[];
@@ -14,6 +23,8 @@ interface LayersMenuProps {
     isMobile?: boolean;
     activeBaseMap?: BaseMapType;
     onBaseMapChange?: (baseMap: BaseMapType) => void;
+    pointVisibility?: PointVisibility;
+    onTogglePointVisibility?: (key: keyof PointVisibility) => void;
 }
 
 export const LayersMenu: React.FC<LayersMenuProps> = ({
@@ -25,6 +36,8 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
     isMobile = false,
     activeBaseMap = 'roadmap',
     onBaseMapChange,
+    pointVisibility = { waypoints: true, vorNdb: true, aerodromes: true, heliports: true, userFixes: true },
+    onTogglePointVisibility,
 }) => {
     // Grupo 1: REA, REUL, REH, ARC
     const chartTypesGroup1 = [
@@ -49,6 +62,58 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
         { id: 'satellite', name: 'Satélite', icon: 'satellite', description: 'Imagem de satélite' }
     ];
 
+    // Toggle items for navigation points visibility
+    const visibilityToggles: Array<{ key: keyof PointVisibility; label: string; description: string }> = [
+        { key: 'vorNdb', label: 'VOR / NDB', description: 'Auxílios rádio-navegação' },
+        { key: 'waypoints', label: 'Fixos / Waypoints', description: 'Pontos de referência FIX' },
+        { key: 'aerodromes', label: 'Aeródromos', description: 'Aeroportos e pistas' },
+        { key: 'heliports', label: 'Helipontos', description: 'Pontos de pouso para helicópteros' },
+        { key: 'userFixes', label: 'Fixos Usuário', description: 'Pontos criados por você' },
+    ];
+
+    // Render a toggle switch component
+    const renderToggle = (toggleKey: keyof PointVisibility, label: string, description: string) => {
+        const isActive = Boolean(pointVisibility[toggleKey]);
+        
+        const handleClick = () => {
+            if (onTogglePointVisibility) {
+                onTogglePointVisibility(toggleKey);
+            }
+        };
+        
+        return (
+            <div 
+                key={toggleKey}
+                className="flex items-center justify-between py-2 px-1 cursor-pointer group"
+                onClick={handleClick}
+            >
+                <div className="flex-1 mr-3">
+                    <div className={`text-xs font-bold uppercase tracking-wide transition-colors ${isActive ? 'text-white' : 'text-slate-400'}`}>
+                        {label}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">{description}</div>
+                </div>
+                {/* Switch container */}
+                <div 
+                    className="relative w-11 h-6 rounded-full cursor-pointer transition-colors duration-200"
+                    style={{
+                        backgroundColor: isActive ? 'hsl(var(--switch-on))' : 'hsl(var(--switch-off))',
+                        boxShadow: isActive ? '0 0 12px hsl(var(--switch-on-glow) / 0.5)' : 'none'
+                    }}
+                >
+                    {/* Knob */}
+                    <div 
+                        className="absolute top-1 w-4 h-4 rounded-full shadow-md transition-all duration-200"
+                        style={{
+                            transform: isActive ? 'translateX(1.5rem)' : 'translateX(0.25rem)',
+                            backgroundColor: isActive ? 'hsl(var(--switch-knob-on))' : 'hsl(var(--switch-knob-off))'
+                        }}
+                    />
+                </div>
+            </div>
+        );
+    };
+
     // Mobile content - without wrapper
     if (isMobile) {
         return (
@@ -66,6 +131,18 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                 </div>
 
                 <div className="p-4 flex flex-col gap-4">
+                    {/* Visibility Toggles Section */}
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500 mb-1">
+                            Exibição no Mapa
+                        </span>
+                        {visibilityToggles.map(toggle => renderToggle(toggle.key, toggle.label, toggle.description))}
+                    </div>
+
+                    {/* Enhanced separator */}
+                    <div className="relative py-2">
+                        <div className="h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent w-full"></div>
+                    </div>
                     {/* Grupo 1: REA, REUL, REH, ARC */}
                     <div className="grid grid-cols-4 gap-2">
                         {chartTypesGroup1.map((chart) => {
@@ -181,19 +258,32 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
     // Desktop content - without wrapper (wrapper is in Sidebar)
     return (
         <>
-            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/80">
+            <div className="p-4 border-b border-slate-800 flex justify-center items-center bg-slate-800/80 relative">
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">
                     Cartas e Mapas
                 </span>
                 <button
                     onClick={onClose}
-                    className="text-slate-500 hover:text-white transition-colors text-xl"
+                    className="absolute right-4 text-slate-500 hover:text-white transition-colors text-xl"
                 >
                     &times;
                 </button>
             </div>
 
             <div className="p-5 flex flex-col gap-6 max-h-[75vh] overflow-y-auto">
+                {/* Visibility Toggles Section */}
+                <div className="flex flex-col gap-1">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+                        Exibição no Mapa
+                    </span>
+                    {visibilityToggles.map(toggle => renderToggle(toggle.key, toggle.label, toggle.description))}
+                </div>
+
+                {/* Enhanced separator */}
+                <div className="relative py-2">
+                    <div className="h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent w-full"></div>
+                </div>
+
                 {/* Grupo 1: REA, REUL, REH, ARC */}
                 <div className="grid grid-cols-4 gap-3">
                     {chartTypesGroup1.map((chart) => {

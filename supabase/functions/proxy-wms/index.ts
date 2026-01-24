@@ -11,7 +11,7 @@ const BASE_WMS_URL = "https://geoaisweb.decea.mil.br/geoserver/wms";
 // Rate limiting configuration
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute window
-const MAX_REQUESTS_PER_WINDOW = 300; // 300 requests per minute per IP (higher for tiles)
+const MAX_REQUESTS_PER_WINDOW = 600; // Increased from 300 to 600
 
 const checkRateLimit = (clientIp: string): { allowed: boolean; retryAfter?: number } => {
   const now = Date.now();

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
+import { useState, useEffect } from 'react';
+import { MapContainer, Polyline, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Waypoint, FlightStats, ChartConfig, AiracCycle, FlightSegment, SavedPlan, NavPoint } from '../types';
 import { calculateDistance, calculateBearing, formatTime, applyMagneticVariation, getMagneticDeclination } from './utils/geoUtils';
@@ -8,8 +8,9 @@ import { syncAeronauticalData, searchAerodrome } from './services/geminiService'
 import { Sidebar } from './components/Sidebar';
 import { FlightPlanPanel } from './components/FlightPlanPanel';
 import { MapControls } from './components/MapControls';
-import { Auth } from './components/Auth';
+import { AuthModal } from './components/AuthModal';
 import { supabase } from './services/supabaseClient';
+import { useAuthGuard } from './hooks/useAuthGuard';
 import { Session } from '@supabase/supabase-js';
 import { getAiracCycleInfo } from './services/airacService';
 import { ENRC_SEGMENTS } from '../config/chartConfig';
@@ -21,8 +22,9 @@ import { AerodromeModal } from './components/AerodromeModal';
 import { DownloadModal } from './components/DownloadModal';
 import { AircraftListModal } from './components/AircraftListModal';
 import { FlightPlanDownloadModal } from './components/FlightPlanDownloadModal';
-import { BaseMapType } from './components/LayersMenu';
+import { BaseMapType, PointVisibility } from './components/LayersMenu';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { getAerodromeIconHTML, getIconSize } from './components/AerodromeIcons';
 import { CachedWMSTileLayer } from './components/CachedWMSTileLayer';
 import { CachedBaseTileLayer } from './components/CachedBaseTileLayer';
@@ -181,7 +183,7 @@ function MapUIControls({ showPlanPanel }: { showPlanPanel: boolean }) {
   return null;
 }
 
-const App: React.FC = () => {
+const App = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [showPlanPanel, setShowPlanPanel] = useState(false);
@@ -213,6 +215,8 @@ const App: React.FC = () => {
   const [mapRef, setMapRef] = useState<L.Map | null>(null);
   const [activeLayers, setActiveLayers] = useState<string[]>([]);
   const [downloadedLayers, setDownloadedLayers] = useState<string[]>([]);
+  // Flag to indicate that downloadedLayers has been validated against IndexedDB
+  const [downloadedLayersReady, setDownloadedLayersReady] = useState(false);
   // syncingLayers state removed - now handled by DownloadManager
   const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
   const [showChartsModal, setShowChartsModal] = useState(false);
@@ -223,7 +227,29 @@ const App: React.FC = () => {
   const [chartsModalIcao, setChartsModalIcao] = useState<string | null>(null);
   const [isSidebarMenuOpen, setIsSidebarMenuOpen] = useState(false);
 
-  // Persistence Keys
+  // Point visibility state (persisted) - merge with defaults to handle new keys
+  const [pointVisibility, setPointVisibility] = useState<PointVisibility>(() => {
+    const defaults: PointVisibility = { waypoints: true, vorNdb: true, aerodromes: true, heliports: true, userFixes: true };
+    try {
+      const saved = localStorage.getItem('sky_nav_point_visibility');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { ...defaults, ...parsed };
+      }
+    } catch (e) {
+      console.warn('Failed to parse pointVisibility from localStorage', e);
+    }
+    return defaults;
+  });
+
+  const handleTogglePointVisibility = (key: keyof PointVisibility) => {
+    setPointVisibility(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      localStorage.setItem('sky_nav_point_visibility', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const KEY_CURRENT_PLAN = 'flight_plan_v1';
   const KEY_SAVED_PLANS = 'saved_flight_plans_v1';
 
@@ -363,26 +389,10 @@ const App: React.FC = () => {
     // Check if it's a base map layer
     const isBaseMap = layer.startsWith('BASEMAP_');
 
-    // Helper to activate layer with mutual exclusion logic
-    const activateLayer = (layerId: string) => {
-      // Don't auto-activate base maps (they're automatically used based on theme)
-      if (layerId.startsWith('BASEMAP_')) return;
-      
-      setActiveLayers(prev => {
-        if (prev.includes(layerId)) return prev; // Already active
-        let next = [...prev, layerId];
-        // Mutual exclusion: HIGH, LOW, WAC
-        if (layerId === 'HIGH') next = next.filter(l => l !== 'LOW' && l !== 'WAC');
-        if (layerId === 'LOW') next = next.filter(l => l !== 'HIGH' && l !== 'WAC');
-        if (layerId === 'WAC') next = next.filter(l => l !== 'HIGH' && l !== 'LOW');
-        // Mutual exclusion: REA, REUL, REH
-        if (layerId === 'REA') next = next.filter(l => l !== 'REUL' && l !== 'REH');
-        if (layerId === 'REUL') next = next.filter(l => l !== 'REA' && l !== 'REH');
-        if (layerId === 'REH') next = next.filter(l => l !== 'REA' && l !== 'REUL');
-        localStorage.setItem('sky_nav_active_layers', JSON.stringify(next));
-        return next;
-      });
-    };
+    // REMOVED: Auto-activation of layers after download
+    // Users should manually activate layers via "CARTAS E MAPAS" menu
+    // This prevents confusion where downloading REH would auto-activate it
+    // and cause the mutual exclusion logic to interfere
 
     try {
       // Start download via manager (runs in background)
@@ -395,15 +405,14 @@ const App: React.FC = () => {
       }
 
       if (success) {
-        // Mark as downloaded
+        // Mark as downloaded (for offline status indicator only)
+        // Do NOT auto-activate on map - user should do this via "CARTAS E MAPAS" menu
         setDownloadedLayers(prev => {
           const next = prev.includes(layer) ? prev : [...prev, layer];
           localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
+          console.log(`[DOWNLOAD] Layer ${layer} marked as downloaded for offline use`);
           return next;
         });
-
-        // Auto-activate the layer on the map after download (not for base maps)
-        activateLayer(layer);
       }
     } catch (error) {
       console.error('Failed to download layer:', layer, error);
@@ -411,37 +420,51 @@ const App: React.FC = () => {
   };
 
   // Load cached layers on mount
-  // Sync downloaded and active layers with actual IndexedDB cache on startup
+  // Sync downloaded layers with actual IndexedDB cache on startup
+  // CRITICAL: Only validate, never auto-add from IndexedDB residual tiles
   useEffect(() => {
     const syncCachedLayers = async () => {
       try {
-        // Get actual cached layer IDs from IndexedDB
+        // Get actual cached layer IDs from IndexedDB (layers with 'complete' status)
         const cachedIds = await getCachedLayerIds();
-        console.log('[CACHE SYNC] IndexedDB cached layers:', cachedIds);
+        console.log('[CACHE SYNC] IndexedDB cached layers (complete status):', cachedIds);
         
-        // Update downloadedLayers to match what's actually in IndexedDB
+        // IMPORTANT:
+        // downloadedLayers must represent ONLY *explicit* offline downloads (via Download modal).
+        // We must NOT auto-add layers just because IndexedDB has metadata/tiles,
+        // otherwise online viewing ends up "linked" to the Download menu.
+        // 
+        // The cachedIds from getCachedLayerIds() returns layers with status='complete',
+        // which SHOULD only be set after an explicit download via Download modal.
+        // 
+        // Here we ONLY validate the explicit list - intersection of what was saved AND exists in IndexedDB
         setDownloadedLayers(prev => {
-          // Only keep layers that are actually cached
+          // Only keep layers that are BOTH in localStorage AND in IndexedDB with complete status
           const validated = prev.filter(id => cachedIds.includes(id));
-          // Add any cached layers not in prev
-          const combined = [...new Set([...validated, ...cachedIds])];
-          console.log('[CACHE SYNC] Validated downloadedLayers:', combined);
-          localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(combined));
-          return combined;
+          if (validated.length !== prev.length) {
+            console.log('[CACHE SYNC] Removed stale downloadedLayers (not in IndexedDB):', {
+              before: prev,
+              after: validated
+            });
+          }
+          localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(validated));
+          return validated;
         });
+        
+        // Mark validation as complete - DownloadModal can now show accurate status
+        setDownloadedLayersReady(true);
         
         // NOTE: Do NOT remove activeLayers based on cache status!
         // Charts can load online without being downloaded for offline use.
-        // Just log current active layers for debugging
         const savedActiveLayers = JSON.parse(localStorage.getItem('sky_nav_active_layers') || '[]');
         console.log('[CACHE SYNC] Active layers (preserved):', savedActiveLayers);
       } catch (error) {
         console.error('[CACHE SYNC] Failed to sync cached layers:', error);
-        // In case of IndexedDB error (e.g., in iframe), clear both states
+        // In case of IndexedDB error, set empty but mark as ready
         setDownloadedLayers([]);
-        setActiveLayers([]);
         localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify([]));
-        localStorage.setItem('sky_nav_active_layers', JSON.stringify([]));
+        setDownloadedLayersReady(true);
+        // Do NOT clear activeLayers - let online viewing work
       }
     };
     syncCachedLayers();
@@ -659,22 +682,18 @@ const App: React.FC = () => {
   const handleClearLayerCache = async (layer: string) => {
     console.log(`[CACHE CLEAR] Starting clear for layer: ${layer}`);
     
-    // FIRST: Immediately remove from active and downloaded layers to stop rendering
-    setActiveLayers(prev => {
-      const next = prev.filter(l => l !== layer);
-      localStorage.setItem('sky_nav_active_layers', JSON.stringify(next));
-      console.log(`[CACHE CLEAR] Removed ${layer} from activeLayers:`, next);
-      return next;
-    });
+    // IMPORTANT: Clearing offline cache should NOT affect map display!
+    // The layer can still load online even without offline cache.
+    // Only update downloadedLayers (offline status), NOT activeLayers (map display).
     
     setDownloadedLayers(prev => {
       const next = prev.filter(l => l !== layer);
       localStorage.setItem('sky_nav_downloaded_layers', JSON.stringify(next));
-      console.log(`[CACHE CLEAR] Removed ${layer} from downloadedLayers:`, next);
+      console.log(`[CACHE CLEAR] Removed ${layer} from downloadedLayers (offline status only):`, next);
       return next;
     });
     
-    // THEN: Clear from IndexedDB cache
+    // Clear from IndexedDB cache
     try {
       await clearLayerCache(layer);
       console.log(`[CACHE CLEAR] IndexedDB cache cleared for layer: ${layer}`);
@@ -710,15 +729,27 @@ const App: React.FC = () => {
     localStorage.setItem(KEY_SAVED_PLANS, JSON.stringify(nextList));
   };
 
-  // Handlers for the new menu
+  // Auth guard hook for protected resources
+  const { 
+    showAuthModal, 
+    setShowAuthModal, 
+    requireAuth, 
+    executePendingAction 
+  } = useAuthGuard(session);
+
+  // Handlers for the new menu (protected resources)
   const handleOpenCharts = (icao: string | null = null) => {
-    setChartsModalIcao(icao);
-    setShowChartsModal(true);
+    requireAuth(() => {
+      setChartsModalIcao(icao);
+      setShowChartsModal(true);
+    });
   };
 
   const handleOpenAerodromes = () => {
-    console.log("Opening aerodromes menu");
-    setShowAerodromeModal(true);
+    requireAuth(() => {
+      console.log("Opening aerodromes menu");
+      setShowAerodromeModal(true);
+    });
   };
 
   const handleOpenDownload = () => {
@@ -727,11 +758,24 @@ const App: React.FC = () => {
   };
 
   const handleOpenAircraft = () => {
-    console.log("Opening aircraft menu");
-    setShowAircraftModal(true);
+    requireAuth(() => {
+      console.log("Opening aircraft menu");
+      setShowAircraftModal(true);
+    });
   };
 
-  if (loadingSession) { // Render a loading spinner or null while session is being checked
+  // Protected toggle for flight plan panel
+  const handleTogglePlanPanel = () => {
+    if (showPlanPanel) {
+      // Always allow closing
+      setShowPlanPanel(false);
+    } else {
+      // Require auth to open
+      requireAuth(() => setShowPlanPanel(true));
+    }
+  };
+
+  if (loadingSession) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0d1117]">
         <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
@@ -739,12 +783,17 @@ const App: React.FC = () => {
     );
   }
 
-  if (!session) {
-    return <Auth />;
-  }
+  // No longer blocking - app loads without session, auth modal shows when needed
 
   return (
     <div className="flex h-screen w-screen bg-[#0d1117] text-slate-100 overflow-hidden font-sans select-none">
+      {/* AUTH MODAL (shows when protected resource accessed without login) */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={executePendingAction}
+      />
+
       {/* TOP LEFT MENU */}
       <TopLeftMenu
         onOpenCharts={handleOpenCharts}
@@ -755,10 +804,10 @@ const App: React.FC = () => {
 
       {/* SIDEBAR */}
       <Sidebar
-        userName={session.user.user_metadata?.full_name}
-        userEmail={session.user.email}
+        userName={session?.user?.user_metadata?.full_name}
+        userEmail={session?.user?.email}
         showPlanPanel={showPlanPanel}
-        onTogglePlanPanel={() => setShowPlanPanel(!showPlanPanel)}
+        onTogglePlanPanel={handleTogglePlanPanel}
         isNightMode={isNightMode}
         onToggleNightMode={() => {
           const newValue = !isNightMode;
@@ -774,7 +823,14 @@ const App: React.FC = () => {
         activeBaseMap={activeBaseMap}
         onBaseMapChange={setActiveBaseMap}
         onMenuStateChange={setIsSidebarMenuOpen}
+        isLoggedIn={!!session}
+        onLogin={() => setShowAuthModal(true)}
+        pointVisibility={pointVisibility}
+        onTogglePointVisibility={handleTogglePointVisibility}
       />
+
+      {/* Offline indicator */}
+      <OfflineIndicator />
 
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex overflow-hidden relative">
@@ -832,17 +888,21 @@ const App: React.FC = () => {
             {/* Base Map Layer with offline caching support */}
             {/* Uses CachedBaseTileLayer for OSM/DARK, regular for terrain/satellite (complex to cache) */}
             {activeBaseMap === 'satellite' && (
-              <TileLayer
+              <CachedBaseTileLayer
                 key="satellite-layer"
                 url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                layerId="BASEMAP_SATELLITE"
+                useCache={downloadedLayers.includes('BASEMAP_SATELLITE')}
                 maxZoom={19}
                 attribution='Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
               />
             )}
             {activeBaseMap === 'terrain' && (
-              <TileLayer
+              <CachedBaseTileLayer
                 key="terrain-layer"
-                url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+                url="https://a.tile.opentopomap.org/{z}/{x}/{y}.png"
+                layerId="BASEMAP_TOPO"
+                useCache={downloadedLayers.includes('BASEMAP_TOPO')}
                 maxZoom={17}
                 attribution='Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)'
               />
@@ -1066,10 +1126,10 @@ const App: React.FC = () => {
             <NavigationLayer
               onPointSelect={(point) => handleAddWaypoint(point, 'WAYPOINT')}
               waypoints={waypoints}
-              flightSegments={flightSegments}
               aircraftPosition={userPos ?? undefined}
               hideLockButton={showPlanPanel || isSidebarMenuOpen}
               onInsertWaypoint={handleInsertWaypoint}
+              pointVisibility={pointVisibility}
             />
           </MapContainer>
         </div>
@@ -1101,9 +1161,8 @@ const App: React.FC = () => {
         aircraftModel={aircraftModel}
         plannedSpeed={plannedSpeed}
         downloadedLayers={downloadedLayers}
-        activeLayers={activeLayers}
+        downloadedLayersReady={downloadedLayersReady}
         onDownloadLayer={handleChartDownload}
-        onToggleLayer={handleToggleLayer}
         onClearLayerCache={handleClearLayerCache}
       />
 

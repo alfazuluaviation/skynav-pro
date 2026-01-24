@@ -1,0 +1,8 @@
+:root {
+  /* Switch tokens (HSL) */
+  --switch-on: 270 92% 60%; /* vivid purple */
+  --switch-on-glow: 270 92% 60%;
+  --switch-off: 215 25% 28%;
+  --switch-knob-off: 215 18% 60%;
+  --switch-knob-on: 0 0% 100%;
+}
