@@ -147,19 +147,31 @@
 
 ## 7. Interface do Usuário
 
-### 7.1 Modo Noturno
+### 7.1 Visibilidade de Pontos de Navegação
+- **Status:** ✅ Aprovado em 2025-01-24
+- **Descrição:** Sistema de toggles para ocultar/mostrar categorias de pontos de navegação no mapa: Fixos/Waypoints, Aeródromos, Helipontos, VOR/NDB e Fixos Usuário.
+- **Arquivos:** `src/components/LayersMenu.tsx`, `src/App.tsx`, `src/components/NavigationLayer.tsx`
+- **Como funciona:**
+  1. **Estado Global (`pointVisibility`):** Objeto com chaves booleanas (`waypoints`, `aerodromes`, `heliports`, `vorNdb`, `userFixes`) gerenciado no `App.tsx`.
+  2. **Persistência:** Estado salvo automaticamente em `localStorage` sob a chave `sky_nav_point_visibility`.
+  3. **Merge com Defaults:** Ao carregar do localStorage, valores são mesclados com defaults para evitar chaves faltando em sessões antigas.
+  4. **Renderização Condicional:** O `NavigationLayer.tsx` filtra marcadores em tempo real com base nas preferências.
+  5. **UI de Toggles:** Switches estilizados com variáveis HSL (`--switch-on`, `--switch-off`) definidas em `theme.css`.
+  6. **Escalonamento de Ícones:** Ícones escalam proporcionalmente ao zoom do mapa (função `getZoomScale` em `AerodromeIcons.tsx`).
+
+### 7.2 Modo Noturno
 - **Status:** ⏳ Aguardando aprovação
 - **Descrição:** -
 - **Arquivos:** `src/App.tsx`, `src/index.css`
 - **Como funciona:** -
 
-### 7.2 PWA e Instalação
+### 7.3 PWA e Instalação
 - **Status:** ⏳ Aguardando aprovação
 - **Descrição:** -
 - **Arquivos:** `src/hooks/usePWAUpdate.ts`, `src/components/PWAUpdatePrompt.tsx`
 - **Como funciona:** -
 
-### 7.3 Indicador Offline
+### 7.4 Indicador Offline
 - **Status:** ⏳ Aguardando aprovação
 - **Descrição:** -
 - **Arquivos:** `src/components/OfflineIndicator.tsx`
@@ -171,6 +183,8 @@
 
 | Data | Funcionalidade | Descrição | Aprovado |
 |------|----------------|-----------|----------|
+| 2025-01-24 | Visibilidade de Pontos | Toggles para ocultar/mostrar Aeródromos, VOR/NDB, Helipontos, Fixos e Fixos Usuário | ✅ |
+| 2025-01-24 | Escalonamento de Ícones | Ícones de navegação escalam proporcionalmente ao zoom do mapa | ✅ |
 | 2025-01-24 | Carregamento Online WMS v5 | Sistema de redundância com Supabase proxy e sourceHealth | ✅ |
 | 2025-01-23 | Estrutura inicial | Criação do arquivo de documentação | ✅ |
 
