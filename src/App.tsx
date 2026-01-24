@@ -227,10 +227,19 @@ const App = () => {
   const [chartsModalIcao, setChartsModalIcao] = useState<string | null>(null);
   const [isSidebarMenuOpen, setIsSidebarMenuOpen] = useState(false);
 
-  // Point visibility state (persisted)
+  // Point visibility state (persisted) - merge with defaults to handle new keys
   const [pointVisibility, setPointVisibility] = useState<PointVisibility>(() => {
-    const saved = localStorage.getItem('sky_nav_point_visibility');
-    return saved ? JSON.parse(saved) : { waypoints: true, vorNdb: true, aerodromes: true, heliports: true, userFixes: true };
+    const defaults: PointVisibility = { waypoints: true, vorNdb: true, aerodromes: true, heliports: true, userFixes: true };
+    try {
+      const saved = localStorage.getItem('sky_nav_point_visibility');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { ...defaults, ...parsed };
+      }
+    } catch (e) {
+      console.warn('Failed to parse pointVisibility from localStorage', e);
+    }
+    return defaults;
   });
 
   const handleTogglePointVisibility = (key: keyof PointVisibility) => {

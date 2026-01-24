@@ -93,19 +93,21 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                     </div>
                     <div className="text-[10px] text-slate-500 mt-0.5">{description}</div>
                 </div>
+                {/* Switch container */}
                 <div 
-                    className={`relative w-11 h-6 rounded-full cursor-pointer transition-all duration-200 ${
-                        isActive 
-                            ? 'bg-purple-600 shadow-lg shadow-purple-500/50' 
-                            : 'bg-slate-700'
-                    }`}
+                    className="relative w-11 h-6 rounded-full cursor-pointer transition-colors duration-200"
+                    style={{
+                        backgroundColor: isActive ? 'hsl(var(--switch-on))' : 'hsl(var(--switch-off))',
+                        boxShadow: isActive ? '0 0 12px hsl(var(--switch-on-glow) / 0.5)' : 'none'
+                    }}
                 >
+                    {/* Knob */}
                     <div 
-                        className={`absolute top-1 w-4 h-4 rounded-full shadow-md transition-all duration-200 ${
-                            isActive 
-                                ? 'translate-x-6 bg-white' 
-                                : 'translate-x-1 bg-slate-400'
-                        }`}
+                        className="absolute top-1 w-4 h-4 rounded-full shadow-md transition-all duration-200"
+                        style={{
+                            transform: isActive ? 'translateX(1.5rem)' : 'translateX(0.25rem)',
+                            backgroundColor: isActive ? 'hsl(var(--switch-knob-on))' : 'hsl(var(--switch-knob-off))'
+                        }}
                     />
                 </div>
             </div>
