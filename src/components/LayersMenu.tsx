@@ -89,13 +89,13 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                 <div 
                     className={`relative w-11 h-6 rounded-full transition-all duration-200 ${
                         isActive 
-                            ? 'bg-purple-500 shadow-lg shadow-purple-500/30' 
-                            : 'bg-slate-600'
+                            ? 'bg-[#9333ea] shadow-lg shadow-purple-600/40' 
+                            : 'bg-slate-700'
                     }`}
                 >
                     <div 
                         className={`absolute top-1 w-4 h-4 rounded-full shadow-md transition-transform duration-200 ${
-                            isActive ? 'translate-x-6 bg-slate-900' : 'translate-x-1 bg-slate-400'
+                            isActive ? 'translate-x-6 bg-white' : 'translate-x-1 bg-slate-400'
                         }`}
                     />
                 </div>
