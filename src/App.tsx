@@ -22,7 +22,7 @@ import { AerodromeModal } from './components/AerodromeModal';
 import { DownloadModal } from './components/DownloadModal';
 import { AircraftListModal } from './components/AircraftListModal';
 import { FlightPlanDownloadModal } from './components/FlightPlanDownloadModal';
-import { BaseMapType } from './components/LayersMenu';
+import { BaseMapType, PointVisibility } from './components/LayersMenu';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { getAerodromeIconHTML, getIconSize } from './components/AerodromeIcons';
@@ -227,7 +227,20 @@ const App = () => {
   const [chartsModalIcao, setChartsModalIcao] = useState<string | null>(null);
   const [isSidebarMenuOpen, setIsSidebarMenuOpen] = useState(false);
 
-  // Persistence Keys
+  // Point visibility state (persisted)
+  const [pointVisibility, setPointVisibility] = useState<PointVisibility>(() => {
+    const saved = localStorage.getItem('sky_nav_point_visibility');
+    return saved ? JSON.parse(saved) : { waypoints: true, aerodromes: true, heliports: true, userFixes: true };
+  });
+
+  const handleTogglePointVisibility = (key: keyof PointVisibility) => {
+    setPointVisibility(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      localStorage.setItem('sky_nav_point_visibility', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const KEY_CURRENT_PLAN = 'flight_plan_v1';
   const KEY_SAVED_PLANS = 'saved_flight_plans_v1';
 
@@ -803,6 +816,8 @@ const App = () => {
         onMenuStateChange={setIsSidebarMenuOpen}
         isLoggedIn={!!session}
         onLogin={() => setShowAuthModal(true)}
+        pointVisibility={pointVisibility}
+        onTogglePointVisibility={handleTogglePointVisibility}
       />
 
       {/* Offline indicator */}
@@ -1102,10 +1117,10 @@ const App = () => {
             <NavigationLayer
               onPointSelect={(point) => handleAddWaypoint(point, 'WAYPOINT')}
               waypoints={waypoints}
-              flightSegments={flightSegments}
               aircraftPosition={userPos ?? undefined}
               hideLockButton={showPlanPanel || isSidebarMenuOpen}
               onInsertWaypoint={handleInsertWaypoint}
+              pointVisibility={pointVisibility}
             />
           </MapContainer>
         </div>

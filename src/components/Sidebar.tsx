@@ -6,7 +6,7 @@ import {
 } from './Icons';
 import { IconButton } from './IconButton';
 import { SettingsPopover } from './SettingsPopover';
-import { LayersMenu, BaseMapType } from './LayersMenu';
+import { LayersMenu, BaseMapType, PointVisibility } from './LayersMenu';
 import { AiracCycle } from '../../types';
 import { usePWAUpdate } from '@/hooks/usePWAUpdate';
 import { useLocationPermission } from '@/hooks/useLocationPermission';
@@ -30,6 +30,8 @@ interface SidebarProps {
     onMenuStateChange?: (isMenuOpen: boolean) => void;
     isLoggedIn?: boolean;
     onLogin?: () => void;
+    pointVisibility?: PointVisibility;
+    onTogglePointVisibility?: (key: keyof PointVisibility) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -50,6 +52,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onMenuStateChange,
     isLoggedIn = false,
     onLogin,
+    pointVisibility = { waypoints: true, aerodromes: true, heliports: true, userFixes: true },
+    onTogglePointVisibility,
 }) => {
     const [showSettings, setShowSettings] = useState(false);
     const [showLayersMenu, setShowLayersMenu] = useState(false);
@@ -149,6 +153,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         position="left"
                         activeBaseMap={activeBaseMap}
                         onBaseMapChange={onBaseMapChange}
+                        pointVisibility={pointVisibility}
+                        onTogglePointVisibility={onTogglePointVisibility}
                     />
                 </div>
             )}
@@ -217,6 +223,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             isMobile={true}
                             activeBaseMap={activeBaseMap}
                             onBaseMapChange={onBaseMapChange}
+                            pointVisibility={pointVisibility}
+                            onTogglePointVisibility={onTogglePointVisibility}
                         />
                     </div>
                 </div>
