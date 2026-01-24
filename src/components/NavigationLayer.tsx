@@ -33,9 +33,6 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     
     // VOR Radial tracking state
     const [selectedVor, setSelectedVor] = useState<NavPoint | null>(null);
-    const map = useMap();
-    const [points, setPoints] = useState<NavPoint[]>([]);
-    const [zoom, setZoom] = useState(map.getZoom());
     
     // Map starts UNLOCKED (free to drag) - user can lock to follow aircraft position
     const [isLocked, setIsLocked] = useState(false);
