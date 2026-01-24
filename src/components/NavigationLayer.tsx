@@ -3,10 +3,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useMapEvents, Tooltip, LayerGroup, Polyline, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { fetchNavigationData, NavPoint } from '../services/NavigationDataService';
-import { Waypoint } from '../types';
+import { Waypoint } from '../../types';
 import { DraggableRoute } from './DraggableRoute';
 import { getMagneticDeclination, applyMagneticVariation } from '../utils/geoUtils';
 import { getAerodromeIconHTML, getIconSize } from './AerodromeIcons';
+import { PointVisibility } from './LayersMenu';
 
 interface NavigationLayerProps {
     onPointSelect?: (point: NavPoint) => void;
@@ -14,6 +15,7 @@ interface NavigationLayerProps {
     aircraftPosition?: [number, number];
     hideLockButton?: boolean;
     onInsertWaypoint?: (waypoint: Waypoint, insertAfterIndex: number) => void;
+    pointVisibility?: PointVisibility;
 }
 
 export const NavigationLayer: React.FC<NavigationLayerProps> = ({ 
@@ -21,7 +23,8 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     waypoints = [],
     aircraftPosition,
     hideLockButton = false,
-    onInsertWaypoint
+    onInsertWaypoint,
+    pointVisibility = { waypoints: true, aerodromes: true, heliports: true, userFixes: true }
 }) => {
     const map = useMap();
     const [points, setPoints] = useState<NavPoint[]>([]);
@@ -210,8 +213,18 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
 
                 {/* 3. NAVIGATION DATA POINTS (WFS) - Using DECEA standard symbols */}
                 {zoom >= 8 && points.map(p => {
+                    // Filter based on visibility settings
+                    const isHeliport = p.kind === 'heliport';
+                    const isAerodrome = p.type === 'airport' && !isHeliport;
+                    const isWaypoint = p.type === 'vor' || p.type === 'ndb' || p.type === 'fix';
+                    
+                    // Apply visibility filters
+                    if (isHeliport && !pointVisibility.heliports) return null;
+                    if (isAerodrome && !pointVisibility.aerodromes) return null;
+                    if (isWaypoint && !pointVisibility.waypoints) return null;
+                    
                     // Determine the icon type based on point type and kind
-                    const iconType = p.kind === 'heliport' ? 'heliport' : p.type;
+                    const iconType = isHeliport ? 'heliport' : p.type;
                     
                     // Determine if it's a principal aerodrome (SB prefix = major Brazilian airports)
                     // SBGR, SBSP, SBRJ, SBGL, etc. are principal aerodromes
@@ -230,7 +243,7 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     });
                     
                     // Generate tooltip with type indication
-                    const typeLabel = p.kind === 'heliport' ? 'Heliporto' : 
+                    const typeLabel = isHeliport ? 'Heliporto' : 
                                      isPrincipal ? 'Aeródromo Principal' : 
                                      p.type === 'airport' ? 'Aeródromo' :
                                      p.type === 'vor' ? 'VOR' :

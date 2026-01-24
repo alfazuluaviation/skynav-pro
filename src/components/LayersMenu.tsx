@@ -5,6 +5,14 @@ import { IconMap, IconPlane, IconMountain, IconSatellite } from './Icons';
 // Base map types: roadmap respects isNightMode for light/dark, terrain shows elevation, satellite shows imagery
 export type BaseMapType = 'roadmap' | 'terrain' | 'satellite';
 
+// Visibility toggles for navigation points
+export interface PointVisibility {
+    waypoints: boolean;      // Fixos / Waypoints
+    aerodromes: boolean;     // Aeródromos
+    heliports: boolean;      // Helipontos
+    userFixes: boolean;      // Fixos Usuário
+}
+
 interface LayersMenuProps {
     onClose: () => void;
     activeLayers: string[];
@@ -14,6 +22,8 @@ interface LayersMenuProps {
     isMobile?: boolean;
     activeBaseMap?: BaseMapType;
     onBaseMapChange?: (baseMap: BaseMapType) => void;
+    pointVisibility?: PointVisibility;
+    onTogglePointVisibility?: (key: keyof PointVisibility) => void;
 }
 
 export const LayersMenu: React.FC<LayersMenuProps> = ({
@@ -25,6 +35,8 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
     isMobile = false,
     activeBaseMap = 'roadmap',
     onBaseMapChange,
+    pointVisibility = { waypoints: true, aerodromes: true, heliports: true, userFixes: true },
+    onTogglePointVisibility,
 }) => {
     // Grupo 1: REA, REUL, REH, ARC
     const chartTypesGroup1 = [
@@ -49,6 +61,46 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
         { id: 'satellite', name: 'Satélite', icon: 'satellite', description: 'Imagem de satélite' }
     ];
 
+    // Toggle items for navigation points visibility
+    const visibilityToggles = [
+        { key: 'waypoints' as keyof PointVisibility, label: 'Fixos / Waypoints', description: 'VOR, NDB, FIX' },
+        { key: 'aerodromes' as keyof PointVisibility, label: 'Aeródromos', description: 'Aeroportos e pistas' },
+        { key: 'heliports' as keyof PointVisibility, label: 'Helipontos', description: 'Pontos de pouso para helicópteros' },
+        { key: 'userFixes' as keyof PointVisibility, label: 'Fixos Usuário', description: 'Pontos criados por você' },
+    ];
+
+    // Render a toggle switch component
+    const renderToggle = (key: keyof PointVisibility, label: string, description: string) => {
+        const isActive = pointVisibility[key];
+        return (
+            <div 
+                key={key}
+                className="flex items-center justify-between py-2 px-1 cursor-pointer group"
+                onClick={() => onTogglePointVisibility?.(key)}
+            >
+                <div className="flex-1 mr-3">
+                    <div className={`text-xs font-bold uppercase tracking-wide transition-colors ${isActive ? 'text-white' : 'text-slate-400'}`}>
+                        {label}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">{description}</div>
+                </div>
+                <div 
+                    className={`relative w-11 h-6 rounded-full transition-all duration-200 ${
+                        isActive 
+                            ? 'bg-gradient-to-r from-purple-500 to-purple-600 shadow-lg shadow-purple-500/30' 
+                            : 'bg-slate-700'
+                    }`}
+                >
+                    <div 
+                        className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                            isActive ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                    />
+                </div>
+            </div>
+        );
+    };
+
     // Mobile content - without wrapper
     if (isMobile) {
         return (
@@ -66,6 +118,21 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                 </div>
 
                 <div className="p-4 flex flex-col gap-4">
+                    {/* Visibility Toggles Section */}
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500 mb-1">
+                            Exibição no Mapa
+                        </span>
+                        {visibilityToggles.map(toggle => renderToggle(toggle.key, toggle.label, toggle.description))}
+                    </div>
+
+                    {/* Enhanced separator */}
+                    <div className="relative py-2">
+                        <div className="h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent w-full"></div>
+                        <div className="absolute left-1/2 -translate-x-1/2 -top-1 bg-slate-900 px-3">
+                            <span className="text-[8px] font-bold uppercase tracking-widest text-purple-400">Cartas</span>
+                        </div>
+                    </div>
                     {/* Grupo 1: REA, REUL, REH, ARC */}
                     <div className="grid grid-cols-4 gap-2">
                         {chartTypesGroup1.map((chart) => {
@@ -194,6 +261,22 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
             </div>
 
             <div className="p-5 flex flex-col gap-6 max-h-[75vh] overflow-y-auto">
+                {/* Visibility Toggles Section */}
+                <div className="flex flex-col gap-1">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+                        Exibição no Mapa
+                    </span>
+                    {visibilityToggles.map(toggle => renderToggle(toggle.key, toggle.label, toggle.description))}
+                </div>
+
+                {/* Enhanced separator */}
+                <div className="relative py-2">
+                    <div className="h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent w-full"></div>
+                    <div className="absolute left-1/2 -translate-x-1/2 -top-1 bg-[#0d1117] px-3">
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-purple-400">Cartas Aeronáuticas</span>
+                    </div>
+                </div>
+
                 {/* Grupo 1: REA, REUL, REH, ARC */}
                 <div className="grid grid-cols-4 gap-3">
                     {chartTypesGroup1.map((chart) => {
