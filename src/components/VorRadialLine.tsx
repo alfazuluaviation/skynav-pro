@@ -74,28 +74,29 @@ export const VorRadialLine: React.FC<VorRadialLineProps> = ({
       className: 'vor-radial-label',
       html: `
         <div style="
-          background: linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(21, 128, 61, 0.95));
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          background: linear-gradient(135deg, #22c55e, #15803d);
           color: white;
-          padding: 6px 12px;
+          padding: 8px 14px;
           border-radius: 8px;
           font-weight: bold;
           font-size: 13px;
           font-family: 'Arial', sans-serif;
           white-space: nowrap;
           box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-          border: 2px solid rgba(255,255,255,0.8);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 2px;
-          transform: translate(-50%, -50%);
+          border: 2px solid rgba(255,255,255,0.9);
+          text-align: center;
+          line-height: 1.3;
         ">
-          <div style="font-size: 14px; letter-spacing: 1px;">${radialText}</div>
-          <div style="font-size: 12px; opacity: 0.9;">${distanceText}</div>
+          <div style="font-size: 15px; letter-spacing: 1px; font-weight: 800;">${radialText}</div>
+          <div style="font-size: 12px; opacity: 0.95; margin-top: 2px;">${distanceText}</div>
         </div>
       `,
-      iconSize: [0, 0],
-      iconAnchor: [0, 0]
+      iconSize: [100, 60],
+      iconAnchor: [50, 30]
     });
   }, [radialData]);
 
