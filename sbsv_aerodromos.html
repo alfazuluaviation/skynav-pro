@@ -1462,7 +1462,7 @@ REF: NOTAM B2658/25</pre></p>
 
 	const buscaSOL = function(){
 		let localidade_id = "SBSV",
-			url = `https://aisweb.decea.mil.br/api/?apiKey=1587263166&apiPass=3199249e-755b-1033-a49b-72567f175e3a&area=sol&icaoCode=${localidade_id}`;
+			url = `https://aisweb.decea.mil.br/api/?apiKey=${import.meta.env.VITE_AIS_API_KEY}&apiPass=${import.meta.env.VITE_AIS_API_PASS}&area=sol&icaoCode=${localidade_id}`;
 		
 		const xhr = new XMLHttpRequest();
 		xhr.open("GET", url, true);
@@ -2828,3 +2828,4 @@ catch(err){return;}
 setTimeout(f5_cspm.wait_perf_data,100);return;},go:function(){var chunk=window.document.cookie.split(/\s*;\s*/);for(var i=0;i<chunk.length;++i){var pair=chunk[i].split(/\s*=\s*/);if(pair[0]=='f5_cspm'&&pair[1]=='1234')
 {var d=new Date();d.setTime(d.getTime()-1000);window.document.cookie='f5_cspm=;expires='+d.toUTCString()+';path=/;'+';';setTimeout(f5_cspm.wait_perf_data,100);}}}}
 f5_cspm.go();}());</script>
+
