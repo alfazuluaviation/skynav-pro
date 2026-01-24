@@ -1,1 +1,22 @@
 project_id = "gongoqjjpwphhttumdjm"
+
+[functions.download]
+verify_jwt = false
+
+[functions.fetch-rotaer]
+verify_jwt = false
+
+[functions.fetch-charts]
+verify_jwt = false
+
+[functions.proxy-geoserver]
+verify_jwt = false
+
+[functions.proxy-wms]
+verify_jwt = false
+
+[functions.search-aerodrome]
+verify_jwt = false
+
+[functions.sync-aeronautical-data]
+verify_jwt = false
