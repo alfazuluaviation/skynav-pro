@@ -30,8 +30,16 @@ function latLngToTile(lat: number, lng: number, zoom: number): { x: number; y: n
  * Always uses first subdomain for consistent caching
  */
 function buildBaseMapTileUrl(baseUrl: string, subdomains: readonly string[], x: number, y: number, zoom: number): string {
+  // Esri uses different format: {z}/{y}/{x}
+  if (baseUrl.includes('arcgisonline.com')) {
+    return baseUrl
+      .replace('{z}', zoom.toString())
+      .replace('{y}', y.toString())
+      .replace('{x}', x.toString());
+  }
+  
   // Always use first subdomain ('a') for consistent cache keys
-  const subdomain = subdomains[0];
+  const subdomain = subdomains[0] || '';
   return baseUrl
     .replace('{s}', subdomain)
     .replace('{z}', zoom.toString())
@@ -104,6 +112,7 @@ async function downloadTile(url: string, layerId: string, retries: number = 2): 
 
 /**
  * Download base map tiles for offline use
+ * OPTIMIZED: Better progress reporting
  */
 export async function downloadBaseMapLayer(
   layerId: BaseMapLayerId,
@@ -111,7 +120,7 @@ export async function downloadBaseMapLayer(
 ): Promise<boolean> {
   const config = BASE_MAP_LAYERS[layerId];
   if (!config) {
-    console.error('Unknown base map layer:', layerId);
+    console.error('[BaseMap] Unknown layer:', layerId);
     return false;
   }
 
@@ -133,8 +142,9 @@ export async function downloadBaseMapLayer(
   const totalTiles = allTiles.length;
   let processedTiles = 0;
   let downloadedTiles = 0;
+  let lastReportedProgress = -1;
 
-  console.log(`[BASE MAP] Starting download of ${layerId}: ${totalTiles} tiles across zoom levels ${zoomLevels.join(', ')}`);
+  console.log(`[BaseMap] Starting ${layerId}: ${totalTiles} tiles, zooms ${zoomLevels.join(',')}`);
 
   onProgress?.(0);
 
@@ -146,8 +156,8 @@ export async function downloadBaseMapLayer(
     status: 'downloading'
   });
 
-  // Download in batches
-  const batchSize = 15;
+  // Higher batch size for external tile servers (more reliable)
+  const batchSize = 20;
   
   for (let i = 0; i < allTiles.length; i += batchSize) {
     const batch = allTiles.slice(i, i + batchSize);
@@ -160,15 +170,24 @@ export async function downloadBaseMapLayer(
         }
         processedTiles++;
         
+        // Throttled progress reporting
         const progress = Math.round((processedTiles / totalTiles) * 100);
-        onProgress?.(progress);
+        if (progress !== lastReportedProgress && progress % 2 === 0) {
+          lastReportedProgress = progress;
+          onProgress?.(progress);
+        }
       })
     );
 
-    await new Promise(resolve => setTimeout(resolve, 30));
+    // Short delay
+    if (i + batchSize < allTiles.length) {
+      await new Promise(resolve => setTimeout(resolve, 30));
+    }
   }
 
-  console.log(`[BASE MAP] Download complete for ${layerId}: ${downloadedTiles}/${totalTiles} tiles cached`);
+  onProgress?.(100);
+
+  console.log(`[BaseMap] Complete ${layerId}: ${downloadedTiles}/${totalTiles} tiles cached`);
 
   await updateLayerMetadata({
     layerId: `BASEMAP_${layerId}`,

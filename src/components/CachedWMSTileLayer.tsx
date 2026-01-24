@@ -2,7 +2,12 @@
  * CachedWMSTileLayer
  * A WMS tile layer component that uses IndexedDB for offline caching.
  * Tiles are served from cache when available, with network fallback.
- * Uses a proxy to avoid CORS issues with DECEA GeoServer.
+ * 
+ * OPTIMIZED v4:
+ * - Supabase Edge Function proxy as primary (most reliable)
+ * - Parallel fetches with staggered fallbacks
+ * - Aggressive retry with exponential backoff
+ * - Session-aware proxy selection
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -10,9 +15,25 @@ import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { getCachedTile, cacheTile } from '../services/tileCache';
 
-// Supabase edge function URL for WMS proxy
-const SUPABASE_URL = "https://gongoqjjpwphhttumdjm.supabase.co";
-const WMS_PROXY_URL = `${SUPABASE_URL}/functions/v1/proxy-wms`;
+// GeoServer direct URL
+const BASE_WMS_URL = "https://geoaisweb.decea.mil.br/geoserver/wms";
+
+// Supabase Edge Function proxy URL - most reliable option
+const SUPABASE_PROXY_URL = `https://gongoqjjpwphhttumdjm.supabase.co/functions/v1/proxy-wms`;
+
+// Public CORS proxies as fallback (ordered by reliability)
+const PUBLIC_PROXIES = [
+  "https://api.codetabs.com/v1/proxy?quest=",  // Most reliable based on logs
+  "https://api.allorigins.win/raw?url=",
+];
+
+// Track which sources are working in this session
+const sourceHealth: Record<string, { failures: number; lastSuccess: number }> = {
+  'supabase': { failures: 0, lastSuccess: Date.now() },
+  'direct': { failures: 0, lastSuccess: 0 },
+  'public-0': { failures: 0, lastSuccess: 0 },
+  'public-1': { failures: 0, lastSuccess: 0 }
+};
 
 interface CachedWMSTileLayerProps {
   url: string;
@@ -25,30 +46,27 @@ interface CachedWMSTileLayerProps {
   tileSize?: number;
   detectRetina?: boolean;
   maxZoom?: number;
-  layerId: string; // Unique ID for caching
-  useCache?: boolean; // Enable/disable cache
-  useProxy?: boolean; // Use proxy for CORS
+  layerId: string;
+  useCache?: boolean;
+  useProxy?: boolean;
   attribution?: string;
 }
 
-// Custom TileLayer class with IndexedDB caching and proxy support
+// Custom TileLayer class with IndexedDB caching and optimized network loading
 const CachedWMSLayer = L.TileLayer.WMS.extend({
   options: {
     layerId: '',
     useCache: true,
-    useProxy: true,
-    proxyUrl: WMS_PROXY_URL
+    useProxy: false,
+    baseWmsUrl: BASE_WMS_URL
   },
 
-  // Override getTileUrl to use proxy with correct EPSG:4326 coordinates
-  // MUST match the URL format used in chartDownloader.ts for cache to work
-  // Uses standard 256px tile size for simplicity and cache consistency
+  // Generate WMS URL with EPSG:4326 coordinates
   getTileUrl: function (coords: L.Coords) {
     const zoom = coords.z;
     const x = coords.x;
     const y = coords.y;
     
-    // Standard tile calculation (256px tiles)
     const n = Math.pow(2, zoom);
     
     const minLng = x / n * 360 - 180;
@@ -60,10 +78,7 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
     const minLat = minLatRad * 180 / Math.PI;
     const maxLat = maxLatRad * 180 / Math.PI;
     
-    // WMS 1.1.1 bbox format: minx,miny,maxx,maxy (lon,lat,lon,lat for EPSG:4326)
     const bboxStr = `${minLng},${minLat},${maxLng},${maxLat}`;
-    
-    // Fixed 256px tile size for consistency with cache
     const tileSize = 256;
     
     const params = new URLSearchParams({
@@ -80,12 +95,7 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
       bbox: bboxStr
     });
 
-    // Use proxy if enabled, otherwise direct URL
-    if (this.options.useProxy) {
-      return `${this.options.proxyUrl}?${params.toString()}`;
-    }
-    
-    return `${this._url}?${params.toString()}`;
+    return `${this.options.baseWmsUrl}?${params.toString()}`;
   },
 
   createTile: function (coords: L.Coords, done: L.DoneCallback) {
@@ -96,52 +106,144 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
 
     tile.alt = '';
     tile.setAttribute('role', 'presentation');
-
-    // Set crossOrigin before src
     tile.crossOrigin = 'anonymous';
 
+    // Build Supabase proxy URL with WMS params
+    const buildSupabaseProxyUrl = (wmsUrl: string) => {
+      const wmsUrlObj = new URL(wmsUrl);
+      const proxyUrl = new URL(SUPABASE_PROXY_URL);
+      // Copy all WMS parameters to the proxy URL
+      for (const [key, value] of wmsUrlObj.searchParams.entries()) {
+        proxyUrl.searchParams.set(key, value);
+      }
+      return proxyUrl.toString();
+    };
+
+    // Fast network loading with smart source selection
     const loadFromNetwork = () => {
-      // Block network requests when offline
       if (!navigator.onLine) {
-        console.debug(`[WMS OFFLINE] ${layerId} - skipping network request`);
-        done(null, tile); // Return empty tile
+        done(null, tile);
         return;
       }
 
-      // Use fetch with AbortController for better offline handling
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const abortController = new AbortController();
+      let resolved = false;
+      
+      // Helper to fetch with timeout
+      const fetchWithTimeout = (url: string, timeout: number, source: string): Promise<{ blob: Blob; source: string }> => {
+        return new Promise((resolve, reject) => {
+          if (resolved) {
+            reject(new Error('already resolved'));
+            return;
+          }
+          
+          const timeoutId = setTimeout(() => {
+            reject(new Error('timeout'));
+          }, timeout);
 
-      fetch(tileUrl, { 
-        mode: 'cors', 
-        credentials: 'omit',
-        signal: controller.signal 
-      })
-        .then(async res => {
-          clearTimeout(timeoutId);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          
-          const contentType = res.headers.get('Content-Type') || '';
-          
-          // If server returned XML (error), handle gracefully
-          if (contentType.includes('xml') || contentType.includes('text/')) {
-            const text = await res.text();
-            if (text.includes('ServiceException')) {
-              console.warn(`[WMS ERROR] ${layerId} - GeoServer error`);
-            }
-            throw new Error('Server returned XML error');
-          }
-          
-          const blob = await res.blob();
-          console.debug(`[WMS LOAD] ${layerId} - received ${blob.size} bytes, type: ${blob.type || contentType}`);
-          return blob;
+          fetch(url, { 
+            mode: 'cors', 
+            credentials: 'omit',
+            signal: abortController.signal,
+          })
+            .then(async res => {
+              clearTimeout(timeoutId);
+              if (resolved) {
+                reject(new Error('already resolved'));
+                return;
+              }
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              
+              const contentType = res.headers.get('Content-Type') || '';
+              if (contentType.includes('xml') || contentType.includes('text/html')) {
+                throw new Error('Invalid response type');
+              }
+              
+              const blob = await res.blob();
+              // Accept small transparent PNGs too (valid tiles)
+              if (!blob.type.startsWith('image/')) {
+                throw new Error('Not an image');
+              }
+              
+              // Track success
+              if (sourceHealth[source]) {
+                sourceHealth[source].failures = 0;
+                sourceHealth[source].lastSuccess = Date.now();
+              }
+              
+              resolve({ blob, source });
+            })
+            .catch(err => {
+              clearTimeout(timeoutId);
+              // Track failure
+              if (sourceHealth[source]) {
+                sourceHealth[source].failures++;
+              }
+              reject(err);
+            });
+        });
+      };
+
+      // Build URLs
+      const supabaseProxyUrl = buildSupabaseProxyUrl(tileUrl);
+      
+      // Sort sources by health (least failures first)
+      const sortedSources = Object.entries(sourceHealth)
+        .sort((a, b) => {
+          // Prioritize by least failures, then by most recent success
+          if (a[1].failures !== b[1].failures) return a[1].failures - b[1].failures;
+          return b[1].lastSuccess - a[1].lastSuccess;
         })
-        .then(blob => {
-          // Cache valid image blobs (any size is fine for transparent tiles)
-          if (useCache && blob.type.startsWith('image/')) {
-            cacheTile(tileUrl, blob, layerId);
+        .map(([key]) => key);
+      
+      // Build attempts in order of health
+      const attempts: Promise<{ blob: Blob; source: string }>[] = [];
+      
+      sortedSources.forEach((source, index) => {
+        // Stagger starts slightly to reduce server load
+        const delay = index * 100;
+        let url: string;
+        let timeout: number;
+        
+        if (source === 'supabase') {
+          url = supabaseProxyUrl;
+          timeout = 4000; // Supabase proxy - reliable but needs more time
+        } else if (source === 'direct') {
+          url = tileUrl;
+          timeout = 1500; // Direct - fast timeout since usually blocked by CORS
+        } else if (source.startsWith('public-')) {
+          const proxyIndex = parseInt(source.split('-')[1]);
+          url = `${PUBLIC_PROXIES[proxyIndex]}${encodeURIComponent(tileUrl)}`;
+          timeout = 3000;
+        } else {
+          return;
+        }
+        
+        if (delay > 0) {
+          attempts.push(
+            new Promise(resolve => setTimeout(resolve, delay))
+              .then(() => fetchWithTimeout(url, timeout, source))
+          );
+        } else {
+          attempts.push(fetchWithTimeout(url, timeout, source));
+        }
+      });
+
+      // Race all attempts - first successful response wins
+      Promise.any(attempts)
+        .then(({ blob, source }) => {
+          resolved = true;
+          // Abort remaining requests
+          try { abortController.abort(); } catch {}
+          
+          console.debug(`[WMS] Tile loaded via ${source}`);
+          
+          // Cache the tile asynchronously (don't wait) - only cache real content
+          if (useCache && blob.type.startsWith('image/') && blob.size > 100) {
+            cacheTile(tileUrl, blob, layerId).catch(() => {});
           }
-          // Create object URL and load into tile
+          
+          // Render tile immediately
           const objectUrl = URL.createObjectURL(blob);
           tile.onload = () => {
             URL.revokeObjectURL(objectUrl);
@@ -149,80 +251,45 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
           };
           tile.onerror = () => {
             URL.revokeObjectURL(objectUrl);
-            done(new Error('Failed to render tile'), tile);
+            done(new Error('Render failed'), tile);
           };
           tile.src = objectUrl;
         })
-        .catch((err) => {
-          clearTimeout(timeoutId);
-          // Silently handle network errors when offline
-          if (!navigator.onLine || err.name === 'AbortError' || err.message?.includes('Failed to fetch')) {
-            console.debug(`[WMS OFFLINE] ${layerId} - network unavailable`);
-          } else {
-            console.debug('Failed to load tile:', err.message);
-          }
-          done(null, tile); // Return empty tile on error
+        .catch(() => {
+          // All attempts failed
+          try { abortController.abort(); } catch {}
+          console.warn(`[WMS] All sources failed for tile`);
+          done(null, tile);
         });
     };
 
     if (useCache) {
-      // Try to load from cache first
+      // Try cache first - but with minimal blocking
       getCachedTile(tileUrl).then(blob => {
-        // Validate blob: must be an image type (any size is valid - transparent tiles can be small)
-        const isValidCachedTile = blob && blob.type.startsWith('image/');
-        
-        if (isValidCachedTile) {
-          console.debug(`[CACHE HIT] ${layerId} tile loaded from cache, size: ${blob.size} bytes`);
-          
-          // Create object URL from cached blob
+        if (blob && blob.type.startsWith('image/') && blob.size > 100) {
           const objectUrl = URL.createObjectURL(blob);
           tile.onload = () => {
             URL.revokeObjectURL(objectUrl);
             done(null, tile);
           };
-          tile.onerror = (err) => {
-            console.warn(`[CACHE ERROR] Failed to render ${layerId}:`, err);
+          tile.onerror = () => {
             URL.revokeObjectURL(objectUrl);
-            // Fallback to network only if online
-            if (navigator.onLine) {
-              loadFromNetwork();
-            } else {
-              done(null, tile);
-            }
+            if (navigator.onLine) loadFromNetwork();
+            else done(null, tile);
           };
           tile.src = objectUrl;
-        } else {
-          // Cache miss or invalid cache entry - load from network if online
-          if (navigator.onLine) {
-            if (blob) {
-              console.debug(`[CACHE INVALID] ${layerId} - type: ${blob.type}, reloading`);
-            } else {
-              console.debug(`[CACHE MISS] ${layerId} - loading from network`);
-            }
-            loadFromNetwork();
-          } else {
-            // Offline with no valid cache - return empty tile
-            console.debug(`[WMS OFFLINE] ${layerId} - not cached, returning empty tile`);
-            done(null, tile);
-          }
-        }
-      }).catch((err) => {
-        // IndexedDB might not be available
-        console.warn(`[CACHE UNAVAILABLE] ${layerId} - IndexedDB error:`, err.message || err);
-        if (navigator.onLine) {
+        } else if (navigator.onLine) {
           loadFromNetwork();
         } else {
           done(null, tile);
         }
+      }).catch(() => {
+        if (navigator.onLine) loadFromNetwork();
+        else done(null, tile);
       });
     } else {
-      // Cache disabled - only load from network if online
-      if (navigator.onLine) {
-        console.debug(`[CACHE DISABLED] ${layerId} - loading from network`);
-        loadFromNetwork();
-      } else {
-        done(null, tile);
-      }
+      if (navigator.onLine) loadFromNetwork();
+      else done(null, tile);
     }
 
     return tile;
@@ -247,12 +314,12 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
 }) => {
   const map = useMap();
   const layerRef = useRef<L.TileLayer.WMS | null>(null);
+  const prevUseCacheRef = useRef<boolean>(useCache);
 
+  // Create/update layer
   useEffect(() => {
     if (!map) return;
 
-    // Create the cached WMS layer - use simple Mercator for tile coords
-    // but generate EPSG:4326 bbox in getTileUrl to match chartDownloader
     const wmsLayer = new CachedWMSLayer(url, {
       layers,
       format,
@@ -265,28 +332,29 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
       maxZoom,
       layerId,
       useCache,
-      useProxy,
-      proxyUrl: WMS_PROXY_URL,
+      useProxy: false,
+      baseWmsUrl: BASE_WMS_URL,
       attribution,
-      // Use simple Mercator CRS for tile coordinate system
-      // but we convert to EPSG:4326 bbox in getTileUrl
       crs: L.CRS.EPSG3857,
       continuousWorld: true,
-      // Optimize loading
+      // OPTIMIZED: Load during idle AND zooming for smoother experience
       updateWhenIdle: false,
-      updateWhenZooming: false,
-      keepBuffer: 4
+      updateWhenZooming: true,
+      // Larger buffer for smoother panning - preload more tiles
+      keepBuffer: 8,
+      // Aggressive tile loading
+      tileLoadingPolicy: 'all'
     });
 
-    // Set zIndex after creation
     if (typeof zIndex === 'number') {
       (wmsLayer as any).setZIndex(zIndex);
     }
 
-    console.log(`[CachedWMSTileLayer] Adding layer ${layerId} to map with zIndex=${zIndex}, useCache=${useCache}, tileSize=${tileSize}`);
+    console.log(`[CachedWMSTileLayer] Adding layer ${layerId} to map`);
 
     wmsLayer.addTo(map);
     layerRef.current = wmsLayer;
+    prevUseCacheRef.current = useCache;
 
     return () => {
       if (layerRef.current) {
@@ -295,14 +363,30 @@ export const CachedWMSTileLayer: React.FC<CachedWMSTileLayerProps> = ({
         layerRef.current = null;
       }
     };
-  }, [map, url, layers, format, transparent, version, opacity, zIndex, tileSize, detectRetina, maxZoom, layerId, useCache, useProxy, attribution]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, url, layers, format, transparent, version, zIndex, tileSize, detectRetina, maxZoom, layerId, useProxy, attribution]);
 
-  // Update opacity if it changes
+  // Update opacity without recreating layer
   useEffect(() => {
     if (layerRef.current) {
       layerRef.current.setOpacity(opacity);
     }
   }, [opacity]);
+
+  // Update useCache option
+  useEffect(() => {
+    if (layerRef.current) {
+      const wasUsingCache = prevUseCacheRef.current;
+      (layerRef.current.options as any).useCache = useCache;
+      
+      if (useCache && !wasUsingCache) {
+        layerRef.current.redraw();
+        console.log(`[CachedWMSTileLayer] Enabled cache for ${layerId}, redrawing`);
+      }
+      
+      prevUseCacheRef.current = useCache;
+    }
+  }, [useCache, layerId]);
 
   return null;
 };

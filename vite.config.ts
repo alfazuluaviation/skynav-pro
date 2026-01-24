@@ -88,6 +88,36 @@ export default defineConfig(({ mode }) => {
                   statuses: [0, 200]
                 }
               }
+            },
+            {
+              // Cache OpenTopoMap tiles
+              urlPattern: /^https:\/\/[abc]\.tile\.opentopomap\.org\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'opentopomap-cache',
+                expiration: {
+                  maxEntries: 5000,
+                  maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              // Cache Esri Satellite tiles
+              urlPattern: /^https:\/\/server\.arcgisonline\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'esri-satellite-cache',
+                expiration: {
+                  maxEntries: 5000,
+                  maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
             }
           ]
         }
