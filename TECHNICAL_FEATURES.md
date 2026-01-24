@@ -2,7 +2,7 @@
 
 > **IMPORTANTE:** Este arquivo contém APENAS funcionalidades testadas e aprovadas pelo usuário.  
 > Atualizações são feitas exclusivamente após validação explícita.  
-> Última atualização: 2025-01-23
+> Última atualização: 2025-01-24
 
 ---
 
@@ -27,10 +27,17 @@
 - **Como funciona:** -
 
 ### 1.2 Camadas WMS (Cartas Aeronáuticas Online)
-- **Status:** ⏳ Aguardando aprovação
-- **Descrição:** -
-- **Arquivos:** `src/components/CachedWMSTileLayer.tsx`, `src/config/chartLayers.ts`
-- **Como funciona:** -
+- **Status:** ✅ Aprovado em 2025-01-24
+- **Descrição:** Sistema de carregamento online de cartas aeronáuticas WMS com redundância multi-fonte e aprendizado de saúde em tempo real.
+- **Arquivos:** `src/components/CachedWMSTileLayer.tsx`, `src/config/chartLayers.ts`, `supabase/functions/proxy-wms/index.ts`
+- **Como funciona:**
+  1. **Fonte Primária:** Edge Function Supabase (`proxy-wms`) como proxy dedicado, evitando bloqueios CORS e limitações de proxies públicos.
+  2. **Fontes de Fallback:** Acesso direto ao GeoServer DECEA + proxies públicos (allorigins.win, corsproxy.io, codetabs.com).
+  3. **Rastreamento de Saúde (`sourceHealth`):** Monitora sucessos/falhas de cada fonte durante a sessão, priorizando automaticamente a mais estável.
+  4. **Concorrência Otimizada:** Requisições paralelas com staggering (atrasos escalonados) usando `Promise.any()` para renderizar o primeiro tile válido.
+  5. **Timeouts:** Supabase (4s), Acesso Direto (1.5s), Proxies Públicos (3s).
+  6. **Cache:** Tiles bem-sucedidos são cacheados em IndexedDB para uso offline.
+- **Notas:** Erros de CORS no console para acesso direto são esperados e não afetam o funcionamento - o sistema usa automaticamente o proxy funcional.
 
 ---
 
@@ -164,6 +171,7 @@
 
 | Data | Funcionalidade | Descrição | Aprovado |
 |------|----------------|-----------|----------|
+| 2025-01-24 | Carregamento Online WMS v5 | Sistema de redundância com Supabase proxy e sourceHealth | ✅ |
 | 2025-01-23 | Estrutura inicial | Criação do arquivo de documentação | ✅ |
 
 ---
