@@ -4,6 +4,7 @@ import { useDownloadManager } from '../hooks/useDownloadManager';
 import { Wifi, WifiOff, AlertTriangle, Loader2, RefreshCw, Clock, Zap } from 'lucide-react';
 import { getCachedTileCount } from '../services/tileCache';
 import { DownloadStats, getLayerDownloadStatus } from '../services/chartDownloader';
+import { NavigationSyncButton } from './NavigationSyncButton';
 
 interface DownloadModalProps {
   isOpen: boolean;
@@ -463,6 +464,12 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
               {baseMapOptions.map(renderChartButton)}
             </div>
           </div>
+
+          {/* Divider */}
+          <div className="border-t border-slate-700/50"></div>
+
+          {/* Navigation Data Sync - NEW */}
+          <NavigationSyncButton />
 
           {/* Divider */}
           <div className="border-t border-slate-700/50"></div>
