@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '@/integrations/supabase/client';
 import { IconGoogle } from './Icons';
 import logoSkyFPL from '@/assets/logo-skyfpl.png';
 
