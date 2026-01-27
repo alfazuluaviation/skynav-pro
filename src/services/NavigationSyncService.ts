@@ -39,9 +39,11 @@ async function fetchAllLayerFeatures(
 ): Promise<NavPoint[]> {
   const results: NavPoint[] = [];
   const bbox = `${BRAZIL_BOUNDS.minLng},${BRAZIL_BOUNDS.minLat},${BRAZIL_BOUNDS.maxLng},${BRAZIL_BOUNDS.maxLat}`;
-  const pageSize = 500;
+  const pageSize = 1000; // Increased for efficiency
   let startIndex = 0;
   let hasMore = true;
+  let retryCount = 0;
+  const maxRetries = 3;
 
   onProgress?.({ layer: layerName, current: 0, total: 0, status: 'syncing' });
 
@@ -51,22 +53,45 @@ async function fetchAllLayerFeatures(
         typeName: layerName,
         bbox: bbox,
         maxFeatures: String(pageSize),
-        startIndex: String(startIndex)
+        startIndex: String(startIndex) // CRITICAL: This was missing proper encoding
       });
 
-      const response = await fetch(`${PROXY_URL}?${params.toString()}`);
+      console.log(`[NavSync] Fetching ${layerName} from index ${startIndex}...`);
+      
+      const response = await fetch(`${PROXY_URL}?${params.toString()}`, {
+        headers: {
+          'Accept': 'application/json',
+        }
+      });
+      
       if (!response.ok) {
-        console.error(`[NavSync] Failed to fetch ${layerName} at index ${startIndex}`);
-        break;
+        console.error(`[NavSync] Failed to fetch ${layerName} at index ${startIndex}: HTTP ${response.status}`);
+        retryCount++;
+        if (retryCount >= maxRetries) {
+          console.error(`[NavSync] Max retries reached for ${layerName}`);
+          break;
+        }
+        await new Promise(r => setTimeout(r, 1000 * retryCount));
+        continue;
       }
 
       const data = await response.json();
       const features = data.features || [];
+      
+      // Check for warning/error from proxy
+      if (data._warning || data._error) {
+        console.warn(`[NavSync] GeoServer warning for ${layerName}:`, data._warning || data._error);
+      }
+
+      console.log(`[NavSync] Got ${features.length} features for ${layerName} at index ${startIndex}`);
 
       if (features.length === 0) {
         hasMore = false;
         break;
       }
+
+      // Reset retry count on success
+      retryCount = 0;
 
       for (const f of features) {
         if (f.geometry && (f.geometry.type === 'Point' || f.geometry.type === 'MultiPoint')) {
@@ -119,9 +144,20 @@ async function fetchAllLayerFeatures(
       if (features.length < pageSize) {
         hasMore = false;
       }
+
+      // Small delay between pages to avoid rate limiting
+      if (hasMore) {
+        await new Promise(r => setTimeout(r, 100));
+      }
     } catch (error) {
       console.error(`[NavSync] Error fetching ${layerName}:`, error);
-      hasMore = false;
+      retryCount++;
+      if (retryCount >= maxRetries) {
+        console.error(`[NavSync] Max retries reached for ${layerName}, stopping`);
+        hasMore = false;
+      } else {
+        await new Promise(r => setTimeout(r, 1000 * retryCount));
+      }
     }
   }
 
@@ -132,6 +168,7 @@ async function fetchAllLayerFeatures(
     status: 'complete' 
   });
 
+  console.log(`[NavSync] Completed ${layerName}: ${results.length} points total`);
   return results;
 }
 
