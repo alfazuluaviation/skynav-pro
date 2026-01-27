@@ -458,7 +458,19 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
             <div className="flex flex-col items-end">
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tempo Total</span>
               <span className="text-xl font-black text-slate-200">
-                {((flightSegments.reduce((acc, s) => acc + s.distance, 0) / plannedSpeed)).toFixed(1).replace('.', ':')} <span className="text-sm text-slate-500">H</span>
+                {(() => {
+                  // Sum ETEs by parsing HH:MM format to ensure consistency with expanded view
+                  let totalMinutes = 0;
+                  flightSegments.forEach(s => {
+                    if (s.ete && s.ete !== '--:--') {
+                      const [h, m] = s.ete.split(':').map(Number);
+                      totalMinutes += h * 60 + m;
+                    }
+                  });
+                  const hours = Math.floor(totalMinutes / 60);
+                  const minutes = totalMinutes % 60;
+                  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                })()} <span className="text-sm text-slate-500">H</span>
               </span>
             </div>
           </div>
