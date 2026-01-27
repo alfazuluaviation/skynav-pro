@@ -54,15 +54,20 @@ export const usePWAUpdate = () => {
       console.log('[PWA] SW Registered: ' + swUrl);
       registrationRef.current = r || null;
       
-      // Check for updates immediately on registration
+      // Check for updates only when online and less frequently (every 5 minutes)
       if (r) {
-        r.update().catch(err => console.log('[PWA] Initial update check failed:', err));
+        // Only check if online
+        if (navigator.onLine) {
+          r.update().catch(err => console.log('[PWA] Initial update check failed:', err));
+        }
         
-        // Check for updates every 30 seconds
+        // Check for updates every 5 minutes (only when online)
         setInterval(() => {
-          console.log('[PWA] Checking for updates...');
-          r.update().catch(err => console.log('[PWA] Update check failed:', err));
-        }, 30 * 1000);
+          if (navigator.onLine) {
+            console.log('[PWA] Checking for updates...');
+            r.update().catch(err => console.log('[PWA] Update check failed:', err));
+          }
+        }, 5 * 60 * 1000); // 5 minutes instead of 30 seconds
       }
     },
     onRegisterError(error) {
@@ -70,7 +75,10 @@ export const usePWAUpdate = () => {
     },
     onNeedRefresh() {
       console.log('[PWA] New content available, refresh needed');
-      setNeedRefresh(true);
+      // Only show update prompt if online
+      if (navigator.onLine) {
+        setNeedRefresh(true);
+      }
     },
     onOfflineReady() {
       console.log('[PWA] App ready to work offline');

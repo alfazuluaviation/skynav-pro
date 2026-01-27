@@ -9,7 +9,7 @@ import { Sidebar } from './components/Sidebar';
 import { FlightPlanPanel } from './components/FlightPlanPanel';
 import { MapControls } from './components/MapControls';
 import { AuthModal } from './components/AuthModal';
-import { supabase } from './services/supabaseClient';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuthGuard } from './hooks/useAuthGuard';
 import { Session } from '@supabase/supabase-js';
 import { getAiracCycleInfo } from './services/airacService';
