@@ -1,40 +1,64 @@
-﻿/* supabase/functions/download/index.ts
-   Secure download proxy with JWT validation */
-export async function handler(req: Request): Promise<Response> {
+/* supabase/functions/download/index.ts
+   Secure download proxy with JWT validation and CORS preflight handling */
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Authorization, apikey, Content-Type, x-client-info',
+  'Access-Control-Max-Age': '600',
+  'Vary': 'Origin',
+};
+
+Deno.serve(async (req: Request): Promise<Response> => {
+  // --- CORS preflight handling ---
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
   try {
+    // Parse request and param
     const url = new URL(req.url);
     const arquivo = url.searchParams.get('arquivo') ?? '';
 
-    // 1) Validação básica do parâmetro 'arquivo' (UUID-like / GUID)
+    // Validate arquivo parameter (UUID format)
     const uuidRegex = /^[0-9a-fA-F\-]{8,}$/;
     if (!arquivo || !uuidRegex.test(arquivo)) {
-      return new Response(JSON.stringify({ success: false, error: 'Parâmetro "arquivo" inválido' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Parâmetro "arquivo" inválido' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // 2) Validação de sessão (JWT) via endpoint /auth/v1/user do Supabase
-    const authHeader = req.headers.get('authorization') || '';
-    if (!authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ success: false, error: 'Não autorizado' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    // --- Accept token from Authorization header OR cookie sb-<project>-auth-token ---
+    let token = '';
+    const authHeader = (req.headers.get('authorization') || '').trim();
+    if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else {
+      const cookieHeader = req.headers.get('cookie') || '';
+      const cookieMatch = cookieHeader.match(/sb-[^=]+-auth-token=([^;]+)/);
+      if (cookieMatch) token = decodeURIComponent(cookieMatch[1]);
     }
-    const token = authHeader.split(' ')[1];
 
+    if (!token) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Não autorizado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Supabase config (must be defined in function secrets)
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
     const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      console.error('Supabase URL/Anon key not configured');
-      return new Response(JSON.stringify({ success: false, error: 'Server misconfigured' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      console.error('[download] Supabase URL/Anon key not configured');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Server misconfigured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Verifica token no endpoint /auth/v1/user  retorna 200 se token válido
+    // Validate token against Supabase /auth/v1/user (JWT validation)
     const userRes = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/auth/v1/user`, {
       method: 'GET',
       headers: {
@@ -44,63 +68,58 @@ export async function handler(req: Request): Promise<Response> {
     });
 
     if (!userRes.ok) {
-      console.warn('Auth check failed', userRes.status);
-      return new Response(JSON.stringify({ success: false, error: 'Não autorizado' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      // Log status only, never log tokens
+      console.warn('[download] Auth check failed, status:', userRes.status);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Não autorizado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // 3) Ler credenciais AIS do ambiente
+    // AIS credentials from environment (secrets)
     const AISKEY = Deno.env.get('AISWEB_API_KEY') ?? '';
     const AISPASS = Deno.env.get('AISWEB_API_PASS') ?? '';
     if (!AISKEY || !AISPASS) {
-      console.error('AISWEB credentials missing');
-      return new Response(JSON.stringify({ success: false, error: 'Server misconfigured' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      console.error('[download] AISWEB credentials missing');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Server misconfigured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // 4) Montar a URL para o AIS (escape do arquivo e credenciais)
-    const aisUrl = `https://aisweb.decea.gov.br/download/?arquivo=${encodeURIComponent(arquivo)}&apikey=${encodeURIComponent(AISKEY)}&apipass=${encodeURIComponent(AISPASS)}`;
+    // Build AIS URL and proxy the request (credentials stay server-side)
+    const aisUrl = `https://aisweb.decea.gov.br/download/?arquivo=${encodeURIComponent(
+      arquivo
+    )}&apikey=${encodeURIComponent(AISKEY)}&apipass=${encodeURIComponent(AISPASS)}`;
 
-    // 5) Fazer fetch ao AIS (stream) e repassar o conteúdo
     const aisRes = await fetch(aisUrl, { method: 'GET' });
 
     if (!aisRes.ok) {
-      const snippet = await aisRes.text().then(t => t.slice(0, 300)).catch(() => '');
-      console.error('AIS responded error', aisRes.status, snippet);
-      return new Response(JSON.stringify({ success: false, error: 'Erro ao obter arquivo externo' }), {
-        status: 502,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      console.error('[download] AIS responded error, status:', aisRes.status);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Erro ao obter arquivo externo' }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Preparar headers a serem encaminhados ao cliente
-    const headers = new Headers();
+    // Forward stream to client with proper headers
+    const responseHeaders = new Headers(corsHeaders);
     const contentType = aisRes.headers.get('content-type') || 'application/octet-stream';
-    headers.set('Content-Type', contentType);
-    const cd = aisRes.headers.get('content-disposition');
-    if (cd) headers.set('Content-Disposition', cd);
-
-    // CORS: usar ALLOWED_ORIGIN se definido, senão usar origin da request
-    const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN') ?? '';
-    if (ALLOWED_ORIGIN) {
-      headers.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
-    } else {
-      const reqOrigin = req.headers.get('origin') ?? '*';
-      headers.set('Access-Control-Allow-Origin', reqOrigin);
+    responseHeaders.set('Content-Type', contentType);
+    
+    const contentDisposition = aisRes.headers.get('content-disposition');
+    if (contentDisposition) {
+      responseHeaders.set('Content-Disposition', contentDisposition);
     }
-    headers.set('Vary', 'Origin');
 
-    // Retornar stream diretamente (preserva memória)
-    return new Response(aisRes.body, { status: 200, headers });
+    return new Response(aisRes.body, { status: 200, headers: responseHeaders });
+    
   } catch (err) {
-    console.error('download function error', err);
-    return new Response(JSON.stringify({ success: false, error: 'Internal server error' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    // Log error without sensitive data
+    console.error('[download] function error:', err instanceof Error ? err.message : 'Unknown error');
+    return new Response(
+      JSON.stringify({ success: false, error: 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
-}
+});

@@ -16,7 +16,9 @@ interface SettingsPopoverProps {
     lastUpdateDate?: string | null;
     onUpdate?: () => void;
     onCheckUpdate?: () => void;
+    onForceRefresh?: () => void;
     isCheckingUpdate?: boolean;
+    currentVersion?: string;
     onClose?: () => void;
     // Location props
     locationPermission?: LocationPermissionStatus;
@@ -36,7 +38,9 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
     lastUpdateDate = null,
     onUpdate,
     onCheckUpdate,
+    onForceRefresh,
     isCheckingUpdate = false,
+    currentVersion = '1.0.0',
     onClose,
     locationPermission = 'unknown',
     onRequestLocation,
@@ -186,6 +190,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                         <div className="flex items-center gap-2">
                             <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
                             <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Atualização</span>
+                            <span className="text-[9px] text-slate-600 font-mono">v{currentVersion}</span>
                         </div>
                         {!needRefresh && onCheckUpdate && (
                             <button
@@ -227,6 +232,23 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                             )}
                         </div>
                     )}
+
+                    {/* Botão para forçar atualização completa */}
+                    {onForceRefresh && (
+                        <button
+                            onClick={onForceRefresh}
+                            disabled={isCheckingUpdate}
+                            className="bg-slate-800/60 hover:bg-slate-700/60 active:bg-slate-600/60 rounded-lg p-2.5 border border-slate-700/50 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                        >
+                            <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wide">
+                                Forçar Atualização Completa
+                            </span>
+                        </button>
+                    )}
+                    <p className="text-[9px] text-slate-500 leading-tight px-1">
+                        Se o app não estiver atualizado, use "Forçar Atualização" para limpar o cache e recarregar.
+                    </p>
                 </div>
 
                 <div className="h-px bg-slate-800 w-full opacity-50"></div>
