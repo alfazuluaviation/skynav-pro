@@ -16,7 +16,7 @@ import { getAiracCycleInfo } from './services/airacService';
 import { ENRC_SEGMENTS } from '../config/chartConfig';
 import { WMSTileLayer } from 'react-leaflet';
 import { NavigationLayer } from './components/NavigationLayer';
-import { TopLeftMenu } from './components/TopLeftMenu';
+// TopLeftMenu removed - functionality moved to Sidebar
 import { ChartsModal } from './components/ChartsModal';
 import { AerodromeModal } from './components/AerodromeModal';
 import { DownloadModal } from './components/DownloadModal';
@@ -794,13 +794,7 @@ const App = () => {
         onSuccess={executePendingAction}
       />
 
-      {/* TOP LEFT MENU */}
-      <TopLeftMenu
-        onOpenCharts={handleOpenCharts}
-        onOpenAerodromes={handleOpenAerodromes}
-        onOpenAircraft={handleOpenAircraft}
-        onOpenDownload={handleOpenDownload}
-      />
+      {/* TOP LEFT MENU - Removed, functionality moved to Sidebar */}
 
       {/* SIDEBAR */}
       <Sidebar
@@ -827,6 +821,10 @@ const App = () => {
         onLogin={() => setShowAuthModal(true)}
         pointVisibility={pointVisibility}
         onTogglePointVisibility={handleTogglePointVisibility}
+        onOpenCharts={handleOpenCharts}
+        onOpenAerodromes={handleOpenAerodromes}
+        onOpenAircraft={handleOpenAircraft}
+        onOpenDownload={handleOpenDownload}
       />
 
       {/* Offline indicator */}
