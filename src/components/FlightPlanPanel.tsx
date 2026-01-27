@@ -326,8 +326,8 @@ export const FlightPlanPanel: React.FC<FlightPlanPanelProps> = ({
           </div>
         </div>
         
-        {/* List - Compact View */}
-        <div className="flex-1 min-h-[200px] bg-[#0b0e14] p-4 space-y-2 pb-6">
+        {/* List - Compact View - No height restrictions, content expands naturally */}
+        <div className="bg-[#0b0e14] p-4 space-y-2 pb-24">
           {waypoints.length === 0 ? (
             <div className="text-center py-8 opacity-30">
               <p className="text-[10px] uppercase font-bold">Nenhuma rota definida</p>
