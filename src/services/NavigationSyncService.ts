@@ -30,6 +30,26 @@ interface SyncProgress {
 
 type ProgressCallback = (progress: SyncProgress) => void;
 
+// Expected count ranges for integrity validation (based on DECEA data)
+// These ranges allow for some variation while detecting major sync failures
+const EXPECTED_COUNTS: Record<string, { min: number; max: number }> = {
+  'ICA:airport': { min: 2000, max: 3500 },
+  'ICA:heliport': { min: 400, max: 2000 },
+  'ICA:vor': { min: 40, max: 150 },
+  'ICA:ndb': { min: 80, max: 300 },
+  'ICA:waypoint': { min: 1000, max: 6000 }
+};
+
+// Sync result with integrity information
+export interface SyncResult {
+  success: boolean;
+  totalPoints: number;
+  byLayer: Record<string, number>;
+  errors: string[];
+  integrity: 'verified' | 'partial' | 'unknown';
+  integrityDetails?: string;
+}
+
 /**
  * Fetch all features from a layer (paginated)
  */
@@ -174,13 +194,19 @@ async function fetchAllLayerFeatures(
 
 /**
  * Sync all navigation data for offline use
- * This downloads ALL Brazilian navigation points
+ * This downloads ALL Brazilian navigation points with integrity validation
  */
 export async function syncAllNavigationData(
   onProgress?: (overallProgress: number, message: string) => void
-): Promise<{ success: boolean; totalPoints: number; error?: string }> {
+): Promise<SyncResult> {
   if (!navigator.onLine) {
-    return { success: false, totalPoints: 0, error: 'Sem conexão com a internet' };
+    return { 
+      success: false, 
+      totalPoints: 0, 
+      byLayer: {},
+      errors: ['Sem conexão com a internet'],
+      integrity: 'unknown'
+    };
   }
 
   const layers = [
@@ -192,6 +218,8 @@ export async function syncAllNavigationData(
   ];
 
   let totalPoints = 0;
+  const byLayer: Record<string, number> = {};
+  const errors: string[] = [];
   const layerProgress = new Map<string, number>();
 
   try {
@@ -219,27 +247,69 @@ export async function syncAllNavigationData(
         }
       }
 
+      byLayer[layer] = points.length;
       totalPoints += points.length;
+      
+      // Check against expected counts
+      const expected = EXPECTED_COUNTS[layer];
+      if (expected && points.length < expected.min) {
+        const warning = `${layerLabel}: ${points.length} pontos (esperado: ${expected.min}-${expected.max})`;
+        errors.push(warning);
+        console.warn(`[NavSync] ⚠️ ${warning}`);
+      }
+      
       console.log(`[NavSync] Synced ${points.length} points from ${layer}`);
     }
 
+    // Validate overall integrity
+    let integrity: 'verified' | 'partial' | 'unknown' = 'verified';
+    let integrityDetails: string | undefined;
+    
+    // Check if any layer is below minimum
+    const failedLayers = Object.entries(byLayer).filter(([layer, count]) => {
+      const expected = EXPECTED_COUNTS[layer];
+      return expected && count < expected.min;
+    });
+    
+    if (failedLayers.length > 0) {
+      integrity = 'partial';
+      integrityDetails = `⚠️ Sincronização parcial: ${failedLayers.length} camada(s) com dados incompletos. Recomenda-se nova sincronização com conexão estável.`;
+    } else if (totalPoints < 3000) {
+      // If total is suspiciously low
+      integrity = 'partial';
+      integrityDetails = `⚠️ Total de ${totalPoints} pontos é menor que o esperado (~5.000+). Verifique a conexão e sincronize novamente.`;
+    }
+
     await updateNavCacheMetadata({
-      status: 'complete',
+      status: integrity === 'verified' ? 'complete' : 'partial',
       totalPoints,
       lastSync: Date.now()
     });
 
-    onProgress?.(100, `Sincronização completa! ${totalPoints} pontos salvos.`);
-    console.log(`[NavSync] Complete! Total points: ${totalPoints}`);
+    const finalMessage = integrity === 'verified'
+      ? `✓ Sincronização completa! ${totalPoints.toLocaleString()} pontos salvos.`
+      : `⚠️ Sincronização parcial: ${totalPoints.toLocaleString()} pontos. ${integrityDetails}`;
+    
+    onProgress?.(100, finalMessage);
+    console.log(`[NavSync] Complete! Total points: ${totalPoints}, Integrity: ${integrity}`);
 
-    return { success: true, totalPoints };
+    return { 
+      success: true, 
+      totalPoints, 
+      byLayer,
+      errors,
+      integrity,
+      integrityDetails
+    };
   } catch (error) {
     console.error('[NavSync] Sync failed:', error);
     await updateNavCacheMetadata({ status: 'error' });
     return { 
       success: false, 
       totalPoints, 
-      error: error instanceof Error ? error.message : 'Erro desconhecido' 
+      byLayer,
+      errors: [error instanceof Error ? error.message : 'Erro desconhecido'],
+      integrity: 'unknown'
     };
   }
 }

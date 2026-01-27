@@ -6,3 +6,36 @@
   --switch-knob-off: 215 18% 60%;
   --switch-knob-on: 0 0% 100%;
 }
+
+/* iOS/iPad touch optimization for navigation icons */
+.nav-point-icon {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+/* Increase touch target on touch devices */
+@media (pointer: coarse) {
+  .nav-point-icon {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  .nav-point-icon > div {
+    transform: scale(1.15);
+  }
+}
+
+/* VOR/NDB selected state animation */
+.vor-selected {
+  animation: vor-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes vor-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px #22c55e) drop-shadow(0 0 16px #22c55e);
+  }
+  50% {
+    filter: drop-shadow(0 0 12px #22c55e) drop-shadow(0 0 24px #22c55e);
+  }
+}

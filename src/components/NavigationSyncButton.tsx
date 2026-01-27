@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { syncAllNavigationData, getSyncStatus, isSyncNeeded } from '../services/NavigationSyncService';
+import { syncAllNavigationData, getSyncStatus, isSyncNeeded, SyncResult } from '../services/NavigationSyncService';
 import { clearNavigationCache, getNavCacheStats } from '../services/NavigationCacheService';
 
 interface NavigationSyncButtonProps {
@@ -10,6 +10,7 @@ export const NavigationSyncButton: React.FC<NavigationSyncButtonProps> = ({ comp
   const [isSyncing, setIsSyncing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState('');
+  const [integrityWarning, setIntegrityWarning] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<{
     isSynced: boolean;
     lastSync: Date | null;
@@ -33,17 +34,23 @@ export const NavigationSyncButton: React.FC<NavigationSyncButtonProps> = ({ comp
     setIsSyncing(true);
     setProgress(0);
     setMessage('Iniciando sincronização...');
+    setIntegrityWarning(null);
 
     try {
-      const result = await syncAllNavigationData((prog, msg) => {
+      const result: SyncResult = await syncAllNavigationData((prog, msg) => {
         setProgress(prog);
         setMessage(msg);
       });
 
       if (result.success) {
-        setMessage(`✓ ${result.totalPoints} pontos sincronizados!`);
+        if (result.integrity === 'verified') {
+          setMessage(`✓ ${result.totalPoints.toLocaleString()} pontos sincronizados!`);
+        } else {
+          setMessage(`⚠️ ${result.totalPoints.toLocaleString()} pontos sincronizados`);
+          setIntegrityWarning(result.integrityDetails || 'Sincronização parcial detectada');
+        }
       } else {
-        setMessage(`✗ Erro: ${result.error}`);
+        setMessage(`✗ Erro: ${result.errors.join(', ')}`);
       }
 
       await loadSyncStatus();
@@ -52,8 +59,10 @@ export const NavigationSyncButton: React.FC<NavigationSyncButtonProps> = ({ comp
       console.error('[NavSync] Error:', error);
     } finally {
       setIsSyncing(false);
-      // Clear message after 5 seconds
-      setTimeout(() => setMessage(''), 5000);
+      // Clear success message after 5 seconds, but keep warnings visible longer
+      setTimeout(() => {
+        if (!integrityWarning) setMessage('');
+      }, 5000);
     }
   };
 
@@ -174,9 +183,32 @@ export const NavigationSyncButton: React.FC<NavigationSyncButtonProps> = ({ comp
             ? 'bg-emerald-500/20 text-emerald-400' 
             : message.startsWith('✗')
               ? 'bg-red-500/20 text-red-400'
-              : 'bg-slate-700/50 text-slate-300'
+              : message.startsWith('⚠️')
+                ? 'bg-amber-500/20 text-amber-400'
+                : 'bg-slate-700/50 text-slate-300'
         }`}>
           {message}
+        </div>
+      )}
+
+      {/* Integrity Warning */}
+      {!isSyncing && integrityWarning && (
+        <div className="text-xs mb-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300">
+          <div className="flex items-start gap-2">
+            <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <div className="font-bold text-amber-400">Atenção - Segurança de Voo</div>
+              <div className="mt-1">{integrityWarning}</div>
+              <button
+                onClick={handleSync}
+                className="mt-2 text-amber-400 underline hover:text-amber-300"
+              >
+                Tentar sincronizar novamente
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
