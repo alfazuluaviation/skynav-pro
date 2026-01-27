@@ -211,48 +211,52 @@ async function downloadTileFast(
     }).finally(() => clearTimeout(timeoutId));
   };
 
-  // Build all fetch attempts
-  const attempts: Promise<boolean>[] = [];
-  
-  // Direct access (fastest)
-  attempts.push(
-    fetchWithTimeout(directUrl, 5000)
-      .then(validateAndCache)
-      .catch(() => false)
-  );
-  
-  // Preferred proxy
-  const preferredUrl = `${CORS_PROXIES[preferredProxy]}${encodeURIComponent(directUrl)}`;
-  attempts.push(
-    fetchWithTimeout(preferredUrl, 6000)
-      .then(validateAndCache)
-      .catch(() => false)
-  );
-
-  // Other proxies (staggered)
-  CORS_PROXIES.forEach((proxy, i) => {
-    if (i !== preferredProxy) {
-      const proxyUrl = `${proxy}${encodeURIComponent(directUrl)}`;
-      attempts.push(
-        new Promise<boolean>(resolve => {
-          setTimeout(() => {
-            fetchWithTimeout(proxyUrl, 7000)
-              .then(validateAndCache)
-              .then(resolve)
-              .catch(() => resolve(false));
-          }, 200 * (i + 1));
-        })
-      );
+  // Use Promise.race to return immediately when any source succeeds
+  // This is CRITICAL for performance - we don't wait for all proxies
+  const attemptFetch = async (url: string, timeout: number): Promise<boolean> => {
+    try {
+      const response = await fetchWithTimeout(url, timeout);
+      return await validateAndCache(response);
+    } catch {
+      return false;
     }
-  });
+  };
 
-  // Return true if any attempt succeeds
+  // First, try direct access (fastest)
   try {
-    const results = await Promise.all(attempts);
-    return results.some(r => r);
+    const directSuccess = await attemptFetch(directUrl, 4000);
+    if (directSuccess) return true;
   } catch {
-    return false;
+    // Continue to proxies
   }
+
+  // Try preferred proxy
+  const preferredUrl = `${CORS_PROXIES[preferredProxy]}${encodeURIComponent(directUrl)}`;
+  try {
+    const proxySuccess = await attemptFetch(preferredUrl, 5000);
+    if (proxySuccess) return true;
+  } catch {
+    // Continue to other proxies
+  }
+
+  // Try remaining proxies in parallel with Promise.race (first success wins)
+  const remainingProxies = CORS_PROXIES.filter((_, i) => i !== preferredProxy);
+  if (remainingProxies.length > 0) {
+    const proxyAttempts = remainingProxies.map(proxy => {
+      const proxyUrl = `${proxy}${encodeURIComponent(directUrl)}`;
+      return attemptFetch(proxyUrl, 6000);
+    });
+
+    try {
+      // Wait for all and check if any succeeded
+      const results = await Promise.all(proxyAttempts);
+      if (results.some(r => r)) return true;
+    } catch {
+      // All failed
+    }
+  }
+
+  return false;
 }
 
 /**
