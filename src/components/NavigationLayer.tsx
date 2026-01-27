@@ -221,13 +221,15 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     const isHeliport = p.kind === 'heliport';
                     const isAerodrome = p.type === 'airport' && !isHeliport;
                     const isVorNdb = p.type === 'vor' || p.type === 'ndb';
-                    const isWaypoint = p.type === 'fix';
+                    const isWaypoint = p.type === 'fix' && p.kind !== 'user';
+                    const isUserFix = p.kind === 'user';
                     
                     // Apply visibility filters
                     if (isHeliport && !pointVisibility.heliports) return null;
                     if (isAerodrome && !pointVisibility.aerodromes) return null;
                     if (isVorNdb && !pointVisibility.vorNdb) return null;
                     if (isWaypoint && !pointVisibility.waypoints) return null;
+                    if (isUserFix && !pointVisibility.userFixes) return null;
                     
                     // Determine the icon type based on point type and kind
                     const iconType = isHeliport ? 'heliport' : p.type;
@@ -257,7 +259,8 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     });
                     
                     // Generate tooltip with type indication
-                    const typeLabel = isHeliport ? 'Heliporto' : 
+                    const typeLabel = isUserFix ? 'Fixo Usuário' :
+                                     isHeliport ? 'Heliponto' : 
                                      isPrincipal ? 'Aeródromo Principal' : 
                                      p.type === 'airport' ? 'Aeródromo' :
                                      p.type === 'vor' ? 'VOR' :
