@@ -37,15 +37,8 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     // VOR Radial tracking state
     const [selectedVor, setSelectedVor] = useState<NavPoint | null>(null);
 
-    // iOS/iPad tap handling: robust tap detection + de-dupe across touch/pointer/click
-    const tapStartRef = useRef<{ t: number; x: number; y: number } | null>(null);
-    const lastVorToggleAtRef = useRef(0);
-
-    const isCoarsePointer = typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(pointer: coarse)').matches;
-
-    const shouldUseTouchTapHandlers = isIOSDevice || isCoarsePointer;
+    // Double-click tracking for radial activation (unified across all devices)
+    const lastClickTimeRef = useRef<{ id: string; time: number } | null>(null);
     
     // Map starts UNLOCKED (free to drag) - user can lock to follow aircraft position
     const [isLocked, setIsLocked] = useState(false);
@@ -279,42 +272,14 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                                      p.type === 'vor' ? 'VOR' :
                                      p.type === 'ndb' ? 'NDB' : 'FIX';
                     
-                    // Handle VOR click for radial tracking - unified for all devices
-                    const getClientXY = (evt: any): { x: number; y: number } => {
-                        const oe = evt?.originalEvent;
-                        const touch = oe?.changedTouches?.[0] || oe?.touches?.[0];
-                        if (touch) return { x: touch.clientX, y: touch.clientY };
-                        if (typeof oe?.clientX === 'number' && typeof oe?.clientY === 'number') {
-                            return { x: oe.clientX, y: oe.clientY };
-                        }
-                        return { x: 0, y: 0 };
-                    };
-
-                    const stopEventHard = (evt: any) => {
-                        try {
-                            // Leaflet helpers (safe even if already prevented)
-                            L.DomEvent.stopPropagation(evt);
-                            L.DomEvent.preventDefault(evt);
-                        } catch {
-                            // ignore
-                        }
-
-                        const oe = evt?.originalEvent;
-                        try {
-                            oe?.stopPropagation?.();
-                            oe?.preventDefault?.();
-                            oe?.stopImmediatePropagation?.();
-                        } catch {
-                            // ignore
-                        }
-                    };
-
-                    const toggleVorSelection = () => {
-                        const now = Date.now();
-                        // Prevent double-toggle when iOS fires pointer/touch + click
-                        if (now - lastVorToggleAtRef.current < 350) return;
-                        lastVorToggleAtRef.current = now;
-
+                    // Handle VOR double-click for radial tracking - unified for all devices
+                    const handleVorDoubleClick = (e: L.LeafletMouseEvent) => {
+                        if (!isVorNdb) return;
+                        
+                        // Stop propagation to prevent map interactions
+                        L.DomEvent.stopPropagation(e);
+                        L.DomEvent.preventDefault(e);
+                        
                         if (selectedVor?.id === p.id) {
                             setSelectedVor(null);
                             console.log(`[VOR RADIAL] Desativado: ${p.icao || p.name}`);
@@ -323,39 +288,22 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                             console.log(`[VOR RADIAL] Ativado: ${p.icao || p.name} (${p.lat.toFixed(4)}, ${p.lng.toFixed(4)})`);
                         }
                     };
-
-                    const handleVorActivateFromClick = (evt: any) => {
+                    
+                    // Unified click handler for double-click detection (works on all devices)
+                    const handleClick = (e: L.LeafletMouseEvent) => {
                         if (!isVorNdb) return;
-                        stopEventHard(evt);
-                        toggleVorSelection();
-                    };
-
-                    const handleTapStart = (evt: any) => {
-                        if (!isVorNdb) return;
-                        stopEventHard(evt);
-                        const { x, y } = getClientXY(evt);
-                        tapStartRef.current = { t: Date.now(), x, y };
-                    };
-
-                    const handleTapEnd = (evt: any) => {
-                        if (!isVorNdb) return;
-                        stopEventHard(evt);
-
-                        const start = tapStartRef.current;
-                        tapStartRef.current = null;
-                        if (!start) {
-                            // Still allow toggle if we didn't capture start (some iOS edge cases)
-                            toggleVorSelection();
-                            return;
-                        }
-
-                        const { x, y } = getClientXY(evt);
-                        const dt = Date.now() - start.t;
-                        const dist = Math.hypot(x - start.x, y - start.y);
-
-                        // Consider a "tap" if it was quick and without drag
-                        if (dt <= 650 && dist <= 12) {
-                            toggleVorSelection();
+                        
+                        const now = Date.now();
+                        const lastClick = lastClickTimeRef.current;
+                        
+                        // Check if this is a double-click (same VOR, within 400ms)
+                        if (lastClick && lastClick.id === p.id && (now - lastClick.time) < 400) {
+                            // Double-click detected - toggle radial
+                            handleVorDoubleClick(e);
+                            lastClickTimeRef.current = null;
+                        } else {
+                            // First click - store for double-click detection
+                            lastClickTimeRef.current = { id: p.id, time: now };
                         }
                     };
                     
@@ -365,14 +313,10 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                             position={[p.lat, p.lng]} 
                             icon={customIcon}
                             eventHandlers={{
-                                // Desktop / non-touch path
-                                click: handleVorActivateFromClick,
-
-                                // Touch/pointer path (critical for iPad/iPhone reliability)
-                                touchstart: shouldUseTouchTapHandlers ? handleTapStart : undefined,
-                                touchend: shouldUseTouchTapHandlers ? handleTapEnd : undefined,
-                                pointerdown: shouldUseTouchTapHandlers ? handleTapStart : undefined,
-                                pointerup: shouldUseTouchTapHandlers ? handleTapEnd : undefined,
+                                // Unified double-click detection via click handler
+                                click: handleClick,
+                                // Also support native dblclick for desktop
+                                dblclick: handleVorDoubleClick,
                             }}
                         >
                             <Tooltip 
@@ -391,8 +335,12 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                                     <div>{p.icao || p.name}</div>
                                     <div style={{ fontSize: '9px', fontWeight: 'normal', color: '#666' }}>
                                         {typeLabel}
-                                        {isVorNdb && <span style={{ color: '#22c55e' }}> • {isIOSDevice ? 'Toque' : 'Clique'} para radial</span>}
                                     </div>
+                                    {isVorNdb && (
+                                        <div style={{ fontSize: '9px', fontWeight: 'normal', color: '#22c55e' }}>
+                                            Radial - Duplo Click
+                                        </div>
+                                    )}
                                 </div>
                             </Tooltip>
                         </Marker>
