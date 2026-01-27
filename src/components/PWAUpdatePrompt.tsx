@@ -14,7 +14,7 @@ export const PWAUpdatePrompt = () => {
 
   return (
     <div className="fixed bottom-20 left-4 right-4 z-[9999] md:left-auto md:right-4 md:max-w-sm md:bottom-4">
-      <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-xl shadow-2xl p-4 flex items-center justify-between gap-3 animate-fade-in border border-primary/30">
+      <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl shadow-2xl p-4 flex items-center justify-between gap-3 animate-fade-in border border-orange-400/50">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-white/20 rounded-full">
             <RefreshCw className="h-5 w-5" />
