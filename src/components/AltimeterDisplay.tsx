@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useBarometricAltitude } from '../hooks/useBarometricAltitude';
-import { ChevronUp, ChevronDown, Minus, Settings, X, GripHorizontal, RotateCcw } from 'lucide-react';
+import { ChevronUp, ChevronDown, Minus, X, GripHorizontal, RotateCcw, Mountain, Gauge } from 'lucide-react';
 
 interface AltimeterDisplayProps {
   visible: boolean;
@@ -12,9 +12,22 @@ interface Position {
   y: number;
 }
 
+// Settings panel mode: closed, qnh input, or elevation input
+type SettingsMode = 'closed' | 'qnh' | 'elevation';
+
 export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onClose }) => {
-  const { data, qnh, updateQnh, resetQnhToStandard, standardPressure } = useBarometricAltitude();
-  const [showSettings, setShowSettings] = useState(false);
+  const { 
+    data, 
+    qnh, 
+    qnhMode,
+    airportElevation,
+    updateQnh, 
+    updateAirportElevation,
+    resetQnhToStandard, 
+    standardPressure 
+  } = useBarometricAltitude();
+  
+  const [settingsMode, setSettingsMode] = useState<SettingsMode>('closed');
   const [isMinimized, setIsMinimized] = useState(false);
   
   // Draggable state
@@ -105,6 +118,14 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
     handleDragEnd();
   };
 
+  // Toggle settings panel logic
+  const toggleSettingsMode = useCallback((mode: 'qnh' | 'elevation') => {
+    setSettingsMode(current => {
+      if (current === mode) return 'closed'; // Same mode clicked - close
+      return mode; // Different mode or closed - open/switch to new mode
+    });
+  }, []);
+
   // Get trend icon and color
   const getTrendDisplay = () => {
     switch (data.trend) {
@@ -113,6 +134,9 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
       case 'descending':
         return { icon: ChevronDown, color: 'text-orange-400', bgColor: 'bg-orange-500/20' };
       default:
+        return { icon: Minus, color: 'text-slate-400', bgColor: 'bg-slate-500/20' };
+    }
+  };
         return { icon: Minus, color: 'text-slate-400', bgColor: 'bg-slate-500/20' };
     }
   };
@@ -167,14 +191,6 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
             )}
           </div>
           <div className="flex items-center gap-1">
-            {!isMinimized && (
-              <button
-                onClick={() => setShowSettings(!showSettings)}
-                className="p-1 hover:bg-slate-700/50 rounded transition-colors"
-              >
-                <Settings className="w-3 h-3 text-slate-400" />
-              </button>
-            )}
             <button
               onClick={() => setIsMinimized(!isMinimized)}
               className="p-1 hover:bg-slate-700/50 rounded transition-colors"
@@ -202,8 +218,16 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
           <>
             {/* Main Altitude Display */}
             <div className="p-3 space-y-2">
-              {/* Altitude */}
-              <div className="text-center">
+              {/* Altitude - Clickable for elevation input */}
+              <div 
+                className={`text-center cursor-pointer rounded-lg p-1 transition-all ${
+                  settingsMode === 'elevation' 
+                    ? 'bg-purple-500/20 ring-1 ring-purple-500/50' 
+                    : 'hover:bg-slate-700/30'
+                }`}
+                onClick={() => toggleSettingsMode('elevation')}
+                title="Clique para ajustar elevação do aeródromo"
+              >
                 <div className="flex items-center justify-center gap-2">
                   <span className={`
                     text-3xl font-mono font-black tracking-tight
@@ -213,9 +237,14 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
                     {data.isValid ? formatAltitude(data.altitude) : '----'}
                   </span>
                 </div>
-                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
-                  FT MSL
-                </span>
+                <div className="flex items-center justify-center gap-1">
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                    FT MSL
+                  </span>
+                  {qnhMode === 'elevation' && (
+                    <Mountain className="w-3 h-3 text-purple-400" />
+                  )}
+                </div>
               </div>
 
               {/* Vertical Speed & Trend */}
@@ -233,17 +262,32 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
                   </div>
                 </div>
 
-                {/* QNH Badge */}
+                {/* QNH Badge - Clickable for QNH input */}
                 <div 
                   className={`
-                    px-2 py-1 rounded-lg text-center cursor-pointer
-                    ${isStandardQnh ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-emerald-500/20 border border-emerald-500/30'}
+                    px-2 py-1 rounded-lg text-center cursor-pointer transition-all
+                    ${settingsMode === 'qnh' 
+                      ? 'bg-cyan-500/30 ring-1 ring-cyan-500/50' 
+                      : isStandardQnh 
+                        ? 'bg-amber-500/20 border border-amber-500/30 hover:bg-amber-500/30' 
+                        : 'bg-emerald-500/20 border border-emerald-500/30 hover:bg-emerald-500/30'
+                    }
                   `}
-                  onClick={() => setShowSettings(true)}
+                  onClick={() => toggleSettingsMode('qnh')}
+                  title="Clique para ajustar QNH"
                 >
-                  <span className={`text-xs font-mono font-bold ${isStandardQnh ? 'text-amber-400' : 'text-emerald-400'}`}>
-                    {qnh.toFixed(0)}
-                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className={`text-xs font-mono font-bold ${
+                      settingsMode === 'qnh' 
+                        ? 'text-cyan-400' 
+                        : isStandardQnh 
+                          ? 'text-amber-400' 
+                          : 'text-emerald-400'
+                    }`}>
+                      {qnh.toFixed(0)}
+                    </span>
+                    {qnhMode === 'manual' && <Gauge className="w-2.5 h-2.5 text-slate-400" />}
+                  </div>
                   <span className="text-[7px] text-slate-400 block">QNH</span>
                 </div>
               </div>
@@ -264,58 +308,126 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
               </div>
             </div>
 
-            {/* Settings Panel */}
-            {showSettings && (
+            {/* Settings Panel - QNH or Elevation */}
+            {settingsMode !== 'closed' && (
               <div className="border-t border-slate-700/50 p-3 space-y-3 bg-slate-800/50">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Ajuste QNH</span>
+                {/* Mode Selector Tabs */}
+                <div className="flex gap-1 p-0.5 bg-slate-900/50 rounded-lg">
                   <button
-                    onClick={() => {
-                      resetQnhToStandard();
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 rounded text-amber-400 text-[9px] font-bold transition-colors"
-                    title="Reset para 1013.25 hPa (FL)"
+                    onClick={() => setSettingsMode('qnh')}
+                    className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[9px] font-bold transition-all ${
+                      settingsMode === 'qnh'
+                        ? 'bg-cyan-500/30 text-cyan-400'
+                        : 'text-slate-400 hover:text-slate-300'
+                    }`}
                   >
-                    <RotateCcw className="w-3 h-3" />
-                    STD
+                    <Gauge className="w-3 h-3" />
+                    QNH
                   </button>
-                </div>
-                
-                {/* QNH Input */}
-                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => updateQnh(qnh - 1)}
-                    className="w-8 h-8 flex items-center justify-center bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-slate-300 font-bold transition-colors"
+                    onClick={() => setSettingsMode('elevation')}
+                    className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[9px] font-bold transition-all ${
+                      settingsMode === 'elevation'
+                        ? 'bg-purple-500/30 text-purple-400'
+                        : 'text-slate-400 hover:text-slate-300'
+                    }`}
                   >
-                    −
-                  </button>
-                  <div className="flex-1 text-center">
-                    <input
-                      type="number"
-                      value={qnh.toFixed(1)}
-                      onChange={(e) => updateQnh(parseFloat(e.target.value) || standardPressure)}
-                      className="w-full bg-slate-900/50 border border-slate-600/50 rounded-lg px-2 py-1.5 text-center text-lg font-mono font-bold text-cyan-400 focus:outline-none focus:border-cyan-500/50"
-                      step="0.1"
-                      min="950"
-                      max="1050"
-                    />
-                    <span className="text-[8px] text-slate-500">hPa</span>
-                  </div>
-                  <button
-                    onClick={() => updateQnh(qnh + 1)}
-                    className="w-8 h-8 flex items-center justify-center bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-slate-300 font-bold transition-colors"
-                  >
-                    +
+                    <Mountain className="w-3 h-3" />
+                    ELEV
                   </button>
                 </div>
 
-                {/* inHg conversion display */}
-                <div className="text-center text-[9px] text-slate-500">
-                  = {(qnh * 0.02953).toFixed(2)} inHg
-                </div>
+                {/* QNH Input Mode */}
+                {settingsMode === 'qnh' && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-cyan-400 uppercase">Ajuste QNH</span>
+                      <button
+                        onClick={resetQnhToStandard}
+                        className="flex items-center gap-1 px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 rounded text-amber-400 text-[9px] font-bold transition-colors"
+                        title="Reset para 1013.25 hPa (FL)"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        STD
+                      </button>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => updateQnh(qnh - 1)}
+                        className="w-8 h-8 flex items-center justify-center bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-slate-300 font-bold transition-colors"
+                      >
+                        −
+                      </button>
+                      <div className="flex-1 text-center">
+                        <input
+                          type="number"
+                          value={qnh.toFixed(1)}
+                          onChange={(e) => updateQnh(parseFloat(e.target.value) || standardPressure)}
+                          className="w-full bg-slate-900/50 border border-slate-600/50 rounded-lg px-2 py-1.5 text-center text-lg font-mono font-bold text-cyan-400 focus:outline-none focus:border-cyan-500/50"
+                          step="0.1"
+                          min="950"
+                          max="1050"
+                        />
+                        <span className="text-[8px] text-slate-500">hPa</span>
+                      </div>
+                      <button
+                        onClick={() => updateQnh(qnh + 1)}
+                        className="w-8 h-8 flex items-center justify-center bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-slate-300 font-bold transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <div className="text-center text-[9px] text-slate-500">
+                      = {(qnh * 0.02953).toFixed(2)} inHg
+                    </div>
+                  </>
+                )}
+
+                {/* Elevation Input Mode */}
+                {settingsMode === 'elevation' && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-purple-400 uppercase">Elevação Aeródromo</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => updateAirportElevation(airportElevation - 100)}
+                        className="w-8 h-8 flex items-center justify-center bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-slate-300 font-bold transition-colors"
+                      >
+                        −
+                      </button>
+                      <div className="flex-1 text-center">
+                        <input
+                          type="number"
+                          value={airportElevation}
+                          onChange={(e) => updateAirportElevation(parseInt(e.target.value) || 0)}
+                          className="w-full bg-slate-900/50 border border-slate-600/50 rounded-lg px-2 py-1.5 text-center text-lg font-mono font-bold text-purple-400 focus:outline-none focus:border-purple-500/50"
+                          step="100"
+                          min="-1000"
+                          max="15000"
+                          placeholder="0"
+                        />
+                        <span className="text-[8px] text-slate-500">FT</span>
+                      </div>
+                      <button
+                        onClick={() => updateAirportElevation(airportElevation + 100)}
+                        className="w-8 h-8 flex items-center justify-center bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-slate-300 font-bold transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <div className="text-center text-[9px] text-purple-300/80 bg-purple-500/10 rounded-lg py-1">
+                      QNH calculado: <span className="font-mono font-bold">{qnh.toFixed(1)} hPa</span>
+                    </div>
+                  </>
+                )}
 
                 <button
-                  onClick={() => setShowSettings(false)}
+                  onClick={() => setSettingsMode('closed')}
                   className="w-full py-1.5 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-[10px] font-bold text-slate-300 transition-colors"
                 >
                   Fechar
