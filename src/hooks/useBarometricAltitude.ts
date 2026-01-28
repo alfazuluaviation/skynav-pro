@@ -145,21 +145,47 @@ export function useBarometricAltitude(options: UseBarometricAltitudeOptions = {}
   // GPS altitude monitoring
   useEffect(() => {
     if (!("geolocation" in navigator)) {
-      console.warn('[Altimeter] Geolocation not available');
+      console.warn('[Altimeter] Geolocation API not available');
+      setData(prev => ({ 
+        ...prev, 
+        isValid: false,
+        source: 'gps',
+      }));
       return;
     }
 
+    console.log('[Altimeter] Starting GPS altitude monitoring...');
+
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
-        const { altitude } = position.coords;
+        const { altitude, altitudeAccuracy, latitude, longitude } = position.coords;
         
-        if (altitude === null) {
-          setData(prev => ({ ...prev, isValid: false }));
+        console.log('[Altimeter] GPS Position received:', {
+          latitude: latitude?.toFixed(6),
+          longitude: longitude?.toFixed(6),
+          altitude: altitude,
+          altitudeAccuracy: altitudeAccuracy,
+        });
+        
+        // Many devices (especially desktop/laptop) don't provide GPS altitude
+        if (altitude === null || altitude === undefined) {
+          console.warn('[Altimeter] GPS altitude not available from device. This is common on desktop browsers.');
+          setData(prev => ({ 
+            ...prev, 
+            isValid: false,
+            source: 'gps',
+            lastUpdate: Date.now(),
+          }));
           return;
         }
 
         // GPS altitude is in meters, convert to feet
         const gpsAltitudeFeet = altitude * 3.28084;
+        
+        console.log('[Altimeter] Altitude calculated:', {
+          metersRaw: altitude,
+          feetConverted: gpsAltitudeFeet.toFixed(0),
+        });
         
         // For GPS altitude, we treat it as if it's already QNH-corrected
         // (GPS provides geometric altitude, not pressure altitude)
@@ -182,17 +208,22 @@ export function useBarometricAltitude(options: UseBarometricAltitudeOptions = {}
         });
       },
       (error) => {
-        console.error('[Altimeter] GPS error:', error);
-        setData(prev => ({ ...prev, isValid: false }));
+        console.error('[Altimeter] GPS error:', error.code, error.message);
+        setData(prev => ({ 
+          ...prev, 
+          isValid: false,
+          source: 'gps',
+        }));
       },
       {
         enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 0,
+        timeout: 10000,
+        maximumAge: 1000,
       }
     );
 
     return () => {
+      console.log('[Altimeter] Stopping GPS watch');
       navigator.geolocation.clearWatch(watchId);
     };
   }, [qnh, applyQnhCorrection, calculateVerticalSpeed, getTrend]);
