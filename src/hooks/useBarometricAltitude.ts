@@ -32,6 +32,9 @@ export interface AltimeterData {
   lastUpdate: number;
 }
 
+// Mode for QNH adjustment
+export type QnhMode = 'manual' | 'elevation';
+
 interface UseBarometricAltitudeOptions {
   initialQnh?: number;
   updateInterval?: number; // ms
@@ -66,6 +69,18 @@ export function useBarometricAltitude(options: UseBarometricAltitudeOptions = {}
   const [qnh, setQnh] = useState<number>(() => {
     const saved = localStorage.getItem('skyfpl_qnh');
     return saved ? parseFloat(saved) : initialQnh;
+  });
+
+  // QNH mode: manual (direct QNH input) or elevation (calculated from airport elevation)
+  const [qnhMode, setQnhMode] = useState<QnhMode>(() => {
+    const saved = localStorage.getItem('skyfpl_qnh_mode');
+    return (saved === 'elevation' ? 'elevation' : 'manual') as QnhMode;
+  });
+
+  // Airport elevation for inverse calculation (persisted)
+  const [airportElevation, setAirportElevation] = useState<number>(() => {
+    const saved = localStorage.getItem('skyfpl_airport_elevation');
+    return saved ? parseFloat(saved) : 0;
   });
 
   /**
@@ -127,20 +142,67 @@ export function useBarometricAltitude(options: UseBarometricAltitudeOptions = {}
   }, []);
 
   /**
-   * Update QNH setting
+   * Update QNH setting (manual mode)
    */
   const updateQnh = useCallback((newQnh: number) => {
     const clampedQnh = Math.max(950, Math.min(1050, newQnh)); // Valid QNH range
     setQnh(clampedQnh);
+    setQnhMode('manual');
     localStorage.setItem('skyfpl_qnh', clampedQnh.toString());
+    localStorage.setItem('skyfpl_qnh_mode', 'manual');
   }, []);
+
+  /**
+   * Calculate QNH from airport elevation
+   * Formula: QNH = ((elevation - gpsAltitude) / 30) + 1013.25
+   */
+  const calculateQnhFromElevation = useCallback((elevation: number): number => {
+    // Use current pressure altitude (GPS altitude) for calculation
+    const currentPressureAlt = data.pressureAltitude;
+    
+    // Calculate what QNH would make the altimeter read the airport elevation
+    // correctedAlt = pressureAlt + ((QNH - 1013.25) * 30)
+    // elevation = pressureAlt + ((QNH - 1013.25) * 30)
+    // QNH = ((elevation - pressureAlt) / 30) + 1013.25
+    const calculatedQnh = ((elevation - currentPressureAlt) / 30) + ISA.P0;
+    
+    // Clamp to valid range
+    return Math.max(950, Math.min(1050, calculatedQnh));
+  }, [data.pressureAltitude]);
+
+  /**
+   * Update airport elevation and calculate QNH
+   */
+  const updateAirportElevation = useCallback((elevation: number) => {
+    const clampedElevation = Math.max(-1000, Math.min(15000, elevation)); // Valid elevation range
+    setAirportElevation(clampedElevation);
+    setQnhMode('elevation');
+    localStorage.setItem('skyfpl_airport_elevation', clampedElevation.toString());
+    localStorage.setItem('skyfpl_qnh_mode', 'elevation');
+    
+    // Calculate and set QNH from elevation
+    const calculatedQnh = calculateQnhFromElevation(clampedElevation);
+    setQnh(calculatedQnh);
+    localStorage.setItem('skyfpl_qnh', calculatedQnh.toString());
+    
+    console.log('[Altimeter] QNH calculated from elevation:', {
+      airportElevation: clampedElevation,
+      currentPressureAlt: data.pressureAltitude,
+      calculatedQnh: calculatedQnh.toFixed(1),
+    });
+  }, [calculateQnhFromElevation, data.pressureAltitude]);
 
   /**
    * Reset QNH to standard (1013.25 hPa)
    */
   const resetQnhToStandard = useCallback(() => {
-    updateQnh(ISA.P0);
-  }, [updateQnh]);
+    setQnh(ISA.P0);
+    setQnhMode('manual');
+    setAirportElevation(0);
+    localStorage.setItem('skyfpl_qnh', ISA.P0.toString());
+    localStorage.setItem('skyfpl_qnh_mode', 'manual');
+    localStorage.removeItem('skyfpl_airport_elevation');
+  }, []);
 
   // GPS altitude monitoring
   useEffect(() => {
@@ -240,7 +302,10 @@ export function useBarometricAltitude(options: UseBarometricAltitudeOptions = {}
   return {
     data,
     qnh,
+    qnhMode,
+    airportElevation,
     updateQnh,
+    updateAirportElevation,
     resetQnhToStandard,
     standardPressure: ISA.P0,
   };
