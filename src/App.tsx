@@ -33,6 +33,7 @@ import { isBaseMapAvailableOffline } from './services/baseMapDownloader';
 import { getCachedLayerIds, clearLayerCache } from './services/tileCache';
 import { CHART_LAYERS, ChartLayerId, BASE_MAP_LAYERS, BaseMapLayerId } from './config/chartLayers';
 import { getDownloadManager } from './services/downloadManager';
+import { AltimeterDisplay } from './components/AltimeterDisplay';
 
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -226,6 +227,17 @@ const App = () => {
   const [showAircraftModal, setShowAircraftModal] = useState(false);
   const [chartsModalIcao, setChartsModalIcao] = useState<string | null>(null);
   const [isSidebarMenuOpen, setIsSidebarMenuOpen] = useState(false);
+  
+  // Altimeter display visibility (persisted)
+  const [showAltimeter, setShowAltimeter] = useState<boolean>(() => {
+    const saved = localStorage.getItem('skyfpl_show_altimeter');
+    return saved === 'true';
+  });
+  
+  // Persist altimeter visibility
+  useEffect(() => {
+    localStorage.setItem('skyfpl_show_altimeter', showAltimeter.toString());
+  }, [showAltimeter]);
 
   // Point visibility state (persisted) - merge with defaults to handle new keys
   const [pointVisibility, setPointVisibility] = useState<PointVisibility>(() => {
@@ -825,6 +837,8 @@ const App = () => {
         onOpenAerodromes={handleOpenAerodromes}
         onOpenAircraft={handleOpenAircraft}
         onOpenDownload={handleOpenDownload}
+        showAltimeter={showAltimeter}
+        onToggleAltimeter={() => setShowAltimeter(!showAltimeter)}
       />
 
       {/* Offline indicator */}
@@ -1187,6 +1201,12 @@ const App = () => {
 
       {/* PWA Update Prompt */}
       <PWAUpdatePrompt />
+
+      {/* Altimeter Display - Floating/Draggable */}
+      <AltimeterDisplay
+        visible={showAltimeter}
+        onClose={() => setShowAltimeter(false)}
+      />
     </div>
   );
 };
