@@ -11,7 +11,7 @@ import { AiracCycle } from '../../types';
 import { usePWAUpdate } from '@/hooks/usePWAUpdate';
 import { useLocationPermission } from '@/hooks/useLocationPermission';
 import { useDownloadManager } from '@/hooks/useDownloadManager';
-import { Map, MapPin, Plane, Download } from 'lucide-react';
+import { Map, MapPin, Plane, Download, Gauge } from 'lucide-react';
 
 interface SidebarProps {
     userName?: string;
@@ -38,6 +38,9 @@ interface SidebarProps {
     onOpenAerodromes?: () => void;
     onOpenAircraft?: () => void;
     onOpenDownload?: () => void;
+    // Altimeter toggle
+    showAltimeter?: boolean;
+    onToggleAltimeter?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -64,6 +67,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onOpenAerodromes,
     onOpenAircraft,
     onOpenDownload,
+    showAltimeter = false,
+    onToggleAltimeter,
 }) => {
     const [showSettings, setShowSettings] = useState(false);
     const [showLayersMenu, setShowLayersMenu] = useState(false);
@@ -97,6 +102,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const handleOpenDownload = () => {
         onOpenDownload?.();
+        setShowMainMenu(false);
+    };
+
+    const handleToggleAltimeter = () => {
+        onToggleAltimeter?.();
         setShowMainMenu(false);
     };
 
@@ -216,6 +226,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             style={{ background: 'linear-gradient(135deg, #0f4c75, #1a73a7)' }}
                         >
                             <Download className="w-7 h-7 text-white drop-shadow-md" strokeWidth={1.5} />
+                        </button>
+                        <button 
+                            onClick={handleToggleAltimeter}
+                            title="Altímetro"
+                            className={`w-14 h-12 rounded-xl transition-all shadow-lg hover:shadow-cyan-500/25 active:scale-95 flex items-center justify-center ${showAltimeter ? 'ring-2 ring-cyan-400' : ''}`}
+                            style={{ background: showAltimeter ? 'linear-gradient(135deg, #0891b2, #06b6d4)' : 'linear-gradient(135deg, #0f4c75, #1a73a7)' }}
+                        >
+                            <Gauge className="w-7 h-7 text-white drop-shadow-md" strokeWidth={1.5} />
                         </button>
                     </div>
                 </div>
@@ -348,6 +366,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 >
                                     <Download className="w-6 h-6 text-white drop-shadow-md" strokeWidth={1.5} />
                                     <span className="text-white text-xs">Download</span>
+                                </button>
+                                <button 
+                                    onClick={handleToggleAltimeter}
+                                    title="Altímetro"
+                                    className={`w-16 h-14 rounded-xl transition-all shadow-lg hover:shadow-cyan-500/25 active:scale-95 flex flex-col items-center justify-center gap-1 ${showAltimeter ? 'ring-2 ring-cyan-400' : ''}`}
+                                    style={{ background: showAltimeter ? 'linear-gradient(135deg, #0891b2, #06b6d4)' : 'linear-gradient(135deg, #0f4c75, #1a73a7)' }}
+                                >
+                                    <Gauge className="w-6 h-6 text-white drop-shadow-md" strokeWidth={1.5} />
+                                    <span className="text-white text-xs">Altímetro</span>
                                 </button>
                             </div>
                         </div>
