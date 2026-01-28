@@ -137,9 +137,6 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
         return { icon: Minus, color: 'text-slate-400', bgColor: 'bg-slate-500/20' };
     }
   };
-        return { icon: Minus, color: 'text-slate-400', bgColor: 'bg-slate-500/20' };
-    }
-  };
 
   // Format altitude with thousands separator
   const formatAltitude = (alt: number): string => {
