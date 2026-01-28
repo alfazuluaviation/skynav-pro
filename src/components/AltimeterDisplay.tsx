@@ -249,11 +249,18 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
               </div>
 
               {/* Source indicator */}
-              <div className="flex items-center justify-center gap-1 pt-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${data.isValid ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-                <span className="text-[8px] text-slate-500 uppercase">
-                  {data.source === 'gps' ? 'GPS' : data.source === 'barometer' ? 'BARO' : 'SIM'}
-                </span>
+              <div className="flex flex-col items-center gap-0.5 pt-1">
+                <div className="flex items-center justify-center gap-1">
+                  <div className={`w-1.5 h-1.5 rounded-full ${data.isValid ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+                  <span className="text-[8px] text-slate-500 uppercase">
+                    {data.source === 'gps' ? 'GPS' : data.source === 'barometer' ? 'BARO' : 'SIM'}
+                  </span>
+                </div>
+                {!data.isValid && (
+                  <span className="text-[7px] text-amber-400/80 text-center px-2">
+                    Altitude GPS indisponível
+                  </span>
+                )}
               </div>
             </div>
 
