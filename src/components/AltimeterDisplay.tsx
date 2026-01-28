@@ -30,17 +30,19 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
   const [settingsMode, setSettingsMode] = useState<SettingsMode>('closed');
   const [isMinimized, setIsMinimized] = useState(false);
   
-  // Draggable state
+  // Draggable state - initial position top-right (avoiding right sidebar ~60px)
   const [position, setPosition] = useState<Position>(() => {
     const saved = localStorage.getItem('skyfpl_altimeter_position');
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch {
-        return { x: 20, y: 100 };
+        // Top-right: window width - component width (180px) - right margin (70px for sidebar)
+        return { x: Math.max(20, window.innerWidth - 250), y: 20 };
       }
     }
-    return { x: 20, y: 100 };
+    // Top-right: window width - component width (180px) - right margin (70px for sidebar)
+    return { x: Math.max(20, window.innerWidth - 250), y: 20 };
   });
   
   const [isDragging, setIsDragging] = useState(false);
@@ -359,10 +361,10 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
                       <div className="flex-1 text-center">
                         <input
                           type="number"
-                          value={qnh.toFixed(1)}
-                          onChange={(e) => updateQnh(parseFloat(e.target.value) || standardPressure)}
+                          value={Math.round(qnh)}
+                          onChange={(e) => updateQnh(parseInt(e.target.value) || standardPressure)}
                           className="w-full bg-slate-900/50 border border-slate-600/50 rounded-lg px-2 py-1.5 text-center text-lg font-mono font-bold text-cyan-400 focus:outline-none focus:border-cyan-500/50"
-                          step="0.1"
+                          step="1"
                           min="950"
                           max="1050"
                         />
@@ -391,7 +393,7 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
                     
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => updateAirportElevation(airportElevation - 100)}
+                        onClick={() => updateAirportElevation((airportElevation || data.altitude) - 1)}
                         className="w-8 h-8 flex items-center justify-center bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-slate-300 font-bold transition-colors"
                       >
                         −
@@ -399,10 +401,10 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
                       <div className="flex-1 text-center">
                         <input
                           type="number"
-                          value={airportElevation}
+                          value={airportElevation || data.altitude}
                           onChange={(e) => updateAirportElevation(parseInt(e.target.value) || 0)}
                           className="w-full bg-slate-900/50 border border-slate-600/50 rounded-lg px-2 py-1.5 text-center text-lg font-mono font-bold text-purple-400 focus:outline-none focus:border-purple-500/50"
-                          step="100"
+                          step="1"
                           min="-1000"
                           max="15000"
                           placeholder="0"
@@ -410,7 +412,7 @@ export const AltimeterDisplay: React.FC<AltimeterDisplayProps> = ({ visible, onC
                         <span className="text-[8px] text-slate-500">FT</span>
                       </div>
                       <button
-                        onClick={() => updateAirportElevation(airportElevation + 100)}
+                        onClick={() => updateAirportElevation((airportElevation || data.altitude) + 1)}
                         className="w-8 h-8 flex items-center justify-center bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-slate-300 font-bold transition-colors"
                       >
                         +
