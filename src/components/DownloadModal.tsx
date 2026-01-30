@@ -19,7 +19,7 @@ interface DownloadModalProps {
   // Flag indicating IndexedDB validation is complete - prevents showing false "OFFLINE" status
   downloadedLayersReady: boolean;
   onDownloadLayer: (layer: string) => Promise<void>;
-  onClearLayerCache: (layer: string) => void;
+  onClearLayerCache: (layer: string) => Promise<void>;
 }
 
 export const DownloadModal: React.FC<DownloadModalProps> = ({
@@ -321,18 +321,31 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     setConfirmClearLayer(chartId);
   };
 
-  const handleConfirmClearCache = () => {
+  const handleConfirmClearCache = async () => {
     if (confirmClearLayer) {
-      // Immediately clear local tile count to reflect UI change
+      const layerToClear = confirmClearLayer;
+      
+      // Immediately clear local state to reflect UI change
       setTileCounts(prev => {
         const next = { ...prev };
-        delete next[confirmClearLayer];
+        delete next[layerToClear];
         return next;
       });
       
-      // Call parent handler to clear IndexedDB and update downloadedLayers
-      onClearLayerCache(confirmClearLayer);
+      // Also clear MBTiles availability status
+      setMbtilesAvailable(prev => {
+        const next = { ...prev };
+        delete next[layerToClear];
+        return next;
+      });
+      
+      // Close modal first for better UX
       setConfirmClearLayer(null);
+      
+      // Call parent handler to clear IndexedDB and update downloadedLayers
+      await onClearLayerCache(layerToClear);
+      
+      console.log(`[DownloadModal] Cache cleared for ${layerToClear}`);
     }
   };
 
