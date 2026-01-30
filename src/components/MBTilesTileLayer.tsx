@@ -51,25 +51,35 @@ const MBTilesTileLayerClass = L.TileLayer.extend({
         try {
           const blob = await getMBTile(fileId, z, x, y);
           if (blob && blob.size > 0) {
-            const objectUrl = URL.createObjectURL(blob);
-            tile.onload = () => {
-              URL.revokeObjectURL(objectUrl);
+            // Try to load the blob as an image - wait for success before returning
+            const loadSuccess = await new Promise<boolean>((resolve) => {
+              const objectUrl = URL.createObjectURL(blob);
+              const testLoad = () => {
+                tile.onload = () => {
+                  URL.revokeObjectURL(objectUrl);
+                  resolve(true);
+                };
+                tile.onerror = () => {
+                  URL.revokeObjectURL(objectUrl);
+                  resolve(false); // Failed to load, try next file
+                };
+                tile.src = objectUrl;
+              };
+              testLoad();
+            });
+            
+            if (loadSuccess) {
               done(null, tile);
-            };
-            tile.onerror = () => {
-              URL.revokeObjectURL(objectUrl);
-              // Try next file
-            };
-            tile.src = objectUrl;
-            return;
+              return; // Successfully loaded - exit
+            }
+            // If loadSuccess is false, continue to next file
           }
         } catch (error) {
-          console.debug(`[MBTiles Layer] Tile not found in ${fileId}: z=${z} x=${x} y=${y}`);
+          // Tile not in this file, try next
         }
       }
       
-      // No tile found in any file
-      // Return transparent tile instead of error
+      // No tile found in any file - return transparent tile
       tile.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
       done(null, tile);
     };
