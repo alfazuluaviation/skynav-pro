@@ -757,9 +757,13 @@ const App = () => {
         await deleteMBTilesPackage(layer);
         console.log(`[CACHE CLEAR] MBTiles package deleted for layer: ${layer}`);
         
-        // Force reload MBTiles availability status
-        const mbtilesReady = await isMBTilesReady(layer);
-        console.log(`[CACHE CLEAR] MBTiles ready status after delete: ${mbtilesReady}`);
+        // CRITICAL: Update mbtilesReady state to hide the toggle
+        setMbtilesReady(prev => {
+          const next = { ...prev };
+          delete next[layer];
+          return next;
+        });
+        console.log(`[CACHE CLEAR] MBTiles ready state cleared for layer: ${layer}`);
       } catch (error) {
         console.error('[CACHE CLEAR] Failed to delete MBTiles package:', error);
       }
