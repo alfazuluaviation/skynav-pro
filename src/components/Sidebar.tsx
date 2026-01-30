@@ -41,6 +41,10 @@ interface SidebarProps {
     // Altimeter toggle
     showAltimeter?: boolean;
     onToggleAltimeter?: () => void;
+    // MBTiles toggle for testing
+    mbtilesReady?: Record<string, boolean>;
+    forceMBTiles?: boolean;
+    onToggleForceMBTiles?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -69,6 +73,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onOpenDownload,
     showAltimeter = false,
     onToggleAltimeter,
+    mbtilesReady = {},
+    forceMBTiles = false,
+    onToggleForceMBTiles,
 }) => {
     const [showSettings, setShowSettings] = useState(false);
     const [showLayersMenu, setShowLayersMenu] = useState(false);
@@ -260,6 +267,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onBaseMapChange={onBaseMapChange}
                         pointVisibility={pointVisibility}
                         onTogglePointVisibility={onTogglePointVisibility}
+                        mbtilesReady={mbtilesReady}
+                        forceMBTiles={forceMBTiles}
+                        onToggleForceMBTiles={onToggleForceMBTiles}
                     />
                 </div>
             )}
@@ -401,6 +411,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             onBaseMapChange={onBaseMapChange}
                             pointVisibility={pointVisibility}
                             onTogglePointVisibility={onTogglePointVisibility}
+                            mbtilesReady={mbtilesReady}
+                            forceMBTiles={forceMBTiles}
+                            onToggleForceMBTiles={onToggleForceMBTiles}
                         />
                     </div>
                 </div>
