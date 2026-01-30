@@ -45,6 +45,14 @@ const MBTilesTileLayerClass = L.TileLayer.extend({
     const { x, y, z } = coords;
     const fileIds = this.options.fileIds as string[];
 
+    // Track which files provided tiles (for debugging)
+    const tileSourceLog = (window as any).__mbtilesSourceLog || new Set<string>();
+    (window as any).__mbtilesSourceLog = tileSourceLog;
+    
+    // Track failed tile coordinates for detailed logging
+    const tileFailLog = (window as any).__mbtilesFailLog || new Set<string>();
+    (window as any).__mbtilesFailLog = tileFailLog;
+
     // Try to get tile from any of the MBTiles files
     // IMPORTANT: Each file covers a different geographic region, so we must try ALL files
     // Use Promise.all to query ALL files simultaneously for faster loading
@@ -85,7 +93,7 @@ const MBTilesTileLayerClass = L.TileLayer.extend({
         
         tile.onerror = () => {
           URL.revokeObjectURL(objectUrl);
-          console.warn(`[MBTiles Layer] ❌ Failed to load tile z=${z} x=${x} y=${y} from ${fileId}`);
+          console.warn(`[MBTiles Layer] ❌ Render failed for tile z=${z} x=${x} y=${y} from ${fileId}`);
           // Return transparent tile on error
           tile.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
           done(null, tile);
@@ -93,15 +101,23 @@ const MBTilesTileLayerClass = L.TileLayer.extend({
         
         tile.src = objectUrl;
       } else {
-        // No tile found in any file - return transparent tile
+        // No tile found in any file - log detailed failure info (first 15 per session)
+        const failKey = `${z}_${x}_${y}`;
+        if (!tileFailLog.has(failKey)) {
+          tileFailLog.add(failKey);
+          if (tileFailLog.size <= 15) {
+            console.debug(
+              `[MBTiles Layer] 📭 No tile found: z=${z} x=${x} y=${y} | ` +
+              `Searched ${fileIds.length} files | ` +
+              `Files: ${fileIds.map(f => f.split('_').pop()).join(', ')}`
+            );
+          }
+        }
+        // Return transparent tile
         tile.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
         done(null, tile);
       }
     };
-    
-    // Track which files provided tiles (for debugging)
-    const tileSourceLog = (window as any).__mbtilesSourceLog || new Set<string>();
-    (window as any).__mbtilesSourceLog = tileSourceLog;
 
     tryLoadTile();
     return tile;
@@ -151,11 +167,15 @@ export const MBTilesTileLayer: React.FC<MBTilesTileLayerProps> = ({
         maxZoom: effectiveMaxZoom,
         tileSize: 256,
         attribution: '© DECEA (MBTiles offline)',
-         // Avoid world wrapping which can display duplicated/"out of bounds" copies
-         // when tiles are misaligned or when panning far from the coverage area.
-         noWrap: true,
-        // Larger buffer for smoother panning
-        keepBuffer: 4,
+        // Avoid world wrapping which can display duplicated/"out of bounds" copies
+        // when tiles are misaligned or when panning far from the coverage area.
+        noWrap: true,
+        // OPTIMIZED: Larger buffer for pre-loading neighboring tiles (6 tiles in each direction)
+        keepBuffer: 6,
+        // OPTIMIZED: Update tiles during map movement, not just when idle
+        // This makes panning feel much smoother as tiles load continuously
+        updateWhenIdle: false,
+        updateWhenZooming: true,
       });
 
       layer.addTo(map);

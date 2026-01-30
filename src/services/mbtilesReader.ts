@@ -180,14 +180,30 @@ function logDatabaseDetails(fileId: string, meta: DBMetadataCache): void {
  * IMPORTANT: Uses XYZ scheme directly (no TMS conversion).
  * QGIS exports tiles in XYZ format where tile_row = Y directly.
  */
+/**
+ * Get a tile from MBTiles as Blob
+ * 
+ * IMPORTANT: Uses XYZ scheme directly (no TMS conversion).
+ * QGIS exports tiles in XYZ format where tile_row = Y directly.
+ * 
+ * Includes automatic retry with 50ms delay for resilience.
+ */
 export async function getMBTile(
   fileId: string,
   z: number,
   x: number,
-  y: number
+  y: number,
+  retryCount: number = 0
 ): Promise<Blob | null> {
   const db = await openDatabase(fileId);
-  if (!db) return null;
+  if (!db) {
+    // Database not ready - retry once after short delay
+    if (retryCount === 0) {
+      await delay(50);
+      return getMBTile(fileId, z, x, y, 1);
+    }
+    return null;
+  }
 
   try {
     // TMS scheme: QGIS exports use TMS where Y is inverted compared to XYZ (Slippy Map).
@@ -200,10 +216,21 @@ export async function getMBTile(
     );
 
     if (result.length === 0 || result[0].values.length === 0) {
-      // Log tile miss for debugging - but only occasionally to avoid console spam
-      const logKey = `${fileId}_${z}_${x}_${y}`;
+      // Log tile miss for debugging - detailed log for first failures
+      const logKey = `miss_${fileId}_${z}_${x}_${y}`;
       if (!tileQueryLog.has(logKey)) {
         tileQueryLog.add(logKey);
+        
+        // Log detailed miss info (first 30 per session)
+        if (tileQueryLog.size <= 30) {
+          const cachedMeta = dbMetadataCache.get(fileId);
+          console.debug(
+            `[MBTiles] 🔍 Tile MISS: z=${z} x=${x} y=${y} (yTms=${yTms}) | ` +
+            `File: ${cachedMeta?.fileName || fileId} | ` +
+            `Bounds: ${cachedMeta?.bounds || 'unknown'}`
+          );
+        }
+        
         // Limit log size
         if (tileQueryLog.size > 1000) {
           tileQueryLog.clear();
@@ -214,18 +241,18 @@ export async function getMBTile(
 
     const tileData = result[0].values[0][0] as Uint8Array;
     if (!tileData || tileData.length === 0) {
-      console.warn(`[MBTiles Reader] ⚠️ Empty tile data at z=${z} x=${x} yTms=${yTms} from ${fileId}`);
+      console.warn(`[MBTiles] ⚠️ Empty tile data at z=${z} x=${x} yTms=${yTms} from ${fileId}`);
       return null;
     }
 
-    // Log successful tile retrieval for debugging (first 50 per file)
+    // Log successful tile retrieval for debugging (first 10 per file)
     const successKey = `hit_${fileId}`;
     if (!tileHitCount.has(successKey)) {
       tileHitCount.set(successKey, 0);
     }
     const hitCount = tileHitCount.get(successKey)!;
-    if (hitCount < 5) {
-      console.log(`[MBTiles Reader] ✅ Tile HIT: z=${z} x=${x} yTms=${yTms} from ${fileId} (${tileData.length} bytes)`);
+    if (hitCount < 10) {
+      console.log(`[MBTiles] ✅ Tile HIT: z=${z} x=${x} yTms=${yTms} from ${fileId} (${tileData.length} bytes)`);
       tileHitCount.set(successKey, hitCount + 1);
     }
 
@@ -234,9 +261,22 @@ export async function getMBTile(
     
     return new Blob([tileData], { type: mimeType });
   } catch (error) {
-    console.error(`[MBTiles Reader] Error reading tile z=${z} x=${x} y=${y}:`, error);
+    // Retry once on query error with 50ms delay
+    if (retryCount === 0) {
+      console.debug(`[MBTiles] ⚡ Retrying tile z=${z} x=${x} y=${y} after error...`);
+      await delay(50);
+      return getMBTile(fileId, z, x, y, 1);
+    }
+    console.error(`[MBTiles] ❌ Error reading tile z=${z} x=${x} y=${y} after retry:`, error);
     return null;
   }
+}
+
+/**
+ * Utility function for delay
+ */
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // Track logged tile queries to avoid spam
