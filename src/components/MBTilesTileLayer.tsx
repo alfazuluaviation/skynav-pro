@@ -46,36 +46,40 @@ const MBTilesTileLayerClass = L.TileLayer.extend({
     const fileIds = this.options.fileIds as string[];
 
     // Try to get tile from any of the MBTiles files
+    // IMPORTANT: Each file covers a different geographic region, so we must try ALL files
     const tryLoadTile = async () => {
-      for (const fileId of fileIds) {
+      for (let i = 0; i < fileIds.length; i++) {
+        const fileId = fileIds[i];
         try {
           const blob = await getMBTile(fileId, z, x, y);
-          if (blob && blob.size > 0) {
-            // Try to load the blob as an image - wait for success before returning
-            const loadSuccess = await new Promise<boolean>((resolve) => {
-              const objectUrl = URL.createObjectURL(blob);
-              const testLoad = () => {
-                tile.onload = () => {
-                  URL.revokeObjectURL(objectUrl);
-                  resolve(true);
-                };
-                tile.onerror = () => {
-                  URL.revokeObjectURL(objectUrl);
-                  resolve(false); // Failed to load, try next file
-                };
-                tile.src = objectUrl;
-              };
-              testLoad();
-            });
-            
-            if (loadSuccess) {
-              done(null, tile);
-              return; // Successfully loaded - exit
-            }
-            // If loadSuccess is false, continue to next file
+          
+          if (!blob || blob.size === 0) {
+            // No tile in this file for these coordinates, try next file
+            continue;
           }
+          
+          // Try to load the blob as an image - wait for success before returning
+          const loadSuccess = await new Promise<boolean>((resolve) => {
+            const objectUrl = URL.createObjectURL(blob);
+            tile.onload = () => {
+              URL.revokeObjectURL(objectUrl);
+              resolve(true);
+            };
+            tile.onerror = () => {
+              URL.revokeObjectURL(objectUrl);
+              resolve(false); // Failed to load, try next file
+            };
+            tile.src = objectUrl;
+          });
+          
+          if (loadSuccess) {
+            done(null, tile);
+            return; // Successfully loaded - exit
+          }
+          // If loadSuccess is false, continue to next file
         } catch (error) {
-          // Tile not in this file, try next
+          // Error reading from this file, continue to next
+          continue;
         }
       }
       
