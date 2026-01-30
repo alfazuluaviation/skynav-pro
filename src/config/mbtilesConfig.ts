@@ -5,22 +5,30 @@
  * If successful, it can be expanded to other charts.
  */
 
+import { supabase } from '@/integrations/supabase/client';
+
 export interface MBTilesPackageConfig {
   id: string;
   chartId: string;
   name: string;
   description: string;
-  downloadUrl: string;
-  // Direct download URL bypassing Google Drive virus scan confirmation
-  directDownloadUrl: string;
+  // Google Drive file ID
+  gdriveFileId: string;
   fileName: string;
   expectedSize: number; // in bytes
   zoomLevels: { min: number; max: number };
   manifestFileName: string;
 }
 
-// Google Drive file ID
+// Google Drive file ID for ENRC LOW
 const ENRC_LOW_FILE_ID = '1WIIbuiR4SLwpQ-PexKhHBwAb8fwoePQs';
+
+// Get the proxy URL for downloading from Google Drive
+export function getProxyDownloadUrl(fileId: string): string {
+  // Use Supabase Edge Function as proxy to bypass CORS
+  const supabaseUrl = (supabase as any).supabaseUrl || 'https://gongoqjjpwphhttumdjm.supabase.co';
+  return `${supabaseUrl}/functions/v1/proxy-gdrive?fileId=${encodeURIComponent(fileId)}`;
+}
 
 export const MBTILES_PACKAGES: Record<string, MBTilesPackageConfig> = {
   LOW: {
@@ -28,10 +36,7 @@ export const MBTILES_PACKAGES: Record<string, MBTilesPackageConfig> = {
     chartId: 'LOW',
     name: 'ENRC LOW (MBTiles)',
     description: 'Cartas de Rota IFR Baixa Altitude - Pacote Offline MBTiles',
-    // Standard Google Drive download URL
-    downloadUrl: `https://drive.google.com/uc?export=download&id=${ENRC_LOW_FILE_ID}`,
-    // Direct download URL bypassing virus scan (for files > 100MB)
-    directDownloadUrl: `https://drive.usercontent.google.com/download?id=${ENRC_LOW_FILE_ID}&export=download&confirm=t`,
+    gdriveFileId: ENRC_LOW_FILE_ID,
     fileName: 'ENRC_LOW_2026_01.zip',
     expectedSize: 338 * 1024 * 1024, // ~338MB
     zoomLevels: { min: 4, max: 11 },
