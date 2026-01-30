@@ -15,11 +15,17 @@ import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import { getMBTilesFile, getMBTilesMetadata, getAllMBTilesMetadata } from './mbtilesStorage';
 import { getMBTilesConfig } from '../config/mbtilesConfig';
 
+// Bundle the sql.js WASM so MBTiles works offline (no CDN dependency)
+import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
+
 // Singleton SQL.js instance
 let SQL: SqlJsStatic | null = null;
 
 // Cache of open databases (by file ID)
 const dbCache: Map<string, Database> = new Map();
+
+// Cache of detected tile scheme per DB (tms vs xyz)
+const schemeCache: Map<string, 'tms' | 'xyz' | 'unknown'> = new Map();
 
 /**
  * Initialize sql.js (loads WASM)
@@ -30,9 +36,12 @@ async function initSQL(): Promise<SqlJsStatic> {
   console.log('[MBTiles Reader] Initializing sql.js...');
   
   SQL = await initSqlJs({
-    // Load WASM from CDN for simplicity
-    // In production, this should be bundled with the app
-    locateFile: (file: string) => `https://sql.js.org/dist/${file}`
+    // IMPORTANT: Use bundled WASM so offline mode works.
+    // sql.js will call locateFile('sql-wasm.wasm')
+    locateFile: (file: string) => {
+      if (file.endsWith('.wasm')) return sqlWasmUrl;
+      return file;
+    }
   });
 
   console.log('[MBTiles Reader] sql.js initialized');
@@ -61,10 +70,28 @@ async function openDatabase(fileId: string): Promise<Database | null> {
   try {
     const db = new sql.Database(new Uint8Array(fileData));
     dbCache.set(fileId, db);
+
+    // Detect tile scheme (tms vs xyz). Many tools set metadata.scheme.
+    // If missing, we'll attempt fallback logic in getMBTile.
+    schemeCache.set(fileId, detectTileScheme(db));
+
     return db;
   } catch (error) {
     console.error(`[MBTiles Reader] Failed to open database:`, error);
     return null;
+  }
+}
+
+function detectTileScheme(db: Database): 'tms' | 'xyz' | 'unknown' {
+  try {
+    const result = db.exec(`SELECT value FROM metadata WHERE name = 'scheme' LIMIT 1`);
+    const scheme = String(result?.[0]?.values?.[0]?.[0] ?? '').toLowerCase();
+    if (scheme === 'tms') return 'tms';
+    if (scheme === 'xyz') return 'xyz';
+    return 'unknown';
+  } catch {
+    // metadata table might be missing in some MBTiles variants
+    return 'unknown';
   }
 }
 
@@ -89,14 +116,30 @@ export async function getMBTile(
   const db = await openDatabase(fileId);
   if (!db) return null;
 
-  // Convert XYZ to TMS coordinates
-  const tms = xyzToTms(x, y, z);
-
   try {
-    const result = db.exec(
-      `SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?`,
-      [tms.z, tms.x, tms.y]
-    );
+    const scheme = schemeCache.get(fileId) ?? 'unknown';
+
+    const queryTile = (qz: number, qx: number, qy: number) =>
+      db.exec(
+        `SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?`,
+        [qz, qx, qy]
+      );
+
+    // MBTiles spec defaults to TMS, but some generators store XYZ.
+    // We'll respect metadata.scheme when available, otherwise try TMS then XYZ.
+    const tms = xyzToTms(x, y, z);
+    const attempts: Array<{ z: number; x: number; y: number }> =
+      scheme === 'xyz'
+        ? [{ z, x, y }]
+        : scheme === 'tms'
+          ? [{ z: tms.z, x: tms.x, y: tms.y }]
+          : [{ z: tms.z, x: tms.x, y: tms.y }, { z, x, y }];
+
+    let result: ReturnType<Database['exec']> = [];
+    for (const a of attempts) {
+      result = queryTile(a.z, a.x, a.y);
+      if (result.length > 0 && result[0].values.length > 0) break;
+    }
 
     if (result.length === 0 || result[0].values.length === 0) {
       return null;
@@ -213,7 +256,10 @@ export async function isMBTilesReady(chartId: string): Promise<boolean> {
   // Check for any complete MBTiles files with this chartId
   const allMetadata = await getAllMBTilesMetadata();
   const hasCompleteFiles = allMetadata.some(m => 
-    m.chartId === chartId && m.status === 'complete'
+    m.chartId === chartId &&
+    m.status === 'complete' &&
+    m.totalSize > 0 &&
+    m.fileName?.toLowerCase().endsWith('.mbtiles')
   );
   
   console.log(`[MBTiles Reader] isMBTilesReady(${chartId}): found ${allMetadata.filter(m => m.chartId === chartId).length} files, complete: ${hasCompleteFiles}`);
@@ -227,7 +273,7 @@ export async function isMBTilesReady(chartId: string): Promise<boolean> {
 export async function getMBTilesFileIds(chartId: string): Promise<string[]> {
   const allMetadata = await getAllMBTilesMetadata();
   const fileIds = allMetadata
-    .filter(m => m.chartId === chartId && m.status === 'complete' && m.totalSize > 0)
+    .filter(m => m.chartId === chartId && m.status === 'complete' && m.totalSize > 0 && m.fileName?.toLowerCase().endsWith('.mbtiles'))
     .map(m => m.id);
   
   console.log(`[MBTiles Reader] getMBTilesFileIds(${chartId}): ${fileIds.length} files found`);

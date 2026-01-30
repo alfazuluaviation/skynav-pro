@@ -23,6 +23,15 @@ interface MBTilesMetadata {
   status: 'downloading' | 'complete' | 'error';
 }
 
+export interface MBTilesChartStatus {
+  chartId: string;
+  /** True when all files listed in manifest are present; if no manifest, true when at least one .mbtiles file exists */
+  isComplete: boolean;
+  availableMbtilesFiles: string[];
+  expectedMbtilesFiles?: string[];
+  missingMbtilesFiles?: string[];
+}
+
 interface ManifestData {
   files: string[];
   version: string;
@@ -237,6 +246,59 @@ export async function getAllMBTilesMetadata(): Promise<MBTilesMetadata[]> {
     request.onsuccess = () => resolve(request.result || []);
     request.onerror = () => resolve([]);
   });
+}
+
+/**
+ * Returns whether a chart has a COMPLETE MBTiles set.
+ * - If manifest exists: all .mbtiles listed must be present with status=complete
+ * - If manifest doesn't exist: at least one .mbtiles file must be present
+ */
+export async function getMBTilesChartStatus(chartId: string): Promise<MBTilesChartStatus> {
+  const all = await getAllMBTilesMetadata();
+
+  const tileFiles = all.filter(
+    (m) =>
+      m.chartId === chartId &&
+      m.status === 'complete' &&
+      m.totalSize > 0 &&
+      (m.fileName || '').toLowerCase().endsWith('.mbtiles')
+  );
+
+  const available = tileFiles.map((m) => m.fileName);
+
+  // Find any "package" metadata entry that contains a manifest.
+  // We store the package reference with totalSize=0.
+  const pkg = all.find(
+    (m) =>
+      m.chartId === chartId &&
+      m.status === 'complete' &&
+      m.totalSize === 0 &&
+      Boolean(m.manifestData?.files?.length)
+  );
+
+  const expected = pkg?.manifestData?.files
+    ?.map((f) => (f.split('/').pop() || f).trim())
+    .filter((f) => f.toLowerCase().endsWith('.mbtiles'));
+
+  if (!expected || expected.length === 0) {
+    // No manifest: consider usable if we have at least one tile file.
+    return {
+      chartId,
+      isComplete: available.length > 0,
+      availableMbtilesFiles: available,
+    };
+  }
+
+  const availableSet = new Set(available);
+  const missing = expected.filter((f) => !availableSet.has(f));
+
+  return {
+    chartId,
+    isComplete: missing.length === 0 && expected.length > 0,
+    availableMbtilesFiles: available,
+    expectedMbtilesFiles: expected,
+    missingMbtilesFiles: missing,
+  };
 }
 
 /**
