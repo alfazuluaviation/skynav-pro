@@ -9,7 +9,7 @@
  */
 
 import JSZip from 'jszip';
-import { getMBTilesConfig, MBTILES_PACKAGES } from '../config/mbtilesConfig';
+import { getMBTilesConfig, MBTILES_PACKAGES, getProxyDownloadUrl } from '../config/mbtilesConfig';
 import { storeMBTilesFile, isMBTilesFileAvailable, deleteMBTilesFile } from './mbtilesStorage';
 
 export interface MBTilesDownloadProgress {
@@ -46,7 +46,10 @@ export async function downloadMBTilesPackage(
   console.log(`[MBTiles Downloader] Starting download of ${config.name}`);
 
   try {
-    // Phase 1: Download ZIP file from Google Drive
+    // Phase 1: Download ZIP file via proxy (to bypass CORS)
+    const downloadUrl = getProxyDownloadUrl(config.gdriveFileId);
+    console.log(`[MBTiles Downloader] Using proxy URL: ${downloadUrl}`);
+
     onProgress?.({
       phase: 'downloading',
       progress: 0,
@@ -55,7 +58,7 @@ export async function downloadMBTilesPackage(
       message: 'Iniciando download...'
     });
 
-    const zipData = await downloadZipFile(config.directDownloadUrl, (downloaded, total) => {
+    const zipData = await downloadZipFile(downloadUrl, (downloaded, total) => {
       const progress = total > 0 ? Math.round((downloaded / total) * 50) : 0; // 0-50%
       onProgress?.({
         phase: 'downloading',
