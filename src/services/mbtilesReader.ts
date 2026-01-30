@@ -201,13 +201,24 @@ export async function getAvailableZoomLevels(fileId: string): Promise<number[]> 
 
 /**
  * Check if MBTiles is available for offline use
+ * Checks if there are any complete MBTiles files for the given chartId
  */
 export async function isMBTilesReady(chartId: string): Promise<boolean> {
   const config = getMBTilesConfig(chartId);
-  if (!config) return false;
+  if (!config) {
+    console.log(`[MBTiles Reader] No config for chartId: ${chartId}`);
+    return false;
+  }
 
-  const metadata = await getMBTilesMetadata(config.id);
-  return metadata?.status === 'complete';
+  // Check for any complete MBTiles files with this chartId
+  const allMetadata = await getAllMBTilesMetadata();
+  const hasCompleteFiles = allMetadata.some(m => 
+    m.chartId === chartId && m.status === 'complete'
+  );
+  
+  console.log(`[MBTiles Reader] isMBTilesReady(${chartId}): found ${allMetadata.filter(m => m.chartId === chartId).length} files, complete: ${hasCompleteFiles}`);
+  
+  return hasCompleteFiles;
 }
 
 /**
@@ -215,9 +226,12 @@ export async function isMBTilesReady(chartId: string): Promise<boolean> {
  */
 export async function getMBTilesFileIds(chartId: string): Promise<string[]> {
   const allMetadata = await getAllMBTilesMetadata();
-  return allMetadata
-    .filter(m => m.chartId === chartId && m.status === 'complete')
+  const fileIds = allMetadata
+    .filter(m => m.chartId === chartId && m.status === 'complete' && m.totalSize > 0)
     .map(m => m.id);
+  
+  console.log(`[MBTiles Reader] getMBTilesFileIds(${chartId}): ${fileIds.length} files found`);
+  return fileIds;
 }
 
 /**
