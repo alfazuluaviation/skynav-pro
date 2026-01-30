@@ -22,8 +22,8 @@ export interface MBTilesPackageConfig {
   tileScheme: 'xyz' | 'tms';
 }
 
-// Google Drive file ID for ENRC LOW
-const ENRC_LOW_FILE_ID = '1WIIbuiR4SLwpQ-PexKhHBwAb8fwoePQs';
+// Google Drive file ID for ENRC LOW (v2026.01 - corrected package)
+const ENRC_LOW_FILE_ID = '1PBeSyP3cj9tbMa2A-XXwgIqKt_QIoAwg';
 
 // Get the proxy URL for downloading from Google Drive
 export function getProxyDownloadUrl(fileId: string): string {

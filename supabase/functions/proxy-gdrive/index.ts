@@ -15,7 +15,7 @@ const corsHeaders = {
 
 // Known file IDs for security (whitelist approach)
 const ALLOWED_FILE_IDS = new Set([
-  '1WIIbuiR4SLwpQ-PexKhHBwAb8fwoePQs', // ENRC LOW MBTiles package
+  '1PBeSyP3cj9tbMa2A-XXwgIqKt_QIoAwg', // ENRC LOW MBTiles package v2026.01 (corrected)
 ]);
 
 Deno.serve(async (req: Request): Promise<Response> => {
