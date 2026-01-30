@@ -24,6 +24,11 @@ let SQL: SqlJsStatic | null = null;
 // Cache of open databases (by file ID)
 const dbCache: Map<string, Database> = new Map();
 
+// Prevent concurrent tile requests from opening the same DB multiple times.
+// Without this, Leaflet can trigger many parallel tile loads, causing repeated
+// IndexedDB reads + multiple sql.js Database instances (high memory, slow, flaky on mobile).
+const dbOpenPromises: Map<string, Promise<Database | null>> = new Map();
+
 // Cache of database metadata for logging
 interface DBMetadataCache {
   fileName: string;
@@ -65,32 +70,43 @@ async function openDatabase(fileId: string): Promise<Database | null> {
     return dbCache.get(fileId)!;
   }
 
-  const sql = await initSQL();
-  const fileData = await getMBTilesFile(fileId);
+  // If an open is already in progress for this file, await it.
+  const inflight = dbOpenPromises.get(fileId);
+  if (inflight) return inflight;
 
-  if (!fileData) {
-    console.error(`[MBTiles Reader] ❌ File not found: ${fileId}`);
-    return null;
-  }
+  const openPromise = (async (): Promise<Database | null> => {
+    const sql = await initSQL();
+    const fileData = await getMBTilesFile(fileId);
 
-  const fileSizeMB = (fileData.byteLength / 1024 / 1024).toFixed(2);
-  console.log(`[MBTiles Reader] 📂 Opening database ${fileId} (${fileSizeMB} MB)`);
+    if (!fileData) {
+      console.error(`[MBTiles Reader] ❌ File not found: ${fileId}`);
+      return null;
+    }
 
-  try {
-    const db = new sql.Database(new Uint8Array(fileData));
-    dbCache.set(fileId, db);
+    const fileSizeMB = (fileData.byteLength / 1024 / 1024).toFixed(2);
+    console.log(`[MBTiles Reader] 📂 Opening database ${fileId} (${fileSizeMB} MB)`);
 
-    // Extract and log detailed metadata
-    const metadata = await extractDatabaseMetadata(db, fileId);
-    dbMetadataCache.set(fileId, metadata);
-    
-    logDatabaseDetails(fileId, metadata);
+    try {
+      const db = new sql.Database(new Uint8Array(fileData));
+      dbCache.set(fileId, db);
 
-    return db;
-  } catch (error) {
-    console.error(`[MBTiles Reader] ❌ Failed to open database:`, error);
-    return null;
-  }
+      // Extract and log detailed metadata
+      const metadata = extractDatabaseMetadata(db, fileId);
+      dbMetadataCache.set(fileId, metadata);
+
+      logDatabaseDetails(fileId, metadata);
+
+      return db;
+    } catch (error) {
+      console.error(`[MBTiles Reader] ❌ Failed to open database:`, error);
+      return null;
+    }
+  })().finally(() => {
+    dbOpenPromises.delete(fileId);
+  });
+
+  dbOpenPromises.set(fileId, openPromise);
+  return openPromise;
 }
 
 /**
@@ -173,6 +189,14 @@ export async function getMBTile(
   const db = await openDatabase(fileId);
   if (!db) return null;
 
+  // Heuristic logging: if tiles exist only with inverted Y, the source may actually be TMS.
+  // We keep rendering strictly as XYZ (per config), but this log helps diagnose misalignment.
+  // Keyed by fileId+z to avoid noisy logs.
+  const schemeHintKey = `${fileId}:z${z}`;
+  const schemeHintSeen = (getMBTile as any).__schemeHintSeen as Set<string> | undefined;
+  const seenSet: Set<string> = schemeHintSeen || new Set<string>();
+  (getMBTile as any).__schemeHintSeen = seenSet;
+
   try {
     // XYZ scheme: use coordinates directly as stored by QGIS
     // tile_column = X, tile_row = Y, zoom_level = Z
@@ -182,6 +206,23 @@ export async function getMBTile(
     );
 
     if (result.length === 0 || result[0].values.length === 0) {
+      if (!seenSet.has(schemeHintKey)) {
+        seenSet.add(schemeHintKey);
+        try {
+          const yTms = (1 << z) - 1 - y;
+          const tms = db.exec(
+            `SELECT 1 FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ? LIMIT 1`,
+            [z, x, yTms]
+          );
+          if (tms.length > 0 && tms[0].values.length > 0) {
+            console.warn(
+              `[MBTiles Reader] ⚠️ Tile miss at XYZ y=${y}, but exists at inverted Y=${yTms} (possible TMS source): file=${fileId} z=${z} x=${x}`
+            );
+          }
+        } catch {
+          // ignore diagnostic failures
+        }
+      }
       return null;
     }
 
