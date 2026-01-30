@@ -18,6 +18,8 @@ export interface MBTilesPackageConfig {
   expectedSize: number; // in bytes
   zoomLevels: { min: number; max: number };
   manifestFileName: string;
+  // Tile coordinate scheme: 'xyz' (web standard) or 'tms' (inverted Y)
+  tileScheme: 'xyz' | 'tms';
 }
 
 // Google Drive file ID for ENRC LOW
@@ -41,6 +43,8 @@ export const MBTILES_PACKAGES: Record<string, MBTilesPackageConfig> = {
     expectedSize: 338 * 1024 * 1024, // ~338MB
     zoomLevels: { min: 4, max: 11 },
     manifestFileName: 'manifest.json',
+    // QGIS exports use XYZ scheme - forced, no auto-detection
+    tileScheme: 'xyz',
   }
 };
 
