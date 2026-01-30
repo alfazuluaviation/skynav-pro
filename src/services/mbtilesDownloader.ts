@@ -276,16 +276,32 @@ export async function isMBTilesPackageDownloaded(chartId: string): Promise<boole
 }
 
 /**
- * Delete MBTiles package
+ * Delete MBTiles package and ALL associated .mbtiles files
  */
 export async function deleteMBTilesPackage(chartId: string): Promise<void> {
   const config = getMBTilesConfig(chartId);
   if (!config) return;
 
-  // Delete the main package reference
-  await deleteMBTilesFile(config.id);
+  console.log(`[MBTiles Downloader] Deleting all files for package ${config.id}`);
 
-  // Note: Individual .mbtiles files would need to be tracked and deleted separately
-  // For simplicity in this test, we delete the main reference
-  console.log(`[MBTiles Downloader] Deleted package ${config.id}`);
+  // Get all metadata entries from storage
+  const { getAllMBTilesMetadata } = await import('./mbtilesStorage');
+  const allMetadata = await getAllMBTilesMetadata();
+
+  // Find all files that belong to this chart (matching chartId OR id prefix)
+  const filesToDelete = allMetadata.filter(m => 
+    m.chartId === chartId || 
+    m.id === config.id ||
+    m.id.startsWith(`${config.id}_`)
+  );
+
+  console.log(`[MBTiles Downloader] Found ${filesToDelete.length} files to delete for ${chartId}`);
+
+  // Delete each file
+  for (const file of filesToDelete) {
+    console.log(`[MBTiles Downloader] Deleting: ${file.id} (${file.fileName})`);
+    await deleteMBTilesFile(file.id);
+  }
+
+  console.log(`[MBTiles Downloader] Successfully deleted package ${config.id}`);
 }
