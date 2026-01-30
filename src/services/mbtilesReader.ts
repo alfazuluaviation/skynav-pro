@@ -200,11 +200,34 @@ export async function getMBTile(
     );
 
     if (result.length === 0 || result[0].values.length === 0) {
+      // Log tile miss for debugging - but only occasionally to avoid console spam
+      const logKey = `${fileId}_${z}_${x}_${y}`;
+      if (!tileQueryLog.has(logKey)) {
+        tileQueryLog.add(logKey);
+        // Limit log size
+        if (tileQueryLog.size > 1000) {
+          tileQueryLog.clear();
+        }
+      }
       return null;
     }
 
     const tileData = result[0].values[0][0] as Uint8Array;
-    if (!tileData || tileData.length === 0) return null;
+    if (!tileData || tileData.length === 0) {
+      console.warn(`[MBTiles Reader] ⚠️ Empty tile data at z=${z} x=${x} yTms=${yTms} from ${fileId}`);
+      return null;
+    }
+
+    // Log successful tile retrieval for debugging (first 50 per file)
+    const successKey = `hit_${fileId}`;
+    if (!tileHitCount.has(successKey)) {
+      tileHitCount.set(successKey, 0);
+    }
+    const hitCount = tileHitCount.get(successKey)!;
+    if (hitCount < 5) {
+      console.log(`[MBTiles Reader] ✅ Tile HIT: z=${z} x=${x} yTms=${yTms} from ${fileId} (${tileData.length} bytes)`);
+      tileHitCount.set(successKey, hitCount + 1);
+    }
 
     // Determine MIME type from tile data
     const mimeType = detectImageType(tileData);
@@ -215,6 +238,10 @@ export async function getMBTile(
     return null;
   }
 }
+
+// Track logged tile queries to avoid spam
+const tileQueryLog = new Set<string>();
+const tileHitCount = new Map<string, number>();
 
 /**
  * Get tile as Data URL (for image src)

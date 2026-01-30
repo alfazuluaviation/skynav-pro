@@ -47,46 +47,61 @@ const MBTilesTileLayerClass = L.TileLayer.extend({
 
     // Try to get tile from any of the MBTiles files
     // IMPORTANT: Each file covers a different geographic region, so we must try ALL files
+    // Use Promise.all to query ALL files simultaneously for faster loading
     const tryLoadTile = async () => {
-      for (let i = 0; i < fileIds.length; i++) {
-        const fileId = fileIds[i];
-        try {
-          const blob = await getMBTile(fileId, z, x, y);
-          
-          if (!blob || blob.size === 0) {
-            // No tile in this file for these coordinates, try next file
-            continue;
+      // Query all files in parallel for this tile coordinate
+      const results = await Promise.all(
+        fileIds.map(async (fileId) => {
+          try {
+            const blob = await getMBTile(fileId, z, x, y);
+            if (blob && blob.size > 0) {
+              return { fileId, blob };
+            }
+            return null;
+          } catch {
+            return null;
           }
-          
-          // Try to load the blob as an image - wait for success before returning
-          const loadSuccess = await new Promise<boolean>((resolve) => {
-            const objectUrl = URL.createObjectURL(blob);
-            tile.onload = () => {
-              URL.revokeObjectURL(objectUrl);
-              resolve(true);
-            };
-            tile.onerror = () => {
-              URL.revokeObjectURL(objectUrl);
-              resolve(false); // Failed to load, try next file
-            };
-            tile.src = objectUrl;
-          });
-          
-          if (loadSuccess) {
-            done(null, tile);
-            return; // Successfully loaded - exit
-          }
-          // If loadSuccess is false, continue to next file
-        } catch (error) {
-          // Error reading from this file, continue to next
-          continue;
-        }
-      }
+        })
+      );
+
+      // Find the first valid result
+      const validResult = results.find(r => r !== null);
       
-      // No tile found in any file - return transparent tile
-      tile.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
-      done(null, tile);
+      if (validResult) {
+        const { fileId, blob } = validResult;
+        const objectUrl = URL.createObjectURL(blob);
+        
+        tile.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          // Log which file provided the tile (first 20 per session)
+          if (!tileSourceLog.has(`${z}_${x}_${y}`)) {
+            tileSourceLog.add(`${z}_${x}_${y}`);
+            if (tileSourceLog.size <= 20) {
+              console.log(`[MBTiles Layer] 🗺️ Tile z=${z} x=${x} y=${y} loaded from: ${fileId}`);
+            }
+          }
+          done(null, tile);
+        };
+        
+        tile.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          console.warn(`[MBTiles Layer] ❌ Failed to load tile z=${z} x=${x} y=${y} from ${fileId}`);
+          // Return transparent tile on error
+          tile.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+          done(null, tile);
+        };
+        
+        tile.src = objectUrl;
+      } else {
+        // No tile found in any file - return transparent tile
+        tile.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+        done(null, tile);
+      }
     };
+    
+    // Track which files provided tiles (for debugging)
+    const tileSourceLog = (window as any).__mbtilesSourceLog || new Set<string>();
+    (window as any).__mbtilesSourceLog = tileSourceLog;
 
     tryLoadTile();
     return tile;
