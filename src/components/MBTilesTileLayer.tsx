@@ -122,6 +122,9 @@ export const MBTilesTileLayer: React.FC<MBTilesTileLayerProps> = ({
         maxZoom: effectiveMaxZoom,
         tileSize: 256,
         attribution: '© DECEA (MBTiles offline)',
+         // Avoid world wrapping which can display duplicated/"out of bounds" copies
+         // when tiles are misaligned or when panning far from the coverage area.
+         noWrap: true,
         // Larger buffer for smoother panning
         keepBuffer: 4,
       });
