@@ -750,10 +750,25 @@ const App = () => {
       return next;
     });
     
-    // Clear from IndexedDB cache
+    // Check if this layer uses MBTiles - if so, delete the MBTiles package
+    if (isMBTilesAvailable(layer)) {
+      try {
+        const { deleteMBTilesPackage } = await import('./services/mbtilesDownloader');
+        await deleteMBTilesPackage(layer);
+        console.log(`[CACHE CLEAR] MBTiles package deleted for layer: ${layer}`);
+        
+        // Force reload MBTiles availability status
+        const mbtilesReady = await isMBTilesReady(layer);
+        console.log(`[CACHE CLEAR] MBTiles ready status after delete: ${mbtilesReady}`);
+      } catch (error) {
+        console.error('[CACHE CLEAR] Failed to delete MBTiles package:', error);
+      }
+    }
+    
+    // Clear from IndexedDB tile cache (for WMS tiles)
     try {
       await clearLayerCache(layer);
-      console.log(`[CACHE CLEAR] IndexedDB cache cleared for layer: ${layer}`);
+      console.log(`[CACHE CLEAR] IndexedDB tile cache cleared for layer: ${layer}`);
     } catch (error) {
       console.error('[CACHE CLEAR] Failed to clear IndexedDB:', error);
     }
