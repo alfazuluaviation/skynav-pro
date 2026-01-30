@@ -282,10 +282,15 @@ export async function deleteMBTilesPackage(chartId: string): Promise<void> {
   const config = getMBTilesConfig(chartId);
   if (!config) return;
 
-  console.log(`[MBTiles Downloader] Deleting all files for package ${config.id}`);
+  console.log(`[MBTiles Downloader] 🗑️ Deleting all files for package ${config.id}`);
+
+  // CRITICAL: Close all open SQLite databases for this chart BEFORE deleting files
+  // Without this, the databases remain in memory and continue serving tiles!
+  const { closeDatabasesForChart } = await import('./mbtilesReader');
+  closeDatabasesForChart(chartId);
 
   // Get all metadata entries from storage
-  const { getAllMBTilesMetadata } = await import('./mbtilesStorage');
+  const { getAllMBTilesMetadata, deleteMBTilesFile } = await import('./mbtilesStorage');
   const allMetadata = await getAllMBTilesMetadata();
 
   // Find all files that belong to this chart (matching chartId OR id prefix)
@@ -295,13 +300,14 @@ export async function deleteMBTilesPackage(chartId: string): Promise<void> {
     m.id.startsWith(`${config.id}_`)
   );
 
-  console.log(`[MBTiles Downloader] Found ${filesToDelete.length} files to delete for ${chartId}`);
+  console.log(`[MBTiles Downloader] Found ${filesToDelete.length} files to delete for ${chartId}:`, 
+    filesToDelete.map(f => f.id));
 
-  // Delete each file
+  // Delete each file from IndexedDB
   for (const file of filesToDelete) {
     console.log(`[MBTiles Downloader] Deleting: ${file.id} (${file.fileName})`);
     await deleteMBTilesFile(file.id);
   }
 
-  console.log(`[MBTiles Downloader] Successfully deleted package ${config.id}`);
+  console.log(`[MBTiles Downloader] ✅ Successfully deleted package ${config.id} (${filesToDelete.length} files)`);
 }

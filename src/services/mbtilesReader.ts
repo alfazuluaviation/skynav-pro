@@ -385,6 +385,40 @@ export function closeAllDatabases(): void {
     console.log(`[MBTiles Reader] Closed database ${fileId}`);
   }
   dbCache.clear();
+  dbMetadataCache.clear();
+  tileQueryLog.clear();
+  tileHitCount.clear();
+}
+
+/**
+ * Close and clear all databases for a specific chart
+ * This MUST be called when deleting a chart's MBTiles files
+ */
+export function closeDatabasesForChart(chartId: string): void {
+  const toClose: string[] = [];
+  
+  for (const fileId of dbCache.keys()) {
+    // Match files belonging to this chart (e.g., ENRC_LOW_MBTILES_*)
+    if (fileId.includes(chartId) || fileId.startsWith(`ENRC_LOW_MBTILES`)) {
+      toClose.push(fileId);
+    }
+  }
+  
+  for (const fileId of toClose) {
+    const db = dbCache.get(fileId);
+    if (db) {
+      db.close();
+      dbCache.delete(fileId);
+      dbMetadataCache.delete(fileId);
+      console.log(`[MBTiles Reader] 🗑️ Closed and removed database: ${fileId}`);
+    }
+  }
+  
+  // Clear tile logs to allow fresh logging after re-download
+  tileQueryLog.clear();
+  tileHitCount.clear();
+  
+  console.log(`[MBTiles Reader] ✅ Cleared ${toClose.length} databases for chart: ${chartId}`);
 }
 
 /**
