@@ -170,7 +170,7 @@ function logDatabaseDetails(fileId: string, meta: DBMetadataCache): void {
   console.log(`[MBTiles Reader]    Zoom Range: ${meta.minZoom} - ${meta.maxZoom}`);
   console.log(`[MBTiles Reader]    Tile Count: ${meta.tileCount.toLocaleString()}`);
   console.log(`[MBTiles Reader]    Metadata Scheme: ${meta.scheme}`);
-  console.log(`[MBTiles Reader]    ⚡ Using: XYZ (forced by config)`);
+  console.log(`[MBTiles Reader]    ⚡ Using: TMS (Y inverted for QGIS exports)`);
   console.log(`[MBTiles Reader] ════════════════════════════════════════`);
 }
 
@@ -189,40 +189,20 @@ export async function getMBTile(
   const db = await openDatabase(fileId);
   if (!db) return null;
 
-  // Heuristic logging: if tiles exist only with inverted Y, the source may actually be TMS.
-  // We keep rendering strictly as XYZ (per config), but this log helps diagnose misalignment.
-  // Keyed by fileId+z to avoid noisy logs.
-  const schemeHintKey = `${fileId}:z${z}`;
-  const schemeHintSeen = (getMBTile as any).__schemeHintSeen as Set<string> | undefined;
-  const seenSet: Set<string> = schemeHintSeen || new Set<string>();
-  (getMBTile as any).__schemeHintSeen = seenSet;
+  // TMS scheme: QGIS exports use TMS where Y is inverted compared to XYZ (Slippy Map).
+  // Convert Leaflet's XYZ coordinates to TMS for the database query.
 
   try {
-    // XYZ scheme: use coordinates directly as stored by QGIS
-    // tile_column = X, tile_row = Y, zoom_level = Z
+    // TMS scheme detected: MBTiles from QGIS use TMS where Y is inverted
+    // Convert from Leaflet's XYZ (y) to TMS (yTms) for database query
+    const yTms = (1 << z) - 1 - y;
+    
     const result = db.exec(
       `SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?`,
-      [z, x, y]
+      [z, x, yTms]
     );
 
     if (result.length === 0 || result[0].values.length === 0) {
-      if (!seenSet.has(schemeHintKey)) {
-        seenSet.add(schemeHintKey);
-        try {
-          const yTms = (1 << z) - 1 - y;
-          const tms = db.exec(
-            `SELECT 1 FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ? LIMIT 1`,
-            [z, x, yTms]
-          );
-          if (tms.length > 0 && tms[0].values.length > 0) {
-            console.warn(
-              `[MBTiles Reader] ⚠️ Tile miss at XYZ y=${y}, but exists at inverted Y=${yTms} (possible TMS source): file=${fileId} z=${z} x=${x}`
-            );
-          }
-        } catch {
-          // ignore diagnostic failures
-        }
-      }
       return null;
     }
 
