@@ -25,6 +25,10 @@ interface LayersMenuProps {
     onBaseMapChange?: (baseMap: BaseMapType) => void;
     pointVisibility?: PointVisibility;
     onTogglePointVisibility?: (key: keyof PointVisibility) => void;
+    // MBTiles toggle for testing
+    mbtilesReady?: Record<string, boolean>;
+    forceMBTiles?: boolean;
+    onToggleForceMBTiles?: () => void;
 }
 
 export const LayersMenu: React.FC<LayersMenuProps> = ({
@@ -38,6 +42,9 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
     onBaseMapChange,
     pointVisibility = { waypoints: true, vorNdb: true, aerodromes: true, heliports: true, userFixes: true },
     onTogglePointVisibility,
+    mbtilesReady = {},
+    forceMBTiles = false,
+    onToggleForceMBTiles,
 }) => {
     // Grupo 1: REA, REUL, REH, ARC
     const chartTypesGroup1 = [
@@ -211,6 +218,39 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                         })}
                     </div>
 
+                    {/* MBTiles Toggle for ENRC LOW (testing) */}
+                    {mbtilesReady['LOW'] && onToggleForceMBTiles && (
+                        <div className="mt-2 p-2 rounded-lg bg-slate-800/50 border border-slate-700">
+                            <div 
+                                className="flex items-center justify-between cursor-pointer"
+                                onClick={onToggleForceMBTiles}
+                            >
+                                <div className="flex-1">
+                                    <div className="text-[9px] font-bold uppercase tracking-wide text-cyan-400">
+                                        📦 MBTiles Local
+                                    </div>
+                                    <div className="text-[8px] text-slate-500 mt-0.5">
+                                        {forceMBTiles ? 'Usando cartas locais' : 'Usando servidor DECEA'}
+                                    </div>
+                                </div>
+                                <div 
+                                    className="relative w-9 h-5 rounded-full cursor-pointer transition-colors duration-200"
+                                    style={{
+                                        backgroundColor: forceMBTiles ? 'hsl(180, 70%, 40%)' : 'hsl(var(--switch-off))',
+                                        boxShadow: forceMBTiles ? '0 0 10px hsla(180, 70%, 50%, 0.5)' : 'none'
+                                    }}
+                                >
+                                    <div 
+                                        className="absolute top-0.5 w-4 h-4 rounded-full shadow-md transition-all duration-200 bg-white"
+                                        style={{
+                                            transform: forceMBTiles ? 'translateX(1.1rem)' : 'translateX(0.15rem)',
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="h-px bg-slate-800 w-full opacity-30"></div>
 
                     <div className="grid grid-cols-3 gap-3">
@@ -351,6 +391,39 @@ export const LayersMenu: React.FC<LayersMenuProps> = ({
                         );
                     })}
                 </div>
+
+                {/* MBTiles Toggle for ENRC LOW (testing) - Desktop */}
+                {mbtilesReady['LOW'] && onToggleForceMBTiles && (
+                    <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700">
+                        <div 
+                            className="flex items-center justify-between cursor-pointer"
+                            onClick={onToggleForceMBTiles}
+                        >
+                            <div className="flex-1">
+                                <div className="text-[10px] font-bold uppercase tracking-wide text-cyan-400">
+                                    📦 MBTiles Local (ENRC LOW)
+                                </div>
+                                <div className="text-[9px] text-slate-500 mt-0.5">
+                                    {forceMBTiles ? 'Usando cartas locais offline' : 'Usando servidor DECEA online'}
+                                </div>
+                            </div>
+                            <div 
+                                className="relative w-11 h-6 rounded-full cursor-pointer transition-colors duration-200"
+                                style={{
+                                    backgroundColor: forceMBTiles ? 'hsl(180, 70%, 40%)' : 'hsl(var(--switch-off))',
+                                    boxShadow: forceMBTiles ? '0 0 12px hsla(180, 70%, 50%, 0.5)' : 'none'
+                                }}
+                            >
+                                <div 
+                                    className="absolute top-1 w-4 h-4 rounded-full shadow-md transition-all duration-200 bg-white"
+                                    style={{
+                                        transform: forceMBTiles ? 'translateX(1.5rem)' : 'translateX(0.25rem)',
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="h-px bg-slate-800 w-full opacity-30"></div>
 

@@ -235,6 +235,11 @@ const App = () => {
   const [mbtilesReady, setMbtilesReady] = useState<Record<string, boolean>>({});
   // Track online/offline status for rendering decisions
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  // Force MBTiles for testing (toggle to use local files even when online)
+  const [forceMBTiles, setForceMBTiles] = useState<boolean>(() => {
+    const saved = localStorage.getItem('skyfpl_force_mbtiles');
+    return saved === 'true';
+  });
   
   // Altimeter display visibility (persisted)
   const [showAltimeter, setShowAltimeter] = useState<boolean>(() => {
@@ -879,6 +884,13 @@ const App = () => {
         onOpenDownload={handleOpenDownload}
         showAltimeter={showAltimeter}
         onToggleAltimeter={() => setShowAltimeter(!showAltimeter)}
+        mbtilesReady={mbtilesReady}
+        forceMBTiles={forceMBTiles}
+        onToggleForceMBTiles={() => {
+          const newValue = !forceMBTiles;
+          setForceMBTiles(newValue);
+          localStorage.setItem('skyfpl_force_mbtiles', String(newValue));
+        }}
       />
 
       {/* Offline indicator */}
@@ -1077,18 +1089,15 @@ const App = () => {
               />
             )}
 
-            {/* ENRC LOW Layer - Uses MBTiles when offline and available */}
+            {/* ENRC LOW Layer - Uses MBTiles when offline OR when forceMBTiles is enabled */}
             {activeLayers.includes('LOW') && (
               <>
                 {/* 
                   MBTiles rendering for offline mode (TEST: ENRC LOW only)
-                  - Only renders when: offline AND MBTiles is available
-                  - Online mode always uses CachedWMSTileLayer (unchanged)
-                  
-                  For TESTING: Force MBTiles when available, even if online
-                  Change (!isOnline && mbtilesReady['LOW']) to (mbtilesReady['LOW']) to test
+                  - Renders when: (offline OR forceMBTiles) AND MBTiles is available
+                  - Online mode uses CachedWMSTileLayer (unchanged) unless forceMBTiles is ON
                 */}
-                {mbtilesReady['LOW'] ? (
+                {((!isOnline || forceMBTiles) && mbtilesReady['LOW']) ? (
                   <MBTilesTileLayer
                     chartId="LOW"
                     opacity={0.85}
