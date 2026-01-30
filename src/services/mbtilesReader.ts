@@ -24,8 +24,16 @@ let SQL: SqlJsStatic | null = null;
 // Cache of open databases (by file ID)
 const dbCache: Map<string, Database> = new Map();
 
-// Cache of detected tile scheme per DB (tms vs xyz)
-const schemeCache: Map<string, 'tms' | 'xyz' | 'unknown'> = new Map();
+// Cache of database metadata for logging
+interface DBMetadataCache {
+  fileName: string;
+  bounds: string | null;
+  minZoom: number;
+  maxZoom: number;
+  tileCount: number;
+  scheme: string;
+}
+const dbMetadataCache: Map<string, DBMetadataCache> = new Map();
 
 /**
  * Initialize sql.js (loads WASM)
@@ -49,7 +57,7 @@ async function initSQL(): Promise<SqlJsStatic> {
 }
 
 /**
- * Open a MBTiles database
+ * Open a MBTiles database and log detailed metadata
  */
 async function openDatabase(fileId: string): Promise<Database | null> {
   // Check cache first
@@ -61,51 +69,100 @@ async function openDatabase(fileId: string): Promise<Database | null> {
   const fileData = await getMBTilesFile(fileId);
 
   if (!fileData) {
-    console.error(`[MBTiles Reader] File not found: ${fileId}`);
+    console.error(`[MBTiles Reader] ❌ File not found: ${fileId}`);
     return null;
   }
 
-  console.log(`[MBTiles Reader] Opening database ${fileId} (${(fileData.byteLength / 1024 / 1024).toFixed(2)} MB)`);
+  const fileSizeMB = (fileData.byteLength / 1024 / 1024).toFixed(2);
+  console.log(`[MBTiles Reader] 📂 Opening database ${fileId} (${fileSizeMB} MB)`);
 
   try {
     const db = new sql.Database(new Uint8Array(fileData));
     dbCache.set(fileId, db);
 
-    // Detect tile scheme (tms vs xyz). Many tools set metadata.scheme.
-    // If missing, we'll attempt fallback logic in getMBTile.
-    schemeCache.set(fileId, detectTileScheme(db));
+    // Extract and log detailed metadata
+    const metadata = await extractDatabaseMetadata(db, fileId);
+    dbMetadataCache.set(fileId, metadata);
+    
+    logDatabaseDetails(fileId, metadata);
 
     return db;
   } catch (error) {
-    console.error(`[MBTiles Reader] Failed to open database:`, error);
+    console.error(`[MBTiles Reader] ❌ Failed to open database:`, error);
     return null;
   }
 }
 
-function detectTileScheme(db: Database): 'tms' | 'xyz' | 'unknown' {
+/**
+ * Extract detailed metadata from the database for logging
+ */
+function extractDatabaseMetadata(db: Database, fileId: string): DBMetadataCache {
+  let bounds: string | null = null;
+  let scheme = 'unknown';
+  let fileName = fileId;
+  
+  // Get metadata
   try {
-    const result = db.exec(`SELECT value FROM metadata WHERE name = 'scheme' LIMIT 1`);
-    const scheme = String(result?.[0]?.values?.[0]?.[0] ?? '').toLowerCase();
-    if (scheme === 'tms') return 'tms';
-    if (scheme === 'xyz') return 'xyz';
-    return 'unknown';
-  } catch {
-    // metadata table might be missing in some MBTiles variants
-    return 'unknown';
+    const metaResult = db.exec('SELECT name, value FROM metadata');
+    if (metaResult.length > 0) {
+      for (const row of metaResult[0].values) {
+        const key = String(row[0]).toLowerCase();
+        const value = String(row[1]);
+        if (key === 'bounds') bounds = value;
+        if (key === 'scheme') scheme = value;
+        if (key === 'name') fileName = value;
+      }
+    }
+  } catch (e) {
+    console.warn(`[MBTiles Reader] Could not read metadata table`);
   }
+
+  // Get actual zoom range from tiles
+  let minZoom = 0, maxZoom = 0;
+  try {
+    const zoomResult = db.exec('SELECT MIN(zoom_level), MAX(zoom_level) FROM tiles');
+    if (zoomResult.length > 0 && zoomResult[0].values.length > 0) {
+      minZoom = Number(zoomResult[0].values[0][0]) || 0;
+      maxZoom = Number(zoomResult[0].values[0][1]) || 0;
+    }
+  } catch (e) {
+    console.warn(`[MBTiles Reader] Could not read zoom levels`);
+  }
+
+  // Get tile count
+  let tileCount = 0;
+  try {
+    const countResult = db.exec('SELECT COUNT(*) FROM tiles');
+    if (countResult.length > 0 && countResult[0].values.length > 0) {
+      tileCount = Number(countResult[0].values[0][0]) || 0;
+    }
+  } catch (e) {
+    console.warn(`[MBTiles Reader] Could not count tiles`);
+  }
+
+  return { fileName, bounds, minZoom, maxZoom, tileCount, scheme };
 }
 
 /**
- * Convert XYZ tile coordinates to TMS (used by MBTiles)
- * TMS has inverted Y axis: tmsY = (2^zoom - 1) - xyzY
+ * Log detailed database information for debugging
  */
-function xyzToTms(x: number, y: number, z: number): { x: number; y: number; z: number } {
-  const tmsY = Math.pow(2, z) - 1 - y;
-  return { x, y: tmsY, z };
+function logDatabaseDetails(fileId: string, meta: DBMetadataCache): void {
+  console.log(`[MBTiles Reader] ════════════════════════════════════════`);
+  console.log(`[MBTiles Reader] 📊 Database: ${meta.fileName}`);
+  console.log(`[MBTiles Reader]    FileID: ${fileId}`);
+  console.log(`[MBTiles Reader]    Bounds: ${meta.bounds || 'not set'}`);
+  console.log(`[MBTiles Reader]    Zoom Range: ${meta.minZoom} - ${meta.maxZoom}`);
+  console.log(`[MBTiles Reader]    Tile Count: ${meta.tileCount.toLocaleString()}`);
+  console.log(`[MBTiles Reader]    Metadata Scheme: ${meta.scheme}`);
+  console.log(`[MBTiles Reader]    ⚡ Using: XYZ (forced by config)`);
+  console.log(`[MBTiles Reader] ════════════════════════════════════════`);
 }
 
 /**
  * Get a tile from MBTiles as Blob
+ * 
+ * IMPORTANT: Uses XYZ scheme directly (no TMS conversion).
+ * QGIS exports tiles in XYZ format where tile_row = Y directly.
  */
 export async function getMBTile(
   fileId: string,
@@ -117,29 +174,12 @@ export async function getMBTile(
   if (!db) return null;
 
   try {
-    const scheme = schemeCache.get(fileId) ?? 'unknown';
-
-    const queryTile = (qz: number, qx: number, qy: number) =>
-      db.exec(
-        `SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?`,
-        [qz, qx, qy]
-      );
-
-    // MBTiles spec defaults to TMS, but some generators store XYZ.
-    // We'll respect metadata.scheme when available, otherwise try TMS then XYZ.
-    const tms = xyzToTms(x, y, z);
-    const attempts: Array<{ z: number; x: number; y: number }> =
-      scheme === 'xyz'
-        ? [{ z, x, y }]
-        : scheme === 'tms'
-          ? [{ z: tms.z, x: tms.x, y: tms.y }]
-          : [{ z: tms.z, x: tms.x, y: tms.y }, { z, x, y }];
-
-    let result: ReturnType<Database['exec']> = [];
-    for (const a of attempts) {
-      result = queryTile(a.z, a.x, a.y);
-      if (result.length > 0 && result[0].values.length > 0) break;
-    }
+    // XYZ scheme: use coordinates directly as stored by QGIS
+    // tile_column = X, tile_row = Y, zoom_level = Z
+    const result = db.exec(
+      `SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?`,
+      [z, x, y]
+    );
 
     if (result.length === 0 || result[0].values.length === 0) {
       return null;
@@ -149,7 +189,6 @@ export async function getMBTile(
     if (!tileData) return null;
 
     // Determine MIME type from tile data
-    // MBTiles typically stores PNG or JPEG tiles
     const mimeType = detectImageType(tileData);
     
     return new Blob([tileData], { type: mimeType });
