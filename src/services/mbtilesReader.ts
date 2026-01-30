@@ -189,11 +189,8 @@ export async function getMBTile(
   const db = await openDatabase(fileId);
   if (!db) return null;
 
-  // TMS scheme: QGIS exports use TMS where Y is inverted compared to XYZ (Slippy Map).
-  // Convert Leaflet's XYZ coordinates to TMS for the database query.
-
   try {
-    // TMS scheme detected: MBTiles from QGIS use TMS where Y is inverted
+    // TMS scheme: QGIS exports use TMS where Y is inverted compared to XYZ (Slippy Map).
     // Convert from Leaflet's XYZ (y) to TMS (yTms) for database query
     const yTms = (1 << z) - 1 - y;
     
@@ -207,7 +204,7 @@ export async function getMBTile(
     }
 
     const tileData = result[0].values[0][0] as Uint8Array;
-    if (!tileData) return null;
+    if (!tileData || tileData.length === 0) return null;
 
     // Determine MIME type from tile data
     const mimeType = detectImageType(tileData);
