@@ -261,20 +261,23 @@ const App = () => {
     };
   }, []);
   
-  // Check MBTiles availability on mount (for offline rendering)
+  // Check MBTiles availability on mount and when downloadedLayers changes
   useEffect(() => {
     const checkMBTilesAvailability = async () => {
       const status: Record<string, boolean> = {};
       // Check LOW for MBTiles (TEST phase)
       if (isMBTilesAvailable('LOW')) {
-        status['LOW'] = await isMBTilesReady('LOW');
-        console.log('[App] MBTiles LOW availability:', status['LOW']);
+        const isReady = await isMBTilesReady('LOW');
+        status['LOW'] = isReady;
+        console.log('[App] MBTiles LOW ready:', isReady, '| isOnline:', isOnline);
       }
       setMbtilesReady(status);
     };
     
     checkMBTilesAvailability();
-  }, [downloadedLayers]);
+    
+    // Re-check when offline status changes or download modal closes
+  }, [downloadedLayers, isOnline]);
 
   // Point visibility state (persisted) - merge with defaults to handle new keys
   const [pointVisibility, setPointVisibility] = useState<PointVisibility>(() => {
@@ -1081,8 +1084,11 @@ const App = () => {
                   MBTiles rendering for offline mode (TEST: ENRC LOW only)
                   - Only renders when: offline AND MBTiles is available
                   - Online mode always uses CachedWMSTileLayer (unchanged)
+                  
+                  For TESTING: Force MBTiles when available, even if online
+                  Change (!isOnline && mbtilesReady['LOW']) to (mbtilesReady['LOW']) to test
                 */}
-                {!isOnline && mbtilesReady['LOW'] ? (
+                {mbtilesReady['LOW'] ? (
                   <MBTilesTileLayer
                     chartId="LOW"
                     opacity={0.85}
