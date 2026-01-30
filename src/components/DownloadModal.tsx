@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Waypoint, FlightSegment } from '../types';
 import { useDownloadManager } from '../hooks/useDownloadManager';
-import { Wifi, WifiOff, AlertTriangle, Loader2, RefreshCw, Clock, Zap } from 'lucide-react';
+import { Wifi, WifiOff, AlertTriangle, Loader2, RefreshCw, Clock, Zap, Package } from 'lucide-react';
 import { getCachedTileCount } from '../services/tileCache';
 import { DownloadStats, getLayerDownloadStatus } from '../services/chartDownloader';
 import { NavigationSyncButton } from './NavigationSyncButton';
+import { downloadMBTilesPackage, isMBTilesPackageDownloaded, MBTilesDownloadProgress } from '../services/mbtilesDownloader';
+import { isMBTilesAvailable, getMBTilesConfig } from '../config/mbtilesConfig';
 
 interface DownloadModalProps {
   isOpen: boolean;
@@ -36,6 +38,10 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   const [confirmClearLayer, setConfirmClearLayer] = useState<string | null>(null);
   const [tileCounts, setTileCounts] = useState<Record<string, number>>({});
   const [checkpoints, setCheckpoints] = useState<Record<string, number>>({});
+  
+  // MBTiles download state (for ENRC LOW test)
+  const [mbtilesDownloadProgress, setMbtilesDownloadProgress] = useState<Record<string, MBTilesDownloadProgress>>({});
+  const [mbtilesAvailable, setMbtilesAvailable] = useState<Record<string, boolean>>({});
   const { syncingLayers, downloadStats, isOnline, getError } = useDownloadManager();
 
   // Fetch tile counts and checkpoint info for all layers
@@ -43,11 +49,23 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     const fetchLayerInfo = async () => {
       const counts: Record<string, number> = {};
       const resumeProgress: Record<string, number> = {};
+      const mbtilesStatus: Record<string, boolean> = {};
       
       const allLayerIds = [...chartOptions, ...baseMapOptions].map(o => o.id);
       
       for (const layerId of allLayerIds) {
         try {
+          // Check for MBTiles availability first (for ENRC LOW)
+          if (isMBTilesAvailable(layerId)) {
+            const isAvailable = await isMBTilesPackageDownloaded(layerId);
+            mbtilesStatus[layerId] = isAvailable;
+            if (isAvailable) {
+              // Mark as downloaded if MBTiles is available
+              counts[layerId] = -1; // -1 indicates MBTiles (no tile count needed)
+              continue;
+            }
+          }
+          
           const status = await getLayerDownloadStatus(layerId);
           if (status.isDownloaded || status.tileCount > 0) {
             counts[layerId] = status.tileCount;
@@ -62,6 +80,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
       
       setTileCounts(counts);
       setCheckpoints(resumeProgress);
+      setMbtilesAvailable(mbtilesStatus);
     };
     
     if (downloadedLayersReady && isOpen) {
@@ -238,9 +257,15 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
 
   const handleChartClick = async (chartId: string) => {
     const isSyncing = syncingLayers[chartId] !== undefined;
-    if (isSyncing) return;
+    const isMBTilesDownloading = mbtilesDownloadProgress[chartId]?.phase === 'downloading' || 
+                                  mbtilesDownloadProgress[chartId]?.phase === 'extracting' ||
+                                  mbtilesDownloadProgress[chartId]?.phase === 'storing';
+    
+    if (isSyncing || isMBTilesDownloading) return;
 
-    const isDownloaded = downloadedLayers.includes(chartId);
+    // Check if MBTiles is available and already downloaded
+    const hasMBTiles = mbtilesAvailable[chartId];
+    const isDownloaded = downloadedLayers.includes(chartId) || hasMBTiles;
     
     // This modal is ONLY for downloading - not for toggling map layers
     // If already downloaded, do nothing (user can use "CARTAS E MAPAS" menu to toggle)
@@ -248,7 +273,46 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
       return;
     }
     
-    // Download the chart/base map
+    // Check if this chart should use MBTiles download (TEST: only LOW)
+    if (isMBTilesAvailable(chartId)) {
+      console.log(`[DownloadModal] Starting MBTiles download for ${chartId}`);
+      
+      const success = await downloadMBTilesPackage(chartId, (progress) => {
+        setMbtilesDownloadProgress(prev => ({
+          ...prev,
+          [chartId]: progress
+        }));
+        
+        // When complete, refresh availability status
+        if (progress.phase === 'complete') {
+          setTimeout(async () => {
+            const isAvailable = await isMBTilesPackageDownloaded(chartId);
+            setMbtilesAvailable(prev => ({ ...prev, [chartId]: isAvailable }));
+            // Also mark in downloadedLayers for offline indicator
+            if (isAvailable) {
+              // Note: This updates the parent component's state
+              // The actual update happens through the onDownloadLayer callback
+              // which should be called with a special flag for MBTiles
+            }
+          }, 500);
+        }
+      });
+      
+      if (success) {
+        console.log(`[DownloadModal] MBTiles download completed for ${chartId}`);
+        // Clear progress after a delay
+        setTimeout(() => {
+          setMbtilesDownloadProgress(prev => {
+            const next = { ...prev };
+            delete next[chartId];
+            return next;
+          });
+        }, 2000);
+      }
+      return;
+    }
+    
+    // Default: Use WMS tile download
     await onDownloadLayer(chartId);
   };
 
@@ -299,8 +363,15 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   };
 
   const renderChartButton = (chart: { id: string; label: string }) => {
+    // Check for MBTiles status first (for ENRC LOW test)
+    const hasMBTiles = mbtilesAvailable[chart.id];
+    const mbtilesProgress = mbtilesDownloadProgress[chart.id];
+    const isMBTilesDownloading = mbtilesProgress?.phase === 'downloading' || 
+                                  mbtilesProgress?.phase === 'extracting' ||
+                                  mbtilesProgress?.phase === 'storing';
+    
     // CRITICAL: Only show as downloaded AFTER IndexedDB validation is complete
-    const isDownloaded = downloadedLayersReady && downloadedLayers.includes(chart.id);
+    const isDownloaded = downloadedLayersReady && (downloadedLayers.includes(chart.id) || hasMBTiles);
     const isValidating = !downloadedLayersReady;
     
     const progress = syncingLayers[chart.id];
@@ -309,31 +380,50 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     const stats = downloadStats[chart.id];
     const hasCheckpoint = checkpoints[chart.id] !== undefined;
     const checkpointProgress = checkpoints[chart.id] || 0;
+    
+    // Check if this chart uses MBTiles (for showing special badge)
+    const usesMBTiles = isMBTilesAvailable(chart.id);
 
     return (
       <div key={chart.id} className="relative">
         <button
           onClick={() => handleChartClick(chart.id)}
-          disabled={isSyncing || isValidating || (!isOnline && !isDownloaded && !hasCheckpoint)}
+          disabled={isSyncing || isMBTilesDownloading || isValidating || (!isOnline && !isDownloaded && !hasCheckpoint)}
           className={`w-full p-4 rounded-xl border-2 transition-all flex flex-col items-center relative overflow-hidden ${
-            error
+            mbtilesProgress?.phase === 'error'
               ? 'border-red-500/50 bg-red-500/10'
-              : isValidating
-                ? 'border-slate-600 bg-slate-800/30'
-                : isDownloaded
-                  ? 'border-emerald-500/50 bg-emerald-500/10'
-                  : isSyncing
-                    ? 'border-sky-500/50 bg-sky-500/5'
-                    : hasCheckpoint
-                      ? 'border-amber-500/50 bg-amber-500/10'
-                      : !isOnline
-                        ? 'border-slate-700 bg-slate-800/30 opacity-50 cursor-not-allowed'
-                        : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+              : error
+                ? 'border-red-500/50 bg-red-500/10'
+                : isValidating
+                  ? 'border-slate-600 bg-slate-800/30'
+                  : isDownloaded
+                    ? 'border-emerald-500/50 bg-emerald-500/10'
+                    : isMBTilesDownloading
+                      ? 'border-purple-500/50 bg-purple-500/5'
+                      : isSyncing
+                        ? 'border-sky-500/50 bg-sky-500/5'
+                        : hasCheckpoint
+                          ? 'border-amber-500/50 bg-amber-500/10'
+                          : !isOnline
+                            ? 'border-slate-700 bg-slate-800/30 opacity-50 cursor-not-allowed'
+                            : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
           }`}
         >
+          {/* MBTiles badge for LOW */}
+          {usesMBTiles && !isDownloaded && !isMBTilesDownloading && (
+            <div className="absolute top-1 right-1 bg-purple-500/20 rounded px-1">
+              <span className="text-[8px] text-purple-400 font-bold">MBTiles</span>
+            </div>
+          )}
+          
           <div className="text-sm font-bold text-white mb-1 relative z-10">{chart.label}</div>
 
-          {error ? (
+          {mbtilesProgress?.phase === 'error' ? (
+            <div className="flex items-center gap-1 text-xs text-red-400 relative z-10">
+              <AlertTriangle className="w-3 h-3" />
+              {mbtilesProgress.message || 'Erro no download'}
+            </div>
+          ) : error ? (
             <div className="flex items-center gap-1 text-xs text-red-400 relative z-10">
               <WifiOff className="w-3 h-3" />
               Sem internet
@@ -342,6 +432,26 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
             <div className="flex items-center gap-1 text-xs text-slate-400 relative z-10">
               <Loader2 className="w-3 h-3 animate-spin" />
               Verificando...
+            </div>
+          ) : isMBTilesDownloading ? (
+            <div className="w-full mt-1 relative z-10">
+              <div className="h-1.5 w-full bg-slate-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-purple-500 to-fuchsia-500 transition-all duration-150"
+                  style={{ width: `${mbtilesProgress?.progress || 0}%` }}
+                ></div>
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <div className="flex items-center gap-1">
+                  <Package className="w-3 h-3 text-purple-400" />
+                  <span className="text-[10px] text-purple-400 font-bold">{mbtilesProgress?.progress || 0}%</span>
+                </div>
+              </div>
+              <div className="text-[8px] text-slate-500 mt-0.5">
+                {mbtilesProgress?.phase === 'downloading' && 'Baixando pacote...'}
+                {mbtilesProgress?.phase === 'extracting' && 'Extraindo arquivos...'}
+                {mbtilesProgress?.phase === 'storing' && mbtilesProgress.currentFile ? `Salvando ${mbtilesProgress.currentFile}...` : 'Salvando...'}
+              </div>
             </div>
           ) : isSyncing ? (
             <div className="w-full mt-1 relative z-10">
@@ -371,10 +481,18 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           ) : isDownloaded ? (
             <div className="flex flex-col items-center relative z-10">
               <div className="flex items-center gap-1 text-xs text-emerald-400">
-                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                {hasMBTiles ? (
+                  <Package className="w-3 h-3" />
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                )}
                 OFFLINE ✓
               </div>
-              {tileCounts[chart.id] > 0 && (
+              {hasMBTiles ? (
+                <div className="text-[9px] text-purple-400 mt-0.5">
+                  MBTiles
+                </div>
+              ) : tileCounts[chart.id] > 0 && (
                 <div className="text-[9px] text-slate-500 mt-0.5">
                   {tileCounts[chart.id]} tiles
                 </div>

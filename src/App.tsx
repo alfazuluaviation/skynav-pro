@@ -28,6 +28,9 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { getAerodromeIconHTML, getIconSize } from './components/AerodromeIcons';
 import { CachedWMSTileLayer } from './components/CachedWMSTileLayer';
 import { CachedBaseTileLayer } from './components/CachedBaseTileLayer';
+import { MBTilesTileLayer } from './components/MBTilesTileLayer';
+import { isMBTilesReady } from './services/mbtilesReader';
+import { isMBTilesAvailable } from './config/mbtilesConfig';
 import { isLayerAvailableOffline } from './services/chartDownloader';
 import { isBaseMapAvailableOffline } from './services/baseMapDownloader';
 import { getCachedLayerIds, clearLayerCache } from './services/tileCache';
@@ -228,6 +231,11 @@ const App = () => {
   const [chartsModalIcao, setChartsModalIcao] = useState<string | null>(null);
   const [isSidebarMenuOpen, setIsSidebarMenuOpen] = useState(false);
   
+  // MBTiles availability state (for offline rendering)
+  const [mbtilesReady, setMbtilesReady] = useState<Record<string, boolean>>({});
+  // Track online/offline status for rendering decisions
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  
   // Altimeter display visibility (persisted)
   const [showAltimeter, setShowAltimeter] = useState<boolean>(() => {
     const saved = localStorage.getItem('skyfpl_show_altimeter');
@@ -238,6 +246,35 @@ const App = () => {
   useEffect(() => {
     localStorage.setItem('skyfpl_show_altimeter', showAltimeter.toString());
   }, [showAltimeter]);
+  
+  // Online/offline status listener
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+  
+  // Check MBTiles availability on mount (for offline rendering)
+  useEffect(() => {
+    const checkMBTilesAvailability = async () => {
+      const status: Record<string, boolean> = {};
+      // Check LOW for MBTiles (TEST phase)
+      if (isMBTilesAvailable('LOW')) {
+        status['LOW'] = await isMBTilesReady('LOW');
+        console.log('[App] MBTiles LOW availability:', status['LOW']);
+      }
+      setMbtilesReady(status);
+    };
+    
+    checkMBTilesAvailability();
+  }, [downloadedLayers]);
 
   // Point visibility state (persisted) - merge with defaults to handle new keys
   const [pointVisibility, setPointVisibility] = useState<PointVisibility>(() => {
@@ -1037,20 +1074,38 @@ const App = () => {
               />
             )}
 
+            {/* ENRC LOW Layer - Uses MBTiles when offline and available */}
             {activeLayers.includes('LOW') && (
-              <CachedWMSTileLayer
-                url={CHART_LAYERS.LOW.url}
-                layers={CHART_LAYERS.LOW.layers}
-                format="image/png"
-                transparent={true}
-                version="1.1.1"
-                opacity={0.85}
-                zIndex={100}
-                maxZoom={18}
-                layerId="LOW"
-                useCache={downloadedLayers.includes('LOW')}
-                useProxy={true}
-              />
+              <>
+                {/* 
+                  MBTiles rendering for offline mode (TEST: ENRC LOW only)
+                  - Only renders when: offline AND MBTiles is available
+                  - Online mode always uses CachedWMSTileLayer (unchanged)
+                */}
+                {!isOnline && mbtilesReady['LOW'] ? (
+                  <MBTilesTileLayer
+                    chartId="LOW"
+                    opacity={0.85}
+                    zIndex={100}
+                    minZoom={4}
+                    maxZoom={11}
+                  />
+                ) : (
+                  <CachedWMSTileLayer
+                    url={CHART_LAYERS.LOW.url}
+                    layers={CHART_LAYERS.LOW.layers}
+                    format="image/png"
+                    transparent={true}
+                    version="1.1.1"
+                    opacity={0.85}
+                    zIndex={100}
+                    maxZoom={18}
+                    layerId="LOW"
+                    useCache={downloadedLayers.includes('LOW')}
+                    useProxy={true}
+                  />
+                )}
+              </>
             )}
 
             {activeLayers.includes('WAC') && (
