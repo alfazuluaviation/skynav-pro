@@ -25,6 +25,7 @@ import { FlightPlanDownloadModal } from './components/FlightPlanDownloadModal';
 import { BaseMapType, PointVisibility } from './components/LayersMenu';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { MBTilesZoomWarning } from './components/MBTilesZoomWarning';
 import { getAerodromeIconHTML, getIconSize } from './components/AerodromeIcons';
 import { CachedWMSTileLayer } from './components/CachedWMSTileLayer';
 import { CachedBaseTileLayer } from './components/CachedBaseTileLayer';
@@ -240,6 +241,8 @@ const App = () => {
     const saved = localStorage.getItem('skyfpl_force_mbtiles');
     return saved === 'true';
   });
+  // PHASE 1: Low zoom warning for MBTiles
+  const [mbtilesLowZoomWarning, setMbtilesLowZoomWarning] = useState(false);
   
   // Altimeter display visibility (persisted)
   const [showAltimeter, setShowAltimeter] = useState<boolean>(() => {
@@ -914,6 +917,11 @@ const App = () => {
 
       {/* Offline indicator */}
       <OfflineIndicator />
+      
+      {/* MBTiles low zoom warning */}
+      {((!isOnline || forceMBTiles) && mbtilesReady['LOW'] && activeLayers.includes('LOW')) && (
+        <MBTilesZoomWarning show={mbtilesLowZoomWarning} />
+      )}
 
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex overflow-hidden relative">
@@ -1121,8 +1129,9 @@ const App = () => {
                     chartId="LOW"
                     opacity={0.85}
                     zIndex={100}
-                    minZoom={4}
+                    minZoom={5}
                     maxZoom={11}
+                    onLowZoomWarning={setMbtilesLowZoomWarning}
                   />
                 ) : (
                   <CachedWMSTileLayer
