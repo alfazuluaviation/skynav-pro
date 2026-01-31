@@ -155,6 +155,9 @@ function getTileCenter(z: number, x: number, y: number): { lat: number; lng: num
   return { lat, lng };
 }
 
+// Tolerance for bounds checking (0.1° = ~11km - tighter than before to avoid patchwork)
+const BOUNDS_TOLERANCE = 0.1;
+
 /**
  * Check if a point is within bounds (with small tolerance for edge tiles)
  */
@@ -163,8 +166,7 @@ function isPointInBounds(
   lng: number, 
   bounds: { minLng: number; minLat: number; maxLng: number; maxLat: number }
 ): boolean {
-  // Add small tolerance (0.5 degrees) for tiles on the edge
-  const tolerance = 0.5;
+  const tolerance = BOUNDS_TOLERANCE;
   return (
     lng >= bounds.minLng - tolerance &&
     lng <= bounds.maxLng + tolerance &&
@@ -400,6 +402,73 @@ export async function getMBTileWithBoundsCheck(
  */
 export function getCachedMetadata(fileId: string): DBMetadataCache | undefined {
   return dbMetadataCache.get(fileId);
+}
+
+/**
+ * Calculate "margin score" for a tile center within bounds.
+ * Higher score = point is more centered within bounds (further from edges).
+ * This is used to deterministically select which file to use when multiple
+ * files contain the same tile coordinates.
+ */
+export function calculateMarginScore(
+  lat: number,
+  lng: number,
+  bounds: { minLng: number; minLat: number; maxLng: number; maxLat: number }
+): number {
+  // Calculate distance from each edge
+  const marginLeft = lng - bounds.minLng;
+  const marginRight = bounds.maxLng - lng;
+  const marginBottom = lat - bounds.minLat;
+  const marginTop = bounds.maxLat - lat;
+  
+  // Score = minimum margin (how far from nearest edge)
+  // Higher score means more "centered" within the bounds
+  return Math.min(marginLeft, marginRight, marginBottom, marginTop);
+}
+
+/**
+ * Select the best file from multiple candidates using deterministic scoring.
+ * Prefers the file where the tile center is most "centered" within bounds.
+ */
+export function selectBestFile(
+  candidates: Array<{ fileId: string; blob: Blob }>,
+  z: number,
+  x: number,
+  y: number
+): { fileId: string; blob: Blob } | null {
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
+  
+  const tileCenter = getTileCenter(z, x, y);
+  
+  // Score each candidate by margin
+  const scored = candidates.map(c => {
+    const meta = dbMetadataCache.get(c.fileId);
+    let score = -Infinity;
+    
+    if (meta?.parsedBounds) {
+      score = calculateMarginScore(tileCenter.lat, tileCenter.lng, meta.parsedBounds);
+    }
+    
+    return { ...c, score };
+  });
+  
+  // Sort by score descending (highest margin = best fit)
+  scored.sort((a, b) => b.score - a.score);
+  
+  // Log selection decision for debugging (first 10)
+  const selectionKey = `sel_${z}_${x}_${y}`;
+  if (!multiHitLog.has(selectionKey) && multiHitLog.size < 40) {
+    multiHitLog.add(selectionKey);
+    const selectedMeta = dbMetadataCache.get(scored[0].fileId);
+    console.log(
+      `[MBTiles] 🎯 SELECTED: z=${z} x=${x} y=${y} | ` +
+      `Winner: ${selectedMeta?.fileName || scored[0].fileId.split('_').pop()} (score: ${scored[0].score.toFixed(2)}) | ` +
+      `From ${candidates.length} candidates`
+    );
+  }
+  
+  return scored[0];
 }
 
 /**
