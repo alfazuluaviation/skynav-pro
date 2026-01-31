@@ -46,6 +46,16 @@ const MBTilesTileLayerClass = L.TileLayer.extend({
     const { x, y, z } = coords;
     const fileIds = this.options.fileIds as string[];
 
+    // Keep track of the most recent requested tile coordinates so we can debug
+    // a real problematic tile without guessing z/x/y.
+    (window as any).__mbtilesLastTile = {
+      chartId: this.options.chartId,
+      z,
+      x,
+      y,
+      ts: Date.now(),
+    };
+
     // Track which files provided tiles (for debugging)
     const tileSourceLog = (window as any).__mbtilesSourceLog || new Set<string>();
     (window as any).__mbtilesSourceLog = tileSourceLog;
