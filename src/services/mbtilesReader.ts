@@ -29,10 +29,26 @@ const dbCache: Map<string, Database> = new Map();
 // IndexedDB reads + multiple sql.js Database instances (high memory, slow, flaky on mobile).
 const dbOpenPromises: Map<string, Promise<Database | null>> = new Map();
 
+// Feature flag for strict bounds filtering
+// When enabled, tiles are only served if the tile's geographic center falls within the MBTiles bounds
+// This prevents "patchwork" visual errors where tiles from one subchart incorrectly appear in another region
+let strictBoundsEnabled = true;
+
+// Export functions to control strict bounds mode
+export function isStrictBoundsEnabled(): boolean {
+  return strictBoundsEnabled;
+}
+
+export function setStrictBoundsEnabled(enabled: boolean): void {
+  strictBoundsEnabled = enabled;
+  console.log(`[MBTiles Reader] Strict bounds mode: ${enabled ? 'ENABLED' : 'DISABLED'}`);
+}
+
 // Cache of database metadata for logging
 interface DBMetadataCache {
   fileName: string;
   bounds: string | null;
+  parsedBounds: { minLng: number; minLat: number; maxLng: number; maxLat: number } | null;
   minZoom: number;
   maxZoom: number;
   tileCount: number;
@@ -110,6 +126,54 @@ async function openDatabase(fileId: string): Promise<Database | null> {
 }
 
 /**
+ * Parse bounds string "minLng,minLat,maxLng,maxLat" into object
+ */
+function parseBounds(boundsStr: string | null): { minLng: number; minLat: number; maxLng: number; maxLat: number } | null {
+  if (!boundsStr) return null;
+  
+  const parts = boundsStr.split(',').map(s => parseFloat(s.trim()));
+  if (parts.length !== 4 || parts.some(isNaN)) return null;
+  
+  return {
+    minLng: parts[0],
+    minLat: parts[1],
+    maxLng: parts[2],
+    maxLat: parts[3]
+  };
+}
+
+/**
+ * Convert tile coordinates to geographic center point
+ * Returns [lat, lng] of tile center
+ */
+function getTileCenter(z: number, x: number, y: number): { lat: number; lng: number } {
+  const n = Math.pow(2, z);
+  // Center of tile
+  const lng = ((x + 0.5) / n) * 360 - 180;
+  const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / n)));
+  const lat = latRad * (180 / Math.PI);
+  return { lat, lng };
+}
+
+/**
+ * Check if a point is within bounds (with small tolerance for edge tiles)
+ */
+function isPointInBounds(
+  lat: number, 
+  lng: number, 
+  bounds: { minLng: number; minLat: number; maxLng: number; maxLat: number }
+): boolean {
+  // Add small tolerance (0.5 degrees) for tiles on the edge
+  const tolerance = 0.5;
+  return (
+    lng >= bounds.minLng - tolerance &&
+    lng <= bounds.maxLng + tolerance &&
+    lat >= bounds.minLat - tolerance &&
+    lat <= bounds.maxLat + tolerance
+  );
+}
+
+/**
  * Extract detailed metadata from the database for logging
  */
 function extractDatabaseMetadata(db: Database, fileId: string): DBMetadataCache {
@@ -156,7 +220,10 @@ function extractDatabaseMetadata(db: Database, fileId: string): DBMetadataCache 
     console.warn(`[MBTiles Reader] Could not count tiles`);
   }
 
-  return { fileName, bounds, minZoom, maxZoom, tileCount, scheme };
+  // Parse bounds for geographic filtering
+  const parsedBounds = parseBounds(bounds);
+
+  return { fileName, bounds, parsedBounds, minZoom, maxZoom, tileCount, scheme };
 }
 
 /**
@@ -282,6 +349,76 @@ function delay(ms: number): Promise<void> {
 // Track logged tile queries to avoid spam
 const tileQueryLog = new Set<string>();
 const tileHitCount = new Map<string, number>();
+const boundsRejectLog = new Set<string>();
+const multiHitLog = new Set<string>();
+
+/**
+ * Get tile with geographic bounds validation
+ * 
+ * This function checks if the tile's geographic center falls within the MBTiles bounds
+ * before returning it. This prevents "patchwork" errors where tiles from one subchart
+ * incorrectly appear in another region.
+ * 
+ * @returns { blob, fileId, rejected } - blob is null if not found or rejected by bounds
+ */
+export async function getMBTileWithBoundsCheck(
+  fileId: string,
+  z: number,
+  x: number,
+  y: number
+): Promise<{ blob: Blob | null; rejected: boolean; reason?: string }> {
+  // Get cached metadata for bounds check
+  const cachedMeta = dbMetadataCache.get(fileId);
+  
+  // If strict bounds is enabled and we have bounds, check geographic validity
+  if (strictBoundsEnabled && cachedMeta?.parsedBounds) {
+    const tileCenter = getTileCenter(z, x, y);
+    
+    if (!isPointInBounds(tileCenter.lat, tileCenter.lng, cachedMeta.parsedBounds)) {
+      // Log rejection (first 20 per session)
+      const rejectKey = `${fileId}_${z}_${x}_${y}`;
+      if (!boundsRejectLog.has(rejectKey) && boundsRejectLog.size < 20) {
+        boundsRejectLog.add(rejectKey);
+        console.debug(
+          `[MBTiles] 🚫 BOUNDS REJECT: z=${z} x=${x} y=${y} | ` +
+          `File: ${cachedMeta.fileName} | ` +
+          `TileCenter: (${tileCenter.lat.toFixed(3)}, ${tileCenter.lng.toFixed(3)}) | ` +
+          `Bounds: [${cachedMeta.bounds}]`
+        );
+      }
+      return { blob: null, rejected: true, reason: 'outside_bounds' };
+    }
+  }
+  
+  // Tile is within bounds (or bounds check disabled) - fetch it
+  const blob = await getMBTile(fileId, z, x, y);
+  return { blob, rejected: false };
+}
+
+/**
+ * Get cached metadata for a file (for external bounds checking)
+ */
+export function getCachedMetadata(fileId: string): DBMetadataCache | undefined {
+  return dbMetadataCache.get(fileId);
+}
+
+/**
+ * Log multi-hit detection (when multiple files return tiles for same coordinates)
+ */
+export function logMultiHit(z: number, x: number, y: number, fileIds: string[]): void {
+  const hitKey = `${z}_${x}_${y}`;
+  if (!multiHitLog.has(hitKey) && multiHitLog.size < 30) {
+    multiHitLog.add(hitKey);
+    const fileNames = fileIds.map(id => {
+      const meta = dbMetadataCache.get(id);
+      return meta?.fileName || id.split('_').pop();
+    });
+    console.warn(
+      `[MBTiles] ⚠️ MULTI-HIT: z=${z} x=${x} y=${y} | ` +
+      `${fileIds.length} files have this tile: ${fileNames.join(', ')}`
+    );
+  }
+}
 
 /**
  * Get tile as Data URL (for image src)
