@@ -446,25 +446,48 @@ export function selectBestFile(
   
   // Separate valid candidates (meet thresholds) from fallback candidates
   const validCandidates = scored.filter(c => c.meetsThresholds);
-  
-  // If we have valid candidates, use them; otherwise use ALL as fallback
+
+  // If we have valid candidates, use them.
+  // If we have NO valid candidates (common at low zoom where one tile covers a huge area),
+  // we must NOT pick the “least-worst by overlap”, because that produces deterministic patchwork.
+  // Instead, fall back to the *most localized* subchart (smallest bounds area), which is the
+  // safest deterministic heuristic for ENRC LOW's subcharts.
   const pool = validCandidates.length > 0 ? validCandidates : scored;
-  
-  // Sort deterministically:
-  // 1. Prefer non-blank tiles
-  // 2. Prefer candidates that meet thresholds (already filtered, but useful if fallback)
-  // 3. Highest overlap ratio
-  // 4. Highest margin score
-  // 5. Smallest bounds area (more localized file = better for specific region)
-  // 6. Stable tie-break by fileId
-  pool.sort((a, b) => {
-    if (a.isBlank !== b.isBlank) return a.isBlank ? 1 : -1;
-    if (a.meetsThresholds !== b.meetsThresholds) return a.meetsThresholds ? -1 : 1;
-    if (b.overlapRatio !== a.overlapRatio) return b.overlapRatio - a.overlapRatio;
-    if (b.marginScore !== a.marginScore) return b.marginScore - a.marginScore;
-    if (a.boundsArea !== b.boundsArea) return a.boundsArea - b.boundsArea; // Smaller area preferred
-    return a.fileId.localeCompare(b.fileId);
-  });
+
+  const hasValid = validCandidates.length > 0;
+
+  if (hasValid) {
+    // Normal path: thresholds already guarantee acceptable overlap/margin.
+    // Sort deterministically:
+    // 1) Prefer non-blank tiles
+    // 2) Highest overlap ratio
+    // 3) Highest margin score
+    // 4) Smallest bounds area (more localized)
+    // 5) Stable tie-break by fileId
+    pool.sort((a, b) => {
+      if (a.isBlank !== b.isBlank) return a.isBlank ? 1 : -1;
+      if (b.overlapRatio !== a.overlapRatio) return b.overlapRatio - a.overlapRatio;
+      if (b.marginScore !== a.marginScore) return b.marginScore - a.marginScore;
+      if (a.boundsArea !== b.boundsArea) return a.boundsArea - b.boundsArea;
+      return a.fileId.localeCompare(b.fileId);
+    });
+  } else {
+    // Fallback path: prioritize smallest boundsArea first (more localized file wins),
+    // then prefer higher overlap/margin as secondary signals.
+    // Sort deterministically:
+    // 1) Prefer non-blank tiles
+    // 2) Smallest bounds area
+    // 3) Highest overlap ratio
+    // 4) Highest margin score
+    // 5) Stable tie-break by fileId
+    pool.sort((a, b) => {
+      if (a.isBlank !== b.isBlank) return a.isBlank ? 1 : -1;
+      if (a.boundsArea !== b.boundsArea) return a.boundsArea - b.boundsArea;
+      if (b.overlapRatio !== a.overlapRatio) return b.overlapRatio - a.overlapRatio;
+      if (b.marginScore !== a.marginScore) return b.marginScore - a.marginScore;
+      return a.fileId.localeCompare(b.fileId);
+    });
+  }
   
   const winner = pool[0];
   
