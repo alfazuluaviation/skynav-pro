@@ -20,6 +20,7 @@ interface MBTilesTileLayerProps {
   zIndex?: number;
   minZoom?: number;
   maxZoom?: number;
+  onLowZoomWarning?: (isLowZoom: boolean) => void;
 }
 
 // Custom TileLayer class that reads from MBTiles
@@ -145,15 +146,37 @@ const MBTilesTileLayerClass = L.TileLayer.extend({
   }
 });
 
+// PHASE 1: Force minZoom=5 for MBTiles to avoid patchwork at z=4
+const MBTILES_MIN_ZOOM = 5;
+
 export const MBTilesTileLayer: React.FC<MBTilesTileLayerProps> = ({
   chartId,
   opacity = 1,
   zIndex = 100,
-  minZoom = 4,
+  minZoom = MBTILES_MIN_ZOOM,
   maxZoom = 11,
+  onLowZoomWarning,
 }) => {
   const map = useMap();
   const layerRef = useRef<L.TileLayer | null>(null);
+
+  // Track zoom level to warn user when below minimum
+  useEffect(() => {
+    if (!map || !onLowZoomWarning) return;
+    
+    const handleZoom = () => {
+      const currentZoom = map.getZoom();
+      onLowZoomWarning(currentZoom < MBTILES_MIN_ZOOM);
+    };
+    
+    // Check initial zoom
+    handleZoom();
+    
+    map.on('zoomend', handleZoom);
+    return () => {
+      map.off('zoomend', handleZoom);
+    };
+  }, [map, onLowZoomWarning]);
 
   useEffect(() => {
     if (!map) return;
@@ -169,10 +192,12 @@ export const MBTilesTileLayer: React.FC<MBTilesTileLayerProps> = ({
 
       console.log(`[MBTiles Layer] Loading ${chartId} with ${fileIds.length} MBTiles files`);
 
-      // Get zoom config from MBTiles config
+      // Get zoom config from MBTiles config, but enforce minimum
       const config = getMBTilesConfig(chartId);
-      const effectiveMinZoom = config?.zoomLevels.min || minZoom;
+      const effectiveMinZoom = Math.max(MBTILES_MIN_ZOOM, config?.zoomLevels.min || minZoom);
       const effectiveMaxZoom = config?.zoomLevels.max || maxZoom;
+
+      console.log(`[MBTiles Layer] Zoom range: ${effectiveMinZoom}-${effectiveMaxZoom} (enforced min: ${MBTILES_MIN_ZOOM})`);
 
       const layer = new MBTilesTileLayerClass({
         chartId,

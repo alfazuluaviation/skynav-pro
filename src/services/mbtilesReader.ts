@@ -14,7 +14,7 @@
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import { getMBTilesFile, getMBTilesMetadata, getAllMBTilesMetadata } from './mbtilesStorage';
 import { getMBTilesConfig } from '../config/mbtilesConfig';
-import { calculateMarginScore, calculateOverlapRatio, getTileBounds, getTileCenter } from './mbtilesGeo';
+import { calculateMarginScore, calculateOverlapRatio, getTileBounds, getTileCenter, calculateBoundsArea } from './mbtilesGeo';
 
 // Bundle the sql.js WASM so MBTiles works offline (no CDN dependency)
 import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
@@ -146,9 +146,15 @@ function parseBounds(boundsStr: string | null): { minLng: number; minLat: number
 // Tolerance for bounds checking (0.1° = ~11km)
 const BOUNDS_TOLERANCE = 0.1;
 
+// ====== PHASE 1 THRESHOLDS ======
+// Minimum overlap ratio required to be a valid candidate (45% = tile must be mostly inside bounds)
+const MIN_OVERLAP_RATIO = 0.45;
+// Margin must be >= 0 (tile center must be inside file bounds, not outside)
+const MIN_MARGIN_SCORE = 0;
+
 // Heuristic: very small image blobs are often transparent/blank placeholder tiles.
 // Prefer non-blank candidates when resolving multi-hit.
-const BLANK_TILE_MAX_BYTES = 600;
+const BLANK_TILE_MAX_BYTES = 800;
 
 /**
  * Extract detailed metadata from the database for logging
@@ -409,47 +415,67 @@ export function selectBestFile(
   const tileCenter = getTileCenter(z, x, y);
   const tileBounds = getTileBounds(z, x, y);
   
-  // Score each candidate by margin
+  // Score each candidate
   const scored = candidates.map(c => {
     const meta = dbMetadataCache.get(c.fileId);
     let marginScore = -Infinity;
     let overlapRatio = 0;
+    let boundsArea = Infinity; // For tie-breaking: smaller = more localized
     const isBlank = c.blob.size > 0 && c.blob.size <= BLANK_TILE_MAX_BYTES;
     
     if (meta?.parsedBounds) {
       marginScore = calculateMarginScore(tileCenter.lat, tileCenter.lng, meta.parsedBounds);
       overlapRatio = calculateOverlapRatio(tileBounds, meta.parsedBounds, BOUNDS_TOLERANCE);
+      boundsArea = calculateBoundsArea(meta.parsedBounds);
     }
     
-    return { ...c, marginScore, overlapRatio, isBlank };
+    // PHASE 1: Determine if candidate meets minimum thresholds
+    const meetsThresholds = overlapRatio >= MIN_OVERLAP_RATIO && marginScore >= MIN_MARGIN_SCORE;
+    
+    return { ...c, marginScore, overlapRatio, boundsArea, isBlank, meetsThresholds };
   });
   
+  // Separate valid candidates (meet thresholds) from fallback candidates
+  const validCandidates = scored.filter(c => c.meetsThresholds);
+  
+  // If we have valid candidates, use them; otherwise use ALL as fallback
+  const pool = validCandidates.length > 0 ? validCandidates : scored;
+  
   // Sort deterministically:
-  // - Prefer non-blank tiles
-  // - Highest overlap ratio
-  // - Highest margin score
-  // - Stable tie-break by fileId
-  scored.sort((a, b) => {
+  // 1. Prefer non-blank tiles
+  // 2. Prefer candidates that meet thresholds (already filtered, but useful if fallback)
+  // 3. Highest overlap ratio
+  // 4. Highest margin score
+  // 5. Smallest bounds area (more localized file = better for specific region)
+  // 6. Stable tie-break by fileId
+  pool.sort((a, b) => {
     if (a.isBlank !== b.isBlank) return a.isBlank ? 1 : -1;
+    if (a.meetsThresholds !== b.meetsThresholds) return a.meetsThresholds ? -1 : 1;
     if (b.overlapRatio !== a.overlapRatio) return b.overlapRatio - a.overlapRatio;
     if (b.marginScore !== a.marginScore) return b.marginScore - a.marginScore;
+    if (a.boundsArea !== b.boundsArea) return a.boundsArea - b.boundsArea; // Smaller area preferred
     return a.fileId.localeCompare(b.fileId);
   });
   
-  // Log selection decision for debugging (first 10)
+  const winner = pool[0];
+  
+  // Log selection decision for debugging (first 40)
   const selectionKey = `sel_${z}_${x}_${y}`;
   if (!multiHitLog.has(selectionKey) && multiHitLog.size < 40) {
     multiHitLog.add(selectionKey);
-    const selectedMeta = dbMetadataCache.get(scored[0].fileId);
+    const selectedMeta = dbMetadataCache.get(winner.fileId);
+    const validCount = validCandidates.length;
+    const fallbackNote = validCount === 0 ? ' [FALLBACK - no valid candidates]' : '';
     console.log(
       `[MBTiles] 🎯 SELECTED: z=${z} x=${x} y=${y} | ` +
-      `Winner: ${selectedMeta?.fileName || scored[0].fileId.split('_').pop()} ` +
-      `(overlap: ${(scored[0].overlapRatio * 100).toFixed(0)}%, margin: ${scored[0].marginScore.toFixed(2)}, blank: ${scored[0].isBlank}) | ` +
-      `From ${candidates.length} candidates`
+      `Winner: ${selectedMeta?.fileName || winner.fileId.split('_').pop()} ` +
+      `(overlap: ${(winner.overlapRatio * 100).toFixed(0)}%, margin: ${winner.marginScore.toFixed(2)}, ` +
+      `valid: ${winner.meetsThresholds}, blank: ${winner.isBlank}) | ` +
+      `From ${candidates.length} candidates (${validCount} valid)${fallbackNote}`
     );
   }
   
-  return scored[0];
+  return winner;
 }
 
 /**

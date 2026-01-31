@@ -88,3 +88,13 @@ export function calculateOverlapRatio(tile: TileBounds, bounds: GeoBounds, toler
   const ixArea = ixW * ixH;
   return Math.max(0, Math.min(1, ixArea / tileArea));
 }
+
+/**
+ * Calculates the geographic area (in square degrees) of a bounds object.
+ * Used for deterministic tie-breaking: smaller area = more localized file = preferred.
+ */
+export function calculateBoundsArea(bounds: GeoBounds): number {
+  const width = bounds.maxLng - bounds.minLng;
+  const height = bounds.maxLat - bounds.minLat;
+  return Math.abs(width * height);
+}
