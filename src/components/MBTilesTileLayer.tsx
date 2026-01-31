@@ -11,7 +11,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { getMBTile, getMBTilesFileIds } from '../services/mbtilesReader';
+import { getMBTileWithBoundsCheck, getMBTilesFileIds, logMultiHit, isStrictBoundsEnabled } from '../services/mbtilesReader';
 import { getMBTilesConfig } from '../config/mbtilesConfig';
 
 interface MBTilesTileLayerProps {
@@ -53,29 +53,36 @@ const MBTilesTileLayerClass = L.TileLayer.extend({
     const tileFailLog = (window as any).__mbtilesFailLog || new Set<string>();
     (window as any).__mbtilesFailLog = tileFailLog;
 
-    // Try to get tile from any of the MBTiles files
-    // IMPORTANT: Each file covers a different geographic region, so we must try ALL files
-    // Use Promise.all to query ALL files simultaneously for faster loading
+    // Try to get tile from MBTiles files WITH geographic bounds validation
+    // This prevents "patchwork" errors where tiles from wrong subcharts appear
     const tryLoadTile = async () => {
-      // Query all files in parallel for this tile coordinate
+      // Query all files in parallel with bounds checking
       const results = await Promise.all(
         fileIds.map(async (fileId) => {
           try {
-            const blob = await getMBTile(fileId, z, x, y);
-            if (blob && blob.size > 0) {
-              return { fileId, blob };
+            const { blob, rejected, reason } = await getMBTileWithBoundsCheck(fileId, z, x, y);
+            if (blob && blob.size > 0 && !rejected) {
+              return { fileId, blob, rejected: false };
             }
-            return null;
+            return { fileId, blob: null, rejected, reason };
           } catch {
-            return null;
+            return { fileId, blob: null, rejected: false };
           }
         })
       );
 
-      // Find the first valid result
-      const validResult = results.find(r => r !== null);
+      // Filter to only valid results (not rejected by bounds, has data)
+      const validResults = results.filter(r => r.blob !== null && !r.rejected);
       
-      if (validResult) {
+      // Log multi-hit if more than one file has this tile (potential overlap issue)
+      if (validResults.length > 1) {
+        logMultiHit(z, x, y, validResults.map(r => r.fileId));
+      }
+      
+      // Use the first valid result
+      const validResult = validResults[0];
+      
+      if (validResult && validResult.blob) {
         const { fileId, blob } = validResult;
         const objectUrl = URL.createObjectURL(blob);
         
@@ -101,15 +108,20 @@ const MBTilesTileLayerClass = L.TileLayer.extend({
         
         tile.src = objectUrl;
       } else {
-        // No tile found in any file - log detailed failure info (first 15 per session)
+        // No valid tile found - check if all were rejected by bounds
+        const rejectedCount = results.filter(r => r.rejected).length;
+        const notFoundCount = results.filter(r => !r.rejected && !r.blob).length;
+        
+        // Log detailed failure info (first 15 per session)
         const failKey = `${z}_${x}_${y}`;
         if (!tileFailLog.has(failKey)) {
           tileFailLog.add(failKey);
           if (tileFailLog.size <= 15) {
+            const strictMode = isStrictBoundsEnabled() ? 'ON' : 'OFF';
             console.debug(
-              `[MBTiles Layer] 📭 No tile found: z=${z} x=${x} y=${y} | ` +
-              `Searched ${fileIds.length} files | ` +
-              `Files: ${fileIds.map(f => f.split('_').pop()).join(', ')}`
+              `[MBTiles Layer] 📭 No tile: z=${z} x=${x} y=${y} | ` +
+              `Rejected: ${rejectedCount}, NotFound: ${notFoundCount} | ` +
+              `StrictBounds: ${strictMode}`
             );
           }
         }
