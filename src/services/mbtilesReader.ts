@@ -14,6 +14,7 @@
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import { getMBTilesFile, getMBTilesMetadata, getAllMBTilesMetadata } from './mbtilesStorage';
 import { getMBTilesConfig } from '../config/mbtilesConfig';
+import { calculateMarginScore, calculateOverlapRatio, getTileBounds, getTileCenter } from './mbtilesGeo';
 
 // Bundle the sql.js WASM so MBTiles works offline (no CDN dependency)
 import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
@@ -142,38 +143,12 @@ function parseBounds(boundsStr: string | null): { minLng: number; minLat: number
   };
 }
 
-/**
- * Convert tile coordinates to geographic center point
- * Returns [lat, lng] of tile center
- */
-function getTileCenter(z: number, x: number, y: number): { lat: number; lng: number } {
-  const n = Math.pow(2, z);
-  // Center of tile
-  const lng = ((x + 0.5) / n) * 360 - 180;
-  const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / n)));
-  const lat = latRad * (180 / Math.PI);
-  return { lat, lng };
-}
-
-// Tolerance for bounds checking (0.1° = ~11km - tighter than before to avoid patchwork)
+// Tolerance for bounds checking (0.1° = ~11km)
 const BOUNDS_TOLERANCE = 0.1;
 
-/**
- * Check if a point is within bounds (with small tolerance for edge tiles)
- */
-function isPointInBounds(
-  lat: number, 
-  lng: number, 
-  bounds: { minLng: number; minLat: number; maxLng: number; maxLat: number }
-): boolean {
-  const tolerance = BOUNDS_TOLERANCE;
-  return (
-    lng >= bounds.minLng - tolerance &&
-    lng <= bounds.maxLng + tolerance &&
-    lat >= bounds.minLat - tolerance &&
-    lat <= bounds.maxLat + tolerance
-  );
-}
+// Heuristic: very small image blobs are often transparent/blank placeholder tiles.
+// Prefer non-blank candidates when resolving multi-hit.
+const BLANK_TILE_MAX_BYTES = 600;
 
 /**
  * Extract detailed metadata from the database for logging
@@ -374,9 +349,12 @@ export async function getMBTileWithBoundsCheck(
   
   // If strict bounds is enabled and we have bounds, check geographic validity
   if (strictBoundsEnabled && cachedMeta?.parsedBounds) {
-    const tileCenter = getTileCenter(z, x, y);
-    
-    if (!isPointInBounds(tileCenter.lat, tileCenter.lng, cachedMeta.parsedBounds)) {
+    // IMPORTANT: use tile BBOX overlap instead of only center point.
+    // At low zoom, one tile covers a huge area; center-point checks are too weak.
+    const tileBounds = getTileBounds(z, x, y);
+    const overlap = calculateOverlapRatio(tileBounds, cachedMeta.parsedBounds, BOUNDS_TOLERANCE);
+
+    if (overlap <= 0) {
       // Log rejection (first 20 per session)
       const rejectKey = `${fileId}_${z}_${x}_${y}`;
       if (!boundsRejectLog.has(rejectKey) && boundsRejectLog.size < 20) {
@@ -384,7 +362,8 @@ export async function getMBTileWithBoundsCheck(
         console.debug(
           `[MBTiles] 🚫 BOUNDS REJECT: z=${z} x=${x} y=${y} | ` +
           `File: ${cachedMeta.fileName} | ` +
-          `TileCenter: (${tileCenter.lat.toFixed(3)}, ${tileCenter.lng.toFixed(3)}) | ` +
+          `TileBBOX: W=${tileBounds.west.toFixed(3)} E=${tileBounds.east.toFixed(3)} ` +
+          `S=${tileBounds.south.toFixed(3)} N=${tileBounds.north.toFixed(3)} | ` +
           `Bounds: [${cachedMeta.bounds}]`
         );
       }
@@ -410,25 +389,13 @@ export function getCachedMetadata(fileId: string): DBMetadataCache | undefined {
  * This is used to deterministically select which file to use when multiple
  * files contain the same tile coordinates.
  */
-export function calculateMarginScore(
-  lat: number,
-  lng: number,
-  bounds: { minLng: number; minLat: number; maxLng: number; maxLat: number }
-): number {
-  // Calculate distance from each edge
-  const marginLeft = lng - bounds.minLng;
-  const marginRight = bounds.maxLng - lng;
-  const marginBottom = lat - bounds.minLat;
-  const marginTop = bounds.maxLat - lat;
-  
-  // Score = minimum margin (how far from nearest edge)
-  // Higher score means more "centered" within the bounds
-  return Math.min(marginLeft, marginRight, marginBottom, marginTop);
-}
-
 /**
  * Select the best file from multiple candidates using deterministic scoring.
- * Prefers the file where the tile center is most "centered" within bounds.
+ * 
+ * Multi-hit disambiguation strategy:
+ * 1) Prefer candidates with higher tile BBOX overlap ratio (important at low zoom).
+ * 2) Tie-break by "margin score" (tile center more centered within file bounds).
+ * 3) Prefer non-blank blobs (avoid holes when one file has transparent placeholders).
  */
 export function selectBestFile(
   candidates: Array<{ fileId: string; blob: Blob }>,
@@ -440,21 +407,34 @@ export function selectBestFile(
   if (candidates.length === 1) return candidates[0];
   
   const tileCenter = getTileCenter(z, x, y);
+  const tileBounds = getTileBounds(z, x, y);
   
   // Score each candidate by margin
   const scored = candidates.map(c => {
     const meta = dbMetadataCache.get(c.fileId);
-    let score = -Infinity;
+    let marginScore = -Infinity;
+    let overlapRatio = 0;
+    const isBlank = c.blob.size > 0 && c.blob.size <= BLANK_TILE_MAX_BYTES;
     
     if (meta?.parsedBounds) {
-      score = calculateMarginScore(tileCenter.lat, tileCenter.lng, meta.parsedBounds);
+      marginScore = calculateMarginScore(tileCenter.lat, tileCenter.lng, meta.parsedBounds);
+      overlapRatio = calculateOverlapRatio(tileBounds, meta.parsedBounds, BOUNDS_TOLERANCE);
     }
     
-    return { ...c, score };
+    return { ...c, marginScore, overlapRatio, isBlank };
   });
   
-  // Sort by score descending (highest margin = best fit)
-  scored.sort((a, b) => b.score - a.score);
+  // Sort deterministically:
+  // - Prefer non-blank tiles
+  // - Highest overlap ratio
+  // - Highest margin score
+  // - Stable tie-break by fileId
+  scored.sort((a, b) => {
+    if (a.isBlank !== b.isBlank) return a.isBlank ? 1 : -1;
+    if (b.overlapRatio !== a.overlapRatio) return b.overlapRatio - a.overlapRatio;
+    if (b.marginScore !== a.marginScore) return b.marginScore - a.marginScore;
+    return a.fileId.localeCompare(b.fileId);
+  });
   
   // Log selection decision for debugging (first 10)
   const selectionKey = `sel_${z}_${x}_${y}`;
@@ -463,7 +443,8 @@ export function selectBestFile(
     const selectedMeta = dbMetadataCache.get(scored[0].fileId);
     console.log(
       `[MBTiles] 🎯 SELECTED: z=${z} x=${x} y=${y} | ` +
-      `Winner: ${selectedMeta?.fileName || scored[0].fileId.split('_').pop()} (score: ${scored[0].score.toFixed(2)}) | ` +
+      `Winner: ${selectedMeta?.fileName || scored[0].fileId.split('_').pop()} ` +
+      `(overlap: ${(scored[0].overlapRatio * 100).toFixed(0)}%, margin: ${scored[0].marginScore.toFixed(2)}, blank: ${scored[0].isBlank}) | ` +
       `From ${candidates.length} candidates`
     );
   }
