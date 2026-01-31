@@ -11,7 +11,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { getMBTileWithBoundsCheck, getMBTilesFileIds, logMultiHit, isStrictBoundsEnabled } from '../services/mbtilesReader';
+import { getMBTileWithBoundsCheck, getMBTilesFileIds, logMultiHit, isStrictBoundsEnabled, selectBestFile } from '../services/mbtilesReader';
 import { getMBTilesConfig } from '../config/mbtilesConfig';
 
 interface MBTilesTileLayerProps {
@@ -72,18 +72,22 @@ const MBTilesTileLayerClass = L.TileLayer.extend({
       );
 
       // Filter to only valid results (not rejected by bounds, has data)
-      const validResults = results.filter(r => r.blob !== null && !r.rejected);
+      const validResults = results.filter(r => r.blob !== null && !r.rejected) as Array<{ fileId: string; blob: Blob; rejected: boolean }>;
       
       // Log multi-hit if more than one file has this tile (potential overlap issue)
       if (validResults.length > 1) {
         logMultiHit(z, x, y, validResults.map(r => r.fileId));
       }
       
-      // Use the first valid result
-      const validResult = validResults[0];
+      // Use DETERMINISTIC selection based on margin score
+      // This ensures the same file is always chosen for overlapping regions
+      const selectedResult = selectBestFile(
+        validResults.map(r => ({ fileId: r.fileId, blob: r.blob })),
+        z, x, y
+      );
       
-      if (validResult && validResult.blob) {
-        const { fileId, blob } = validResult;
+      if (selectedResult && selectedResult.blob) {
+        const { fileId, blob } = selectedResult;
         const objectUrl = URL.createObjectURL(blob);
         
         tile.onload = () => {
