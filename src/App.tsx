@@ -243,6 +243,18 @@ const App = () => {
   });
   // PHASE 1: Low zoom warning for MBTiles
   const [mbtilesLowZoomWarning, setMbtilesLowZoomWarning] = useState(false);
+
+  // Install runtime MBTiles debug helpers (console-driven, no UI impact).
+  // Usage in DevTools console:
+  //   window.__mbtilesDebug.debugLastTile()
+  //   window.__mbtilesDebug.debugTileSelection('LOW', z, x, y)
+  useEffect(() => {
+    import('./services/mbtilesDebug')
+      .then(({ installMBTilesDebug }) => installMBTilesDebug())
+      .catch(() => {
+        // no-op
+      });
+  }, []);
   
   // Altimeter display visibility (persisted)
   const [showAltimeter, setShowAltimeter] = useState<boolean>(() => {

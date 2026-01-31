@@ -156,6 +156,15 @@ const MIN_MARGIN_SCORE = 0;
 // Prefer non-blank candidates when resolving multi-hit.
 const BLANK_TILE_MAX_BYTES = 800;
 
+// Export selection tuning values so runtime debug tooling can print the exact
+// thresholds currently in use.
+export const MBTILES_SELECTION_THRESHOLDS = {
+  BOUNDS_TOLERANCE,
+  MIN_OVERLAP_RATIO,
+  MIN_MARGIN_SCORE,
+  BLANK_TILE_MAX_BYTES,
+} as const;
+
 /**
  * Extract detailed metadata from the database for logging
  */
