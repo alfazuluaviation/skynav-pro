@@ -1,15 +1,22 @@
 /**
  * MBTiles Storage Service
  * 
- * Handles storage of MBTiles files using IndexedDB.
- * Files are stored as ArrayBuffer chunks for efficient memory usage.
+ * Handles storage of MBTiles files using:
+ * - IndexedDB for web/PWA (default)
+ * - Capacitor Filesystem for native apps (Android/iOS)
  * 
+ * Files are stored as ArrayBuffer chunks for efficient memory usage.
  * This service is ISOLATED from the existing tile cache system.
  */
 
 import { MBTILES_CONSTANTS } from '../config/mbtilesConfig';
+import { isCapacitorNative } from '../utils/environment';
+import * as nativeStorage from './nativeStorage';
 
 const { DB_NAME, DB_VERSION, STORE_NAME, METADATA_STORE, CHUNKS_STORE, CHUNK_SIZE } = MBTILES_CONSTANTS;
+
+// Directory for MBTiles files in native storage
+const MBTILES_DIR = 'mbtiles';
 
 interface MBTilesMetadata {
   id: string;
@@ -87,9 +94,74 @@ async function openDatabase(): Promise<IDBDatabase> {
 }
 
 /**
- * Store MBTiles file in IndexedDB (as chunks for large files)
+ * Store MBTiles file
+ * - Native: Uses Capacitor Filesystem
+ * - Web: Uses IndexedDB chunks
  */
 export async function storeMBTilesFile(
+  fileId: string,
+  chartId: string,
+  fileName: string,
+  data: ArrayBuffer,
+  manifestData: ManifestData | null = null
+): Promise<void> {
+  const totalSize = data.byteLength;
+  console.log(`[MBTiles Storage] Storing ${fileName} (${(totalSize / 1024 / 1024).toFixed(2)} MB)`);
+
+  // Use native storage for Capacitor
+  if (isCapacitorNative()) {
+    await storeNativeMBTilesFile(fileId, chartId, fileName, data, manifestData);
+    return;
+  }
+
+  // Web/PWA: Use IndexedDB
+  await storeIndexedDBMBTilesFile(fileId, chartId, fileName, data, manifestData);
+}
+
+/**
+ * Store MBTiles file in native filesystem (Capacitor)
+ */
+async function storeNativeMBTilesFile(
+  fileId: string,
+  chartId: string,
+  fileName: string,
+  data: ArrayBuffer,
+  manifestData: ManifestData | null = null
+): Promise<void> {
+  // Ensure directory exists
+  await nativeStorage.ensureDirectory(MBTILES_DIR);
+  
+  // Write the actual file
+  const filePath = `${MBTILES_DIR}/${fileName}`;
+  const success = await nativeStorage.writeFile(filePath, data);
+  
+  if (!success) {
+    throw new Error(`Failed to write MBTiles file: ${fileName}`);
+  }
+  
+  // Store metadata in a JSON file
+  const metadata: MBTilesMetadata = {
+    id: fileId,
+    chartId,
+    fileName,
+    totalSize: data.byteLength,
+    totalChunks: 1, // Native stores as single file
+    downloadedAt: Date.now(),
+    version: manifestData?.version || 'unknown',
+    manifestData,
+    status: 'complete'
+  };
+  
+  const metadataPath = `${MBTILES_DIR}/${fileId}_metadata.json`;
+  await nativeStorage.writeFile(metadataPath, JSON.stringify(metadata), 'utf8');
+  
+  console.log(`[MBTiles Storage] Native file stored: ${fileName}`);
+}
+
+/**
+ * Store MBTiles file in IndexedDB (as chunks for large files)
+ */
+async function storeIndexedDBMBTilesFile(
   fileId: string,
   chartId: string,
   fileName: string,
@@ -99,8 +171,6 @@ export async function storeMBTilesFile(
   const db = await openDatabase();
   const totalSize = data.byteLength;
   const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
-
-  console.log(`[MBTiles Storage] Storing ${fileName} (${(totalSize / 1024 / 1024).toFixed(2)} MB) in ${totalChunks} chunks`);
 
   // Store metadata first
   const metadata: MBTilesMetadata = {
@@ -161,9 +231,44 @@ export async function storeMBTilesFile(
 }
 
 /**
- * Retrieve MBTiles file from IndexedDB
+ * Retrieve MBTiles file
+ * - Native: Reads from Capacitor Filesystem
+ * - Web: Reads from IndexedDB chunks
  */
 export async function getMBTilesFile(fileId: string): Promise<ArrayBuffer | null> {
+  // Use native storage for Capacitor
+  if (isCapacitorNative()) {
+    return getNativeMBTilesFile(fileId);
+  }
+  
+  // Web/PWA: Use IndexedDB
+  return getIndexedDBMBTilesFile(fileId);
+}
+
+/**
+ * Retrieve MBTiles file from native filesystem
+ */
+async function getNativeMBTilesFile(fileId: string): Promise<ArrayBuffer | null> {
+  const metadata = await getMBTilesMetadata(fileId);
+  if (!metadata || metadata.status !== 'complete') {
+    console.log(`[MBTiles Storage] Native file ${fileId} not found or incomplete`);
+    return null;
+  }
+  
+  const filePath = `${MBTILES_DIR}/${metadata.fileName}`;
+  const data = await nativeStorage.readFile(filePath);
+  
+  if (data) {
+    console.log(`[MBTiles Storage] Native file loaded: ${metadata.fileName} (${(data.byteLength / 1024 / 1024).toFixed(2)} MB)`);
+  }
+  
+  return data;
+}
+
+/**
+ * Retrieve MBTiles file from IndexedDB
+ */
+async function getIndexedDBMBTilesFile(fileId: string): Promise<ArrayBuffer | null> {
   const db = await openDatabase();
 
   // Get metadata first
@@ -212,8 +317,40 @@ export async function getMBTilesFile(fileId: string): Promise<ArrayBuffer | null
 
 /**
  * Get MBTiles metadata
+ * - Native: Reads from JSON metadata file
+ * - Web: Reads from IndexedDB
  */
 export async function getMBTilesMetadata(fileId: string): Promise<MBTilesMetadata | null> {
+  // Use native storage for Capacitor
+  if (isCapacitorNative()) {
+    return getNativeMBTilesMetadata(fileId);
+  }
+  
+  // Web/PWA: Use IndexedDB
+  return getIndexedDBMBTilesMetadata(fileId);
+}
+
+/**
+ * Get MBTiles metadata from native filesystem
+ */
+async function getNativeMBTilesMetadata(fileId: string): Promise<MBTilesMetadata | null> {
+  const metadataPath = `${MBTILES_DIR}/${fileId}_metadata.json`;
+  const data = await nativeStorage.readFileAsString(metadataPath);
+  
+  if (!data) return null;
+  
+  try {
+    return JSON.parse(data) as MBTilesMetadata;
+  } catch (error) {
+    console.error('[MBTiles Storage] Failed to parse native metadata:', error);
+    return null;
+  }
+}
+
+/**
+ * Get MBTiles metadata from IndexedDB
+ */
+async function getIndexedDBMBTilesMetadata(fileId: string): Promise<MBTilesMetadata | null> {
   const db = await openDatabase();
 
   return new Promise((resolve) => {
@@ -235,8 +372,47 @@ export async function isMBTilesFileAvailable(fileId: string): Promise<boolean> {
 
 /**
  * Get all available MBTiles files
+ * - Native: Lists metadata files from filesystem
+ * - Web: Reads from IndexedDB
  */
 export async function getAllMBTilesMetadata(): Promise<MBTilesMetadata[]> {
+  // Use native storage for Capacitor
+  if (isCapacitorNative()) {
+    return getAllNativeMBTilesMetadata();
+  }
+  
+  // Web/PWA: Use IndexedDB
+  return getAllIndexedDBMBTilesMetadata();
+}
+
+/**
+ * Get all MBTiles metadata from native filesystem
+ */
+async function getAllNativeMBTilesMetadata(): Promise<MBTilesMetadata[]> {
+  const files = await nativeStorage.listDirectory(MBTILES_DIR);
+  const metadataFiles = files.filter(f => f.endsWith('_metadata.json'));
+  
+  const results: MBTilesMetadata[] = [];
+  
+  for (const file of metadataFiles) {
+    const path = `${MBTILES_DIR}/${file}`;
+    const data = await nativeStorage.readFileAsString(path);
+    if (data) {
+      try {
+        results.push(JSON.parse(data) as MBTilesMetadata);
+      } catch (e) {
+        console.warn(`[MBTiles Storage] Failed to parse metadata: ${file}`);
+      }
+    }
+  }
+  
+  return results;
+}
+
+/**
+ * Get all MBTiles metadata from IndexedDB
+ */
+async function getAllIndexedDBMBTilesMetadata(): Promise<MBTilesMetadata[]> {
   const db = await openDatabase();
 
   return new Promise((resolve) => {

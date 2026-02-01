@@ -1,5 +1,22 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useRegisterSW } from 'virtual:pwa-register/react';
+import { isWeb } from '@/utils/environment';
+
+// Conditionally import PWA register only on web
+let useRegisterSWHook: any = null;
+
+if (isWeb()) {
+  try {
+    // This import only works on web with vite-plugin-pwa
+    // @ts-ignore - virtual module
+    import('virtual:pwa-register/react').then(module => {
+      useRegisterSWHook = module.useRegisterSW;
+    }).catch(() => {
+      console.log('[PWA] PWA register not available');
+    });
+  } catch {
+    // Not available in native
+  }
+}
 
 const LAST_UPDATE_KEY = 'pwa_last_update_date';
 const APP_VERSION_KEY = 'pwa_app_version';
@@ -18,16 +35,24 @@ const formatDate = () => {
   });
 };
 
+/**
+ * Hook for PWA update management
+ * Only active on web platform, returns no-op on native Capacitor apps
+ */
 export const usePWAUpdate = () => {
   const [lastUpdateDate, setLastUpdateDate] = useState<string | null>(() => {
+    if (!isWeb()) return null;
     return localStorage.getItem(LAST_UPDATE_KEY);
   });
   const [isChecking, setIsChecking] = useState(false);
   const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
+  const [needRefreshState, setNeedRefreshState] = useState(false);
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
 
-  // Set initial date if none exists
+  // Set initial date if none exists (web only)
   useEffect(() => {
+    if (!isWeb()) return;
+    
     if (!lastUpdateDate) {
       const now = formatDate();
       localStorage.setItem(LAST_UPDATE_KEY, now);
@@ -35,53 +60,63 @@ export const usePWAUpdate = () => {
     }
   }, [lastUpdateDate]);
 
-  const {
-    needRefresh: [needRefresh, setNeedRefresh],
-    updateServiceWorker,
-  } = useRegisterSW({
-    onRegisteredSW(swUrl, r) {
-      console.log('[PWA] SW Registered: ' + swUrl);
-      registrationRef.current = r || null;
-      
-      // Only check for updates when online and less frequently
-      if (r && navigator.onLine) {
-        r.update().catch(err => console.log('[PWA] Initial update check failed:', err));
-        
-        // Check for updates every 10 minutes (only when online)
-        setInterval(() => {
-          if (navigator.onLine) {
-            console.log('[PWA] Checking for updates...');
-            r.update().catch(err => console.log('[PWA] Update check failed:', err));
-          }
-        }, 10 * 60 * 1000); // 10 minutes
-      }
-    },
-    onRegisterError(error) {
-      console.log('[PWA] SW registration error', error);
-    },
-    onNeedRefresh() {
-      console.log('[PWA] New content available, refresh needed');
-      // Only show update prompt if online AND user hasn't dismissed this version
-      if (navigator.onLine) {
-        const dismissedVersion = localStorage.getItem(UPDATE_DISMISSED_KEY);
-        const storedVersion = localStorage.getItem(APP_VERSION_KEY);
-        
-        // Only show if this is a genuinely new version
-        if (storedVersion !== CURRENT_APP_VERSION && dismissedVersion !== CURRENT_APP_VERSION) {
-          setShowUpdatePrompt(true);
-          setNeedRefresh(true);
-        }
-      }
-    },
-    onOfflineReady() {
-      console.log('[PWA] App ready to work offline');
-    },
-  });
-
-  // Check on mount if we should show update prompt (only if online)
+  // Register service worker (web only)
   useEffect(() => {
-    if (!navigator.onLine) {
-      console.log('[PWA] Offline - skipping update check');
+    if (!isWeb()) return;
+    
+    // Dynamic import for PWA registration
+    import('virtual:pwa-register').then(({ registerSW }) => {
+      const updateSW = registerSW({
+        onRegisteredSW(swUrl: string, r?: ServiceWorkerRegistration) {
+          console.log('[PWA] SW Registered: ' + swUrl);
+          registrationRef.current = r || null;
+          
+          // Only check for updates when online and less frequently
+          if (r && navigator.onLine) {
+            r.update().catch((err: Error) => console.log('[PWA] Initial update check failed:', err));
+            
+            // Check for updates every 10 minutes (only when online)
+            setInterval(() => {
+              if (navigator.onLine) {
+                console.log('[PWA] Checking for updates...');
+                r.update().catch((err: Error) => console.log('[PWA] Update check failed:', err));
+              }
+            }, 10 * 60 * 1000); // 10 minutes
+          }
+        },
+        onRegisterError(error: Error) {
+          console.log('[PWA] SW registration error', error);
+        },
+        onNeedRefresh() {
+          console.log('[PWA] New content available, refresh needed');
+          // Only show update prompt if online AND user hasn't dismissed this version
+          if (navigator.onLine) {
+            const dismissedVersion = localStorage.getItem(UPDATE_DISMISSED_KEY);
+            const storedVersion = localStorage.getItem(APP_VERSION_KEY);
+            
+            // Only show if this is a genuinely new version
+            if (storedVersion !== CURRENT_APP_VERSION && dismissedVersion !== CURRENT_APP_VERSION) {
+              setShowUpdatePrompt(true);
+              setNeedRefreshState(true);
+            }
+          }
+        },
+        onOfflineReady() {
+          console.log('[PWA] App ready to work offline');
+        },
+      });
+      
+      // Store update function for later use
+      (window as any).__pwaUpdateSW = updateSW;
+    }).catch(() => {
+      console.log('[PWA] PWA registration not available');
+    });
+  }, []);
+
+  // Check on mount if we should show update prompt (only if online and web)
+  useEffect(() => {
+    if (!isWeb() || !navigator.onLine) {
+      console.log('[PWA] Offline or native - skipping update check');
       return;
     }
     
@@ -96,6 +131,8 @@ export const usePWAUpdate = () => {
   }, []);
 
   const handleUpdate = useCallback(() => {
+    if (!isWeb()) return;
+    
     const now = formatDate();
     localStorage.setItem(LAST_UPDATE_KEY, now);
     localStorage.setItem(APP_VERSION_KEY, CURRENT_APP_VERSION);
@@ -104,21 +141,30 @@ export const usePWAUpdate = () => {
     setShowUpdatePrompt(false);
     
     console.log('[PWA] Updating service worker and reloading...');
-    updateServiceWorker(true);
-  }, [updateServiceWorker]);
+    
+    // Call the stored update function
+    const updateSW = (window as any).__pwaUpdateSW;
+    if (updateSW) {
+      updateSW(true);
+    } else {
+      window.location.reload();
+    }
+  }, []);
 
   const dismissUpdate = useCallback(() => {
+    if (!isWeb()) return;
+    
     // Save that user dismissed this specific version - won't show again until next version
     localStorage.setItem(UPDATE_DISMISSED_KEY, CURRENT_APP_VERSION);
     localStorage.setItem(APP_VERSION_KEY, CURRENT_APP_VERSION);
-    setNeedRefresh(false);
+    setNeedRefreshState(false);
     setShowUpdatePrompt(false);
     console.log('[PWA] Update dismissed for version:', CURRENT_APP_VERSION);
-  }, [setNeedRefresh]);
+  }, []);
 
   const checkForUpdate = useCallback(async () => {
-    if (!navigator.onLine) {
-      console.log('[PWA] Cannot check for updates while offline');
+    if (!isWeb() || !navigator.onLine) {
+      console.log('[PWA] Cannot check for updates while offline or native');
       return;
     }
     
@@ -139,8 +185,8 @@ export const usePWAUpdate = () => {
   }, []);
 
   const forceRefresh = useCallback(async () => {
-    if (!navigator.onLine) {
-      console.log('[PWA] Cannot force refresh while offline');
+    if (!isWeb() || !navigator.onLine) {
+      console.log('[PWA] Cannot force refresh while offline or native');
       return;
     }
     
@@ -181,7 +227,7 @@ export const usePWAUpdate = () => {
   }, []);
 
   return {
-    needRefresh: showUpdatePrompt && navigator.onLine,
+    needRefresh: isWeb() && showUpdatePrompt && navigator.onLine,
     lastUpdateDate,
     handleUpdate,
     dismissUpdate,

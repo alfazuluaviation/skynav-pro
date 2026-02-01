@@ -1,5 +1,6 @@
 import { RefreshCw, X } from 'lucide-react';
 import { usePWAUpdate } from '@/hooks/usePWAUpdate';
+import { isWeb } from '@/utils/environment';
 
 export const PWAUpdatePrompt = () => {
   const { 
@@ -9,8 +10,9 @@ export const PWAUpdatePrompt = () => {
     currentVersion 
   } = usePWAUpdate();
 
-  // Don't show anything if no update needed or offline
-  if (!needRefresh || !navigator.onLine) return null;
+  // Only show on web (PWA), never on native Capacitor apps
+  // Also don't show if no update needed or offline
+  if (!isWeb() || !needRefresh || !navigator.onLine) return null;
 
   return (
     <div className="fixed bottom-20 left-4 right-4 z-[9999] md:left-auto md:right-4 md:max-w-sm md:bottom-4">
