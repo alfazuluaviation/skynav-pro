@@ -8,3 +8,9 @@ interface ImportMetaEnv {
 interface ImportMeta {
     readonly env: ImportMetaEnv;
 }
+
+// Allow Vite asset imports like: import wasmUrl from 'pkg/file.wasm?url'
+declare module '*?url' {
+  const src: string;
+  export default src;
+}

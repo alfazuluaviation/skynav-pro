@@ -90,6 +90,7 @@ serve(async (req) => {
     const bbox = url.searchParams.get("bbox");
     const cql_filter = url.searchParams.get("cql_filter");
     const maxFeatures = url.searchParams.get("maxFeatures") || "50";
+    const startIndex = url.searchParams.get("startIndex"); // CRITICAL: Support pagination
 
     // Validate typeName
     if (!typeName || !ALLOWED_LAYERS.includes(typeName)) {
@@ -118,6 +119,10 @@ serve(async (req) => {
     }
     if (cql_filter) {
       params.set("cql_filter", cql_filter);
+    }
+    // CRITICAL: Add startIndex for pagination support
+    if (startIndex && !isNaN(Number(startIndex))) {
+      params.set("startIndex", startIndex);
     }
 
     const wfsUrl = `${BASE_WFS_URL}?${params.toString()}`;

@@ -256,9 +256,10 @@ const CachedWMSLayer = L.TileLayer.WMS.extend({
           tile.src = objectUrl;
         })
         .catch(() => {
-          // All attempts failed
+          // All attempts failed - silenced to reduce console noise in offline mode
           try { abortController.abort(); } catch {}
-          console.warn(`[WMS] All sources failed for tile`);
+          // Use debug level instead of warn to reduce noise when offline or WMS unavailable
+          console.debug(`[WMS] All sources failed for tile (offline or server unavailable)`);
           done(null, tile);
         });
     };

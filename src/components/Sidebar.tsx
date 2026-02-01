@@ -11,6 +11,7 @@ import { AiracCycle } from '../../types';
 import { usePWAUpdate } from '@/hooks/usePWAUpdate';
 import { useLocationPermission } from '@/hooks/useLocationPermission';
 import { useDownloadManager } from '@/hooks/useDownloadManager';
+import { Map, MapPin, Plane, Download, Gauge } from 'lucide-react';
 
 interface SidebarProps {
     userName?: string;
@@ -32,6 +33,18 @@ interface SidebarProps {
     onLogin?: () => void;
     pointVisibility?: PointVisibility;
     onTogglePointVisibility?: (key: keyof PointVisibility) => void;
+    // New props for main menu functionality
+    onOpenCharts?: () => void;
+    onOpenAerodromes?: () => void;
+    onOpenAircraft?: () => void;
+    onOpenDownload?: () => void;
+    // Altimeter toggle
+    showAltimeter?: boolean;
+    onToggleAltimeter?: () => void;
+    // MBTiles toggle for testing
+    mbtilesReady?: Record<string, boolean>;
+    forceMBTiles?: boolean;
+    onToggleForceMBTiles?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -54,9 +67,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onLogin,
     pointVisibility = { waypoints: true, aerodromes: true, heliports: true, userFixes: true },
     onTogglePointVisibility,
+    onOpenCharts,
+    onOpenAerodromes,
+    onOpenAircraft,
+    onOpenDownload,
+    showAltimeter = false,
+    onToggleAltimeter,
+    mbtilesReady = {},
+    forceMBTiles = false,
+    onToggleForceMBTiles,
 }) => {
     const [showSettings, setShowSettings] = useState(false);
     const [showLayersMenu, setShowLayersMenu] = useState(false);
+    const [showMainMenu, setShowMainMenu] = useState(false);
     const { needRefresh, lastUpdateDate, handleUpdate, checkForUpdate, forceRefresh, isChecking, currentVersion } = usePWAUpdate();
     const { permissionStatus, isRequesting, requestPermission, showIOSInstructions } = useLocationPermission();
     const { syncingLayers } = useDownloadManager();
@@ -64,17 +87,48 @@ export const Sidebar: React.FC<SidebarProps> = ({
     // Notify parent when menus are open (mobile only)
     React.useEffect(() => {
         if (onMenuStateChange) {
-            onMenuStateChange(showSettings || showLayersMenu);
+            onMenuStateChange(showSettings || showLayersMenu || showMainMenu);
         }
-    }, [showSettings, showLayersMenu, onMenuStateChange]);
+    }, [showSettings, showLayersMenu, showMainMenu, onMenuStateChange]);
+
+    // Handlers for main menu items
+    const handleOpenCharts = () => {
+        onOpenCharts?.();
+        setShowMainMenu(false);
+    };
+
+    const handleOpenAerodromes = () => {
+        onOpenAerodromes?.();
+        setShowMainMenu(false);
+    };
+
+    const handleOpenAircraft = () => {
+        onOpenAircraft?.();
+        setShowMainMenu(false);
+    };
+
+    const handleOpenDownload = () => {
+        onOpenDownload?.();
+        setShowMainMenu(false);
+    };
+
+    const handleToggleAltimeter = () => {
+        onToggleAltimeter?.();
+        setShowMainMenu(false);
+    };
 
     return (
         <>
             {/* Desktop Sidebar - Hidden on mobile */}
             <aside className="hidden md:flex w-14 flex-col items-center py-6 bg-slate-900 border-r border-slate-800 z-[2000] shadow-2xl shrink-0">
-                <div className="mb-8 text-slate-500 hover:text-white cursor-pointer transition-colors">
+                {/* Main Menu Button (Hamburger) */}
+                <button 
+                    onClick={() => setShowMainMenu(!showMainMenu)}
+                    className={`mb-8 p-2 rounded-xl transition-all ${showMainMenu ? 'text-teal-400 bg-teal-500/20' : 'text-slate-500 hover:text-white hover:bg-slate-800'}`}
+                    title="Menu Principal"
+                >
                     <IconMenu />
-                </div>
+                </button>
 
                 <nav className="flex flex-col gap-6 flex-1">
                     <IconButton
@@ -144,6 +198,62 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
             </aside>
 
+            {/* Desktop Main Menu Dropdown */}
+            {showMainMenu && (
+                <div className="hidden md:block absolute left-16 top-4 z-[2100] bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden animate-in">
+                    <div className="p-3 flex flex-row gap-2">
+                        <button 
+                            onClick={handleOpenCharts}
+                            title="Cartas"
+                            className="w-14 h-12 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 active:scale-95 flex items-center justify-center"
+                            style={{ background: 'linear-gradient(135deg, #0f4c75, #1a73a7)' }}
+                        >
+                            <Map className="w-7 h-7 text-white drop-shadow-md" strokeWidth={1.5} />
+                        </button>
+                        <button 
+                            onClick={handleOpenAerodromes}
+                            title="Aeródromos"
+                            className="w-14 h-12 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 active:scale-95 flex items-center justify-center"
+                            style={{ background: 'linear-gradient(135deg, #0f4c75, #1a73a7)' }}
+                        >
+                            <MapPin className="w-7 h-7 text-white drop-shadow-md" strokeWidth={1.5} />
+                        </button>
+                        <button 
+                            onClick={handleOpenAircraft}
+                            title="Aeronaves"
+                            className="w-14 h-12 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 active:scale-95 flex items-center justify-center"
+                            style={{ background: 'linear-gradient(135deg, #0f4c75, #1a73a7)' }}
+                        >
+                            <Plane className="w-7 h-7 text-white drop-shadow-md" strokeWidth={1.5} />
+                        </button>
+                        <button 
+                            onClick={handleOpenDownload}
+                            title="Download"
+                            className="w-14 h-12 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 active:scale-95 flex items-center justify-center"
+                            style={{ background: 'linear-gradient(135deg, #0f4c75, #1a73a7)' }}
+                        >
+                            <Download className="w-7 h-7 text-white drop-shadow-md" strokeWidth={1.5} />
+                        </button>
+                        <button 
+                            onClick={handleToggleAltimeter}
+                            title="Altímetro"
+                            className={`w-14 h-12 rounded-xl transition-all shadow-lg hover:shadow-cyan-500/25 active:scale-95 flex items-center justify-center ${showAltimeter ? 'ring-2 ring-cyan-400' : ''}`}
+                            style={{ background: showAltimeter ? 'linear-gradient(135deg, #0891b2, #06b6d4)' : 'linear-gradient(135deg, #0f4c75, #1a73a7)' }}
+                        >
+                            <Gauge className="w-7 h-7 text-white drop-shadow-md" strokeWidth={1.5} />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Click outside to close main menu (Desktop) */}
+            {showMainMenu && (
+                <div 
+                    className="hidden md:block fixed inset-0 z-[2050]" 
+                    onClick={() => setShowMainMenu(false)} 
+                />
+            )}
+
             {/* Desktop Layers Menu - Positioned to the left of sidebar */}
             {showLayersMenu && (
                 <div className="hidden md:block absolute left-20 top-1/2 -translate-y-1/2 w-[340px] z-[2000] bg-slate-900 border border-slate-800 rounded-3xl shadow-3xl overflow-hidden animate-in shadow-black/80">
@@ -157,6 +267,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onBaseMapChange={onBaseMapChange}
                         pointVisibility={pointVisibility}
                         onTogglePointVisibility={onTogglePointVisibility}
+                        mbtilesReady={mbtilesReady}
+                        forceMBTiles={forceMBTiles}
+                        onToggleForceMBTiles={onToggleForceMBTiles}
                     />
                 </div>
             )}
@@ -164,6 +277,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Mobile Bottom Navigation Bar */}
             <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[2000] bg-slate-900/95 backdrop-blur-xl border-t border-slate-800 safe-bottom">
                 <div className="flex items-center justify-around py-2 px-4">
+                    {/* Mobile Main Menu Button */}
+                    <IconButton
+                        icon={<IconMenu />}
+                        onClick={() => setShowMainMenu(!showMainMenu)}
+                        isActive={showMainMenu}
+                        activeColor="teal"
+                        title="Menu Principal"
+                    />
+
                     <IconButton
                         icon={<IconRoute />}
                         onClick={onTogglePlanPanel}
@@ -208,6 +330,68 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
             </nav>
 
+            {/* Mobile Main Menu - Bottom Sheet */}
+            {showMainMenu && (
+                <div className="md:hidden fixed inset-0 z-[2100] bg-black/80 backdrop-blur-sm" onClick={() => setShowMainMenu(false)}>
+                    <div 
+                        className="absolute bottom-16 left-0 right-0 bg-slate-900 border-t border-slate-800 rounded-t-3xl animate-slide-up safe-bottom"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-2" />
+                        <div className="p-4">
+                            <h3 className="text-white text-lg font-semibold mb-4 text-center">Menu Principal</h3>
+                            <div className="flex flex-row justify-center gap-3">
+                                <button 
+                                    onClick={handleOpenCharts}
+                                    title="Cartas"
+                                    className="w-16 h-14 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 active:scale-95 flex flex-col items-center justify-center gap-1"
+                                    style={{ background: 'linear-gradient(135deg, #0f4c75, #1a73a7)' }}
+                                >
+                                    <Map className="w-6 h-6 text-white drop-shadow-md" strokeWidth={1.5} />
+                                    <span className="text-white text-xs">Cartas</span>
+                                </button>
+                                <button 
+                                    onClick={handleOpenAerodromes}
+                                    title="Aeródromos"
+                                    className="w-16 h-14 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 active:scale-95 flex flex-col items-center justify-center gap-1"
+                                    style={{ background: 'linear-gradient(135deg, #0f4c75, #1a73a7)' }}
+                                >
+                                    <MapPin className="w-6 h-6 text-white drop-shadow-md" strokeWidth={1.5} />
+                                    <span className="text-white text-xs">Aeródromos</span>
+                                </button>
+                                <button 
+                                    onClick={handleOpenAircraft}
+                                    title="Aeronaves"
+                                    className="w-16 h-14 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 active:scale-95 flex flex-col items-center justify-center gap-1"
+                                    style={{ background: 'linear-gradient(135deg, #0f4c75, #1a73a7)' }}
+                                >
+                                    <Plane className="w-6 h-6 text-white drop-shadow-md" strokeWidth={1.5} />
+                                    <span className="text-white text-xs">Aeronaves</span>
+                                </button>
+                                <button 
+                                    onClick={handleOpenDownload}
+                                    title="Download"
+                                    className="w-16 h-14 rounded-xl transition-all shadow-lg hover:shadow-sky-500/25 active:scale-95 flex flex-col items-center justify-center gap-1"
+                                    style={{ background: 'linear-gradient(135deg, #0f4c75, #1a73a7)' }}
+                                >
+                                    <Download className="w-6 h-6 text-white drop-shadow-md" strokeWidth={1.5} />
+                                    <span className="text-white text-xs">Download</span>
+                                </button>
+                                <button 
+                                    onClick={handleToggleAltimeter}
+                                    title="Altímetro"
+                                    className={`w-16 h-14 rounded-xl transition-all shadow-lg hover:shadow-cyan-500/25 active:scale-95 flex flex-col items-center justify-center gap-1 ${showAltimeter ? 'ring-2 ring-cyan-400' : ''}`}
+                                    style={{ background: showAltimeter ? 'linear-gradient(135deg, #0891b2, #06b6d4)' : 'linear-gradient(135deg, #0f4c75, #1a73a7)' }}
+                                >
+                                    <Gauge className="w-6 h-6 text-white drop-shadow-md" strokeWidth={1.5} />
+                                    <span className="text-white text-xs">Altímetro</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Mobile Layers Menu - Full Screen */}
             {showLayersMenu && (
                 <div className="md:hidden fixed inset-0 z-[2100] bg-black/80 backdrop-blur-sm" onClick={() => setShowLayersMenu(false)}>
@@ -227,6 +411,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             onBaseMapChange={onBaseMapChange}
                             pointVisibility={pointVisibility}
                             onTogglePointVisibility={onTogglePointVisibility}
+                            mbtilesReady={mbtilesReady}
+                            forceMBTiles={forceMBTiles}
+                            onToggleForceMBTiles={onToggleForceMBTiles}
                         />
                     </div>
                 </div>

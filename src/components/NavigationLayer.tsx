@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useMapEvents, Tooltip, LayerGroup, Polyline, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -9,6 +8,10 @@ import { getMagneticDeclination, applyMagneticVariation } from '../utils/geoUtil
 import { getAerodromeIconHTML, getIconSize } from './AerodromeIcons';
 import { PointVisibility } from './LayersMenu';
 import { VorRadialLine } from './VorRadialLine';
+
+// Detect iOS/iPad for touch handling
+const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 interface NavigationLayerProps {
     onPointSelect?: (point: NavPoint) => void;
@@ -33,6 +36,9 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
     
     // VOR Radial tracking state
     const [selectedVor, setSelectedVor] = useState<NavPoint | null>(null);
+
+    // Double-click tracking for radial activation (unified across all devices)
+    const lastClickTimeRef = useRef<{ id: string; time: number } | null>(null);
     
     // Map starts UNLOCKED (free to drag) - user can lock to follow aircraft position
     const [isLocked, setIsLocked] = useState(false);
@@ -221,13 +227,15 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     const isHeliport = p.kind === 'heliport';
                     const isAerodrome = p.type === 'airport' && !isHeliport;
                     const isVorNdb = p.type === 'vor' || p.type === 'ndb';
-                    const isWaypoint = p.type === 'fix';
+                    const isWaypoint = p.type === 'fix' && p.kind !== 'user';
+                    const isUserFix = p.kind === 'user';
                     
                     // Apply visibility filters
                     if (isHeliport && !pointVisibility.heliports) return null;
                     if (isAerodrome && !pointVisibility.aerodromes) return null;
                     if (isVorNdb && !pointVisibility.vorNdb) return null;
                     if (isWaypoint && !pointVisibility.waypoints) return null;
+                    if (isUserFix && !pointVisibility.userFixes) return null;
                     
                     // Determine the icon type based on point type and kind
                     const iconType = isHeliport ? 'heliport' : p.type;
@@ -257,23 +265,45 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                     });
                     
                     // Generate tooltip with type indication
-                    const typeLabel = isHeliport ? 'Heliporto' : 
+                    const typeLabel = isUserFix ? 'Fixo Usuário' :
+                                     isHeliport ? 'Heliponto' : 
                                      isPrincipal ? 'Aeródromo Principal' : 
                                      p.type === 'airport' ? 'Aeródromo' :
                                      p.type === 'vor' ? 'VOR' :
                                      p.type === 'ndb' ? 'NDB' : 'FIX';
                     
-                    // Handle VOR click for radial tracking
-                    const handleVorClick = () => {
-                        if (isVorNdb) {
-                            // Toggle selection: if same VOR clicked, deselect; otherwise select
-                            if (selectedVor?.id === p.id) {
-                                setSelectedVor(null);
-                                console.log(`[VOR RADIAL] Desativado: ${p.icao || p.name}`);
-                            } else {
-                                setSelectedVor(p);
-                                console.log(`[VOR RADIAL] Ativado: ${p.icao || p.name} (${p.lat.toFixed(4)}, ${p.lng.toFixed(4)})`);
-                            }
+                    // Handle VOR double-click for radial tracking - unified for all devices
+                    const handleVorDoubleClick = (e: L.LeafletMouseEvent) => {
+                        if (!isVorNdb) return;
+                        
+                        // Stop propagation to prevent map interactions
+                        L.DomEvent.stopPropagation(e);
+                        L.DomEvent.preventDefault(e);
+                        
+                        if (selectedVor?.id === p.id) {
+                            setSelectedVor(null);
+                            console.log(`[VOR RADIAL] Desativado: ${p.icao || p.name}`);
+                        } else {
+                            setSelectedVor(p);
+                            console.log(`[VOR RADIAL] Ativado: ${p.icao || p.name} (${p.lat.toFixed(4)}, ${p.lng.toFixed(4)})`);
+                        }
+                    };
+                    
+                    // Unified click handler for double-click detection (works on all devices)
+                    const handleClick = (e: L.LeafletMouseEvent) => {
+                        if (!isVorNdb) return;
+                        
+                        const now = Date.now();
+                        const lastClick = lastClickTimeRef.current;
+                        
+                        // Check if this is a double-click (same VOR, within 400ms)
+                        if (lastClick && lastClick.id === p.id && (now - lastClick.time) < 400) {
+                            // Double-click detected - toggle radial
+                            handleVorDoubleClick(e);
+                            lastClickTimeRef.current = null;
+                        } else {
+                            // First click - store for double-click detection
+                            lastClickTimeRef.current = { id: p.id, time: now };
                         }
                     };
                     
@@ -283,7 +313,10 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                             position={[p.lat, p.lng]} 
                             icon={customIcon}
                             eventHandlers={{
-                                click: handleVorClick
+                                // Unified double-click detection via click handler
+                                click: handleClick,
+                                // Also support native dblclick for desktop
+                                dblclick: handleVorDoubleClick,
                             }}
                         >
                             <Tooltip 
@@ -302,8 +335,12 @@ export const NavigationLayer: React.FC<NavigationLayerProps> = ({
                                     <div>{p.icao || p.name}</div>
                                     <div style={{ fontSize: '9px', fontWeight: 'normal', color: '#666' }}>
                                         {typeLabel}
-                                        {isVorNdb && <span style={{ color: '#22c55e' }}> • Clique para radial</span>}
                                     </div>
+                                    {isVorNdb && (
+                                        <div style={{ fontSize: '9px', fontWeight: 'normal', color: '#22c55e' }}>
+                                            Radial - Duplo Click
+                                        </div>
+                                    )}
                                 </div>
                             </Tooltip>
                         </Marker>

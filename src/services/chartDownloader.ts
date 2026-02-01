@@ -174,7 +174,7 @@ function clearCheckpoint(layerId: string): void {
 
 /**
  * Download a single tile with concurrent proxy attempts
- * Returns immediately when any source succeeds
+ * OPTIMIZED: Returns immediately when FIRST source succeeds (Promise.any)
  */
 async function downloadTileFast(
   directUrl: string,
@@ -211,46 +211,50 @@ async function downloadTileFast(
     }).finally(() => clearTimeout(timeoutId));
   };
 
-  // Build all fetch attempts
-  const attempts: Promise<boolean>[] = [];
-  
-  // Direct access (fastest)
-  attempts.push(
-    fetchWithTimeout(directUrl, 5000)
-      .then(validateAndCache)
-      .catch(() => false)
-  );
-  
-  // Preferred proxy
-  const preferredUrl = `${CORS_PROXIES[preferredProxy]}${encodeURIComponent(directUrl)}`;
-  attempts.push(
-    fetchWithTimeout(preferredUrl, 6000)
-      .then(validateAndCache)
-      .catch(() => false)
-  );
-
-  // Other proxies (staggered)
-  CORS_PROXIES.forEach((proxy, i) => {
-    if (i !== preferredProxy) {
-      const proxyUrl = `${proxy}${encodeURIComponent(directUrl)}`;
-      attempts.push(
-        new Promise<boolean>(resolve => {
-          setTimeout(() => {
-            fetchWithTimeout(proxyUrl, 7000)
-              .then(validateAndCache)
-              .then(resolve)
-              .catch(() => resolve(false));
-          }, 200 * (i + 1));
-        })
-      );
+  // Attempt fetch and throw if failed (for Promise.any)
+  const attemptFetchOrThrow = async (url: string, timeout: number): Promise<true> => {
+    try {
+      const response = await fetchWithTimeout(url, timeout);
+      const success = await validateAndCache(response);
+      if (success) return true;
+      throw new Error('Invalid tile');
+    } catch (e) {
+      throw e; // Re-throw for Promise.any to continue
     }
+  };
+
+  // Build all attempts: direct + all proxies
+  const allAttempts: Promise<true>[] = [];
+  
+  // Direct access with longer timeout (8s for mobile connections)
+  allAttempts.push(attemptFetchOrThrow(directUrl, 8000));
+  
+  // All proxies in parallel with staggered start for efficiency
+  CORS_PROXIES.forEach((proxy, idx) => {
+    const proxyUrl = `${proxy}${encodeURIComponent(directUrl)}`;
+    // Preferred proxy starts immediately, others after slight delay
+    const delay = idx === preferredProxy ? 0 : 500 + (idx * 200);
+    
+    allAttempts.push(
+      new Promise<true>((resolve, reject) => {
+        setTimeout(async () => {
+          try {
+            const result = await attemptFetchOrThrow(proxyUrl, 10000);
+            resolve(result);
+          } catch (e) {
+            reject(e);
+          }
+        }, delay);
+      })
+    );
   });
 
-  // Return true if any attempt succeeds
+  // Promise.any returns as soon as ANY promise resolves (first success wins!)
   try {
-    const results = await Promise.all(attempts);
-    return results.some(r => r);
+    await Promise.any(allAttempts);
+    return true;
   } catch {
+    // All attempts failed
     return false;
   }
 }
@@ -363,10 +367,10 @@ export async function downloadChartLayer(
   }
 
   // High-concurrency download
-  // Desktop: 20 concurrent, iOS: 10 concurrent
+  // Desktop: 30 concurrent, iOS: 15 concurrent (increased for speed)
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const concurrency = isIOS ? 10 : 20;
+  const concurrency = isIOS ? 15 : 30;
   
   let downloadedTiles = skippedTiles;
   let failedTiles = 0;

@@ -9,14 +9,14 @@ import { Sidebar } from './components/Sidebar';
 import { FlightPlanPanel } from './components/FlightPlanPanel';
 import { MapControls } from './components/MapControls';
 import { AuthModal } from './components/AuthModal';
-import { supabase } from './services/supabaseClient';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuthGuard } from './hooks/useAuthGuard';
 import { Session } from '@supabase/supabase-js';
 import { getAiracCycleInfo } from './services/airacService';
 import { ENRC_SEGMENTS } from '../config/chartConfig';
 import { WMSTileLayer } from 'react-leaflet';
 import { NavigationLayer } from './components/NavigationLayer';
-import { TopLeftMenu } from './components/TopLeftMenu';
+// TopLeftMenu removed - functionality moved to Sidebar
 import { ChartsModal } from './components/ChartsModal';
 import { AerodromeModal } from './components/AerodromeModal';
 import { DownloadModal } from './components/DownloadModal';
@@ -25,14 +25,19 @@ import { FlightPlanDownloadModal } from './components/FlightPlanDownloadModal';
 import { BaseMapType, PointVisibility } from './components/LayersMenu';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { MBTilesZoomWarning } from './components/MBTilesZoomWarning';
 import { getAerodromeIconHTML, getIconSize } from './components/AerodromeIcons';
 import { CachedWMSTileLayer } from './components/CachedWMSTileLayer';
 import { CachedBaseTileLayer } from './components/CachedBaseTileLayer';
+import { MBTilesTileLayer } from './components/MBTilesTileLayer';
+import { isMBTilesReady } from './services/mbtilesReader';
+import { isMBTilesAvailable } from './config/mbtilesConfig';
 import { isLayerAvailableOffline } from './services/chartDownloader';
 import { isBaseMapAvailableOffline } from './services/baseMapDownloader';
 import { getCachedLayerIds, clearLayerCache } from './services/tileCache';
 import { CHART_LAYERS, ChartLayerId, BASE_MAP_LAYERS, BaseMapLayerId } from './config/chartLayers';
 import { getDownloadManager } from './services/downloadManager';
+import { AltimeterDisplay } from './components/AltimeterDisplay';
 
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -226,6 +231,73 @@ const App = () => {
   const [showAircraftModal, setShowAircraftModal] = useState(false);
   const [chartsModalIcao, setChartsModalIcao] = useState<string | null>(null);
   const [isSidebarMenuOpen, setIsSidebarMenuOpen] = useState(false);
+  
+  // MBTiles availability state (for offline rendering)
+  const [mbtilesReady, setMbtilesReady] = useState<Record<string, boolean>>({});
+  // Track online/offline status for rendering decisions
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  // Force MBTiles for testing (toggle to use local files even when online)
+  const [forceMBTiles, setForceMBTiles] = useState<boolean>(() => {
+    const saved = localStorage.getItem('skyfpl_force_mbtiles');
+    return saved === 'true';
+  });
+  // PHASE 1: Low zoom warning for MBTiles
+  const [mbtilesLowZoomWarning, setMbtilesLowZoomWarning] = useState(false);
+
+  // Install runtime MBTiles debug helpers (console-driven, no UI impact).
+  // Usage in DevTools console:
+  //   window.__mbtilesDebug.debugLastTile()
+  //   window.__mbtilesDebug.debugTileSelection('LOW', z, x, y)
+  useEffect(() => {
+    import('./services/mbtilesDebug')
+      .then(({ installMBTilesDebug }) => installMBTilesDebug())
+      .catch(() => {
+        // no-op
+      });
+  }, []);
+  
+  // Altimeter display visibility (persisted)
+  const [showAltimeter, setShowAltimeter] = useState<boolean>(() => {
+    const saved = localStorage.getItem('skyfpl_show_altimeter');
+    return saved === 'true';
+  });
+  
+  // Persist altimeter visibility
+  useEffect(() => {
+    localStorage.setItem('skyfpl_show_altimeter', showAltimeter.toString());
+  }, [showAltimeter]);
+  
+  // Online/offline status listener
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+  
+  // Check MBTiles availability on mount and when downloadedLayers changes
+  useEffect(() => {
+    const checkMBTilesAvailability = async () => {
+      const status: Record<string, boolean> = {};
+      // Check LOW for MBTiles (TEST phase)
+      if (isMBTilesAvailable('LOW')) {
+        const isReady = await isMBTilesReady('LOW');
+        status['LOW'] = isReady;
+        console.log('[App] MBTiles LOW ready:', isReady, '| isOnline:', isOnline);
+      }
+      setMbtilesReady(status);
+    };
+    
+    checkMBTilesAvailability();
+    
+    // Re-check when offline status changes or download modal closes
+  }, [downloadedLayers, isOnline]);
 
   // Point visibility state (persisted) - merge with defaults to handle new keys
   const [pointVisibility, setPointVisibility] = useState<PointVisibility>(() => {
@@ -693,10 +765,29 @@ const App = () => {
       return next;
     });
     
-    // Clear from IndexedDB cache
+    // Check if this layer uses MBTiles - if so, delete the MBTiles package
+    if (isMBTilesAvailable(layer)) {
+      try {
+        const { deleteMBTilesPackage } = await import('./services/mbtilesDownloader');
+        await deleteMBTilesPackage(layer);
+        console.log(`[CACHE CLEAR] MBTiles package deleted for layer: ${layer}`);
+        
+        // CRITICAL: Update mbtilesReady state to hide the toggle
+        setMbtilesReady(prev => {
+          const next = { ...prev };
+          delete next[layer];
+          return next;
+        });
+        console.log(`[CACHE CLEAR] MBTiles ready state cleared for layer: ${layer}`);
+      } catch (error) {
+        console.error('[CACHE CLEAR] Failed to delete MBTiles package:', error);
+      }
+    }
+    
+    // Clear from IndexedDB tile cache (for WMS tiles)
     try {
       await clearLayerCache(layer);
-      console.log(`[CACHE CLEAR] IndexedDB cache cleared for layer: ${layer}`);
+      console.log(`[CACHE CLEAR] IndexedDB tile cache cleared for layer: ${layer}`);
     } catch (error) {
       console.error('[CACHE CLEAR] Failed to clear IndexedDB:', error);
     }
@@ -794,13 +885,7 @@ const App = () => {
         onSuccess={executePendingAction}
       />
 
-      {/* TOP LEFT MENU */}
-      <TopLeftMenu
-        onOpenCharts={handleOpenCharts}
-        onOpenAerodromes={handleOpenAerodromes}
-        onOpenAircraft={handleOpenAircraft}
-        onOpenDownload={handleOpenDownload}
-      />
+      {/* TOP LEFT MENU - Removed, functionality moved to Sidebar */}
 
       {/* SIDEBAR */}
       <Sidebar
@@ -827,10 +912,28 @@ const App = () => {
         onLogin={() => setShowAuthModal(true)}
         pointVisibility={pointVisibility}
         onTogglePointVisibility={handleTogglePointVisibility}
+        onOpenCharts={handleOpenCharts}
+        onOpenAerodromes={handleOpenAerodromes}
+        onOpenAircraft={handleOpenAircraft}
+        onOpenDownload={handleOpenDownload}
+        showAltimeter={showAltimeter}
+        onToggleAltimeter={() => setShowAltimeter(!showAltimeter)}
+        mbtilesReady={mbtilesReady}
+        forceMBTiles={forceMBTiles}
+        onToggleForceMBTiles={() => {
+          const newValue = !forceMBTiles;
+          setForceMBTiles(newValue);
+          localStorage.setItem('skyfpl_force_mbtiles', String(newValue));
+        }}
       />
 
       {/* Offline indicator */}
       <OfflineIndicator />
+      
+      {/* MBTiles low zoom warning */}
+      {((!isOnline || forceMBTiles) && mbtilesReady['LOW'] && activeLayers.includes('LOW')) && (
+        <MBTilesZoomWarning show={mbtilesLowZoomWarning} />
+      )}
 
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex overflow-hidden relative">
@@ -1025,20 +1128,39 @@ const App = () => {
               />
             )}
 
+            {/* ENRC LOW Layer - Uses MBTiles when offline OR when forceMBTiles is enabled */}
             {activeLayers.includes('LOW') && (
-              <CachedWMSTileLayer
-                url={CHART_LAYERS.LOW.url}
-                layers={CHART_LAYERS.LOW.layers}
-                format="image/png"
-                transparent={true}
-                version="1.1.1"
-                opacity={0.85}
-                zIndex={100}
-                maxZoom={18}
-                layerId="LOW"
-                useCache={downloadedLayers.includes('LOW')}
-                useProxy={true}
-              />
+              <>
+                {/* 
+                  MBTiles rendering for offline mode (TEST: ENRC LOW only)
+                  - Renders when: (offline OR forceMBTiles) AND MBTiles is available
+                  - Online mode uses CachedWMSTileLayer (unchanged) unless forceMBTiles is ON
+                */}
+                {((!isOnline || forceMBTiles) && mbtilesReady['LOW']) ? (
+                  <MBTilesTileLayer
+                    chartId="LOW"
+                    opacity={0.85}
+                    zIndex={100}
+                    minZoom={5}
+                    maxZoom={11}
+                    onLowZoomWarning={setMbtilesLowZoomWarning}
+                  />
+                ) : (
+                  <CachedWMSTileLayer
+                    url={CHART_LAYERS.LOW.url}
+                    layers={CHART_LAYERS.LOW.layers}
+                    format="image/png"
+                    transparent={true}
+                    version="1.1.1"
+                    opacity={0.85}
+                    zIndex={100}
+                    maxZoom={18}
+                    layerId="LOW"
+                    useCache={downloadedLayers.includes('LOW')}
+                    useProxy={true}
+                  />
+                )}
+              </>
             )}
 
             {activeLayers.includes('WAC') && (
@@ -1189,6 +1311,12 @@ const App = () => {
 
       {/* PWA Update Prompt */}
       <PWAUpdatePrompt />
+
+      {/* Altimeter Display - Floating/Draggable */}
+      <AltimeterDisplay
+        visible={showAltimeter}
+        onClose={() => setShowAltimeter(false)}
+      />
     </div>
   );
 };
